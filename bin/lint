@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "Usage: bin/lint [--autofix]" >&2
+}
+
+case "${1-}" in
+  '') mode=--check ;;
+  --autofix) mode=--write ;;
+  *) usage; exit 2 ;;
+esac
+
+if (( $# > 1 )); then
+  usage
+  exit 2
+fi
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+# TODO: lint Bash files.
+# TODO: lint Go files.
+exec npx prettier "$mode" --prose-wrap always '**/*.md'
