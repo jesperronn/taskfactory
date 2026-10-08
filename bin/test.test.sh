@@ -115,7 +115,6 @@ real_fixture=${fixture_root}/real-invalid-task
 mkdir -p "${real_fixture}"
 cp -R "${repo_root}/bin" "${repo_root}/cmd" "${repo_root}/internal" "${repo_root}/tasks" "${repo_root}/.taskfactory" "${real_fixture}/"
 cp "${repo_root}/go.mod" "${repo_root}/go.sum" "${real_fixture}/"
-ln -s "${repo_root}/node_modules" "${real_fixture}/node_modules"
 git -C "${real_fixture}" init --quiet --initial-branch=main
 # Avoid recursively re-running this fixture test from the copied repository.
 rm "${real_fixture}/bin/test.test.sh"
