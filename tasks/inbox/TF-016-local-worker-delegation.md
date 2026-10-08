@@ -30,6 +30,28 @@ worker must not silently complete or archive a task.
 TF-023 defines the shared launch and result contract before adapter
 implementation tasks are promoted.
 
+## Split into
+
+TF-016 is split into small implementation tasks, all kept in `tasks/inbox/`
+until a harness can launch a model and verify them. Each depends on the archived
+TF-010 (worktree isolation) and TF-011 (worker evidence); TF-026 also depends on
+the TF-015 experiment. Each carries real acceptance checks (`bin/test`,
+`go test ./...`, and a documented-invocation comparison against installed CLI
+help).
+
+- **TF-024** (inbox) — OMP adapter: launch with explicit `ornith1.5-35B`, no
+  fallback, local endpoint, permissions, timeout; runs `bin/test` and
+  `bin/lint`. Depends on TF-010, TF-011.
+- **TF-025** (inbox) — Pi adapter: same contract via Pi flags; runs `bin/test`
+  and `bin/lint`. Depends on TF-010, TF-011.
+- **TF-026** (inbox) — Claude Code adapter through the oMLX local endpoint,
+  resolving the TF-015 "model not in catalog" warning; no `--fallback-model`.
+  Depends on TF-010, TF-011, TF-015.
+- **TF-027** (inbox) — TaskFactory records the result commit and evidence, and
+  calls `verify` independently of the worker. Depends on TF-011.
+- **TF-028** (inbox) — Worker state machine: completion, failure, stall, stop,
+  and resume preserving Git state and evidence. Depends on TF-010, TF-011.
+
 ## Context
 
 The first sequential comparison is recorded in
