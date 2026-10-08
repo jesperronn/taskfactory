@@ -92,13 +92,16 @@ from `protocol-v1.md`, and registered worker worktrees under the configured
 root. Reject unrelated tracked or untracked changes, and never stage concurrent
 claim transitions. Inventory runtime directories even when Git ignore rules hide
 them, so ignored user files are not mistaken for TaskFactory state. The task
-worktree itself must be clean. The claimed branch must be checked out in its
-registered worktree, and the complete, schema-valid, consecutively numbered
-worker evidence file must end with a PASS for the claimed task and branch. Its
-`base_commit` must match Claim metadata, its `result_commit` must equal
-candidate HEAD, and that commit must descend from the recorded base. A later
-FAILED or BLOCKED worker record invalidates an earlier PASS; malformed or
-incomplete evidence is not skipped.
+worktree itself must be clean. `.taskfactory/config.toml` is allowed only when
+tracked in HEAD and clean in the index and worktree; reject a missing,
+untracked, staged, or unstaged config. Recheck it immediately before merge and
+before lifecycle staging. Never stage or commit it. The claimed branch must be
+checked out in its registered worktree, and the complete, schema-valid,
+consecutively numbered worker evidence file must end with a PASS for the claimed
+task and branch. Its `base_commit` must match Claim metadata, its
+`result_commit` must equal candidate HEAD, and that commit must descend from the
+recorded base. A later FAILED or BLOCKED worker record invalidates an earlier
+PASS; malformed or incomplete evidence is not skipped.
 
 Serialize integrations with `.taskfactory/integration.lock`. Claims serialize
 only with `.taskfactory/claim.lock`; neither operation acquires both locks, so
@@ -121,11 +124,13 @@ exists. TF-013 adds `check-main` and clears that record only after all
 configured checks pass on current main. When the setting is false, retain
 failure evidence without creating a stop record. After all checks pass, move
 only this task from active to archive and commit the lifecycle transition
-separately, staging only the task's ready deletion and archive addition. Never
-stage unrelated task or user files. Append a PASS integration record after the
-archive commit; if that commit fails, append an archive failure and leave main
-advanced. If the final evidence append fails, preserve the already committed
-archive and report the missing evidence; do not rewrite existing JSONL.
+separately, staging only the task's active deletion and archive addition. If the
+config changed after main advanced, restore the task to active and record an
+archive failure. Never stage unrelated task or user files. Append a PASS
+integration record after the archive commit; if that commit fails, append an
+archive failure and leave main advanced. If the final evidence append fails,
+preserve the already committed archive and report the missing evidence; do not
+rewrite existing JSONL.
 
 Append one integration-attempt object per attempt to
 `.taskfactory/integration-evidence/<ID>.jsonl`, independently from worker

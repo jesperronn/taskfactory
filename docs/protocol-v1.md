@@ -69,9 +69,9 @@ that local `main` exists and is checked out in the repository worktree. The
 repository worktree may contain ready-to-active lifecycle changes from
 concurrent claims: each must be exactly a ready task file moved to active with
 the Claim block appended. It may also contain these TaskFactory operational
-paths: `.taskfactory/config.toml`, `.taskfactory/claim.lock`,
-`.taskfactory/integration.lock`, `.taskfactory/evidence/<ID>.jsonl`,
-`.taskfactory/evidence/<ID>.lock`,
+paths: `.taskfactory/config.toml` (only when tracked and clean),
+`.taskfactory/claim.lock`, `.taskfactory/integration.lock`,
+`.taskfactory/evidence/<ID>.jsonl`, `.taskfactory/evidence/<ID>.lock`,
 `.taskfactory/integration-evidence/<ID>.jsonl`,
 `.taskfactory/integration-stop.json`, its atomic-write sibling
 `.taskfactory/integration-stop.json.tmp`, and registered worker worktrees
@@ -87,9 +87,12 @@ lifecycle state. A parent directory may appear in Git status instead of its
 operational children; allow it only when every descendant is an allowed
 operational path. Inventory these directory contents even when Git ignore rules
 hide them; ignore rules do not grant a blanket runtime allowance. The
-integration candidate is the task's claimed worktree. Only TaskFactory
-integrations coordinate through `.taskfactory/integration.lock`; an external Git
-process does not honor this lock.
+integration candidate is the task's claimed worktree. `.taskfactory/config.toml`
+must be tracked in HEAD and match both the index and worktree; recheck it before
+merge and before lifecycle staging. Any config edit invalidates the check, and
+the config is never staged by integration. Only TaskFactory integrations
+coordinate through `.taskfactory/integration.lock`; an external Git process does
+not honor this lock.
 
 An active task is eligible only when all of these facts hold at the start of an
 attempt:
@@ -165,8 +168,10 @@ While holding the integration lock, the integrator performs this sequence:
 4. Immediately before merging, read `refs/heads/main` again. If it differs from
    the rebase base, rebase onto the new main commit and rerun all integration
    checks. Repeat until the ref is unchanged at the pre-merge check. Then run
-   `git merge --ff-only <verified-commit>` in the main worktree. Any merge error
-   is a failure; never create a merge commit or reset main to simulate rollback.
+   `git merge --ff-only <verified-commit>` in the main worktree. If the config
+   is missing, untracked, or differs from HEAD before merge, record a failure
+   and stop without moving main. Any merge error is a failure; never create a
+   merge commit or reset main to simulate rollback.
 5. If `verification.main` is configured, run every command at the repository
    root after the fast-forward. If one fails, leave this task active. When
    `integration.stop_on_main_failure` is true, write
@@ -180,14 +185,17 @@ While holding the integration lock, the integrator performs this sequence:
    and active task but do not create a persistent stop record. Main has already
    advanced; do not claim rollback.
 6. After all required checks pass, atomically move only this task file from
-   active to archive. Commit the lifecycle transition separately on local main,
-   staging only this task's ready deletion and archive addition; never use
-   `git add -A` or stage unrelated task or user files. Append the PASS record
-   only after that commit succeeds. If the task move or its commit fails, append
-   an archive-stage failure record with main left at the verified commit; do not
-   report the task archived. If appending the final PASS record fails after the
-   archive commit, report that evidence failure and preserve both the main
-   commit and archive state; never rewrite older evidence.
+   active to archive. Before staging, recheck config cleanliness; if it changed
+   after main advanced, move the task back to active, record an archive-stage
+   failure, and leave main advanced. Otherwise commit the lifecycle transition
+   separately on local main, staging only this task's active deletion and
+   archive addition; never use `git add -A` or stage unrelated task or user
+   files. Append the PASS record only after that commit succeeds. If the task
+   move or its commit fails, append an archive-stage failure record with main
+   left at the verified commit; do not report the task archived. If appending
+   the final PASS record fails after the archive commit, report that evidence
+   failure and preserve both the main commit and archive state; never rewrite
+   older evidence.
 7. Release the integration lock on every exit.
 
 The main-ref recheck detects movement caused by another process before the
