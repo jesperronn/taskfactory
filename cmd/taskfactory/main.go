@@ -36,6 +36,7 @@ Usage:
   taskfactory claim <ID> --owner <name>
   taskfactory verify <ID>
   taskfactory integrate <ID>
+  taskfactory check-main
 
 Global flags:
   -help, --help      print this usage and exit successfully.
@@ -151,6 +152,22 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Fprintf(os.Stdout, "integrated %s\n", args[1])
+		return
+	}
+	if len(args) > 0 && args[0] == "check-main" {
+		if len(args) != 1 {
+			fmt.Fprintln(os.Stderr, "taskfactory check-main: usage: taskfactory check-main")
+			os.Exit(exitUsage)
+		}
+		root, err := projectRoot()
+		if err == nil {
+			err = integrate.CheckMain(root)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "taskfactory check-main: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintln(os.Stdout, "check-main: ok")
 		return
 	}
 
