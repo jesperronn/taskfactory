@@ -125,6 +125,50 @@ func TestValidateEnforcesActiveClaimAndRejectsUnsupportedMarkdown(t *testing.T) 
 	}
 }
 
+func TestValidateRejectsEmptyTaskFileAndWhitespaceOnlyText(t *testing.T) {
+	root := project(t)
+	writeTask(t, root, "ready", "TF-101-empty.md", "")
+	title := strings.Replace(validTask, "# TF-101: Example task", "# TF-101:    ", 1)
+	writeTask(t, root, "ready", "TF-102-title.md", strings.Replace(title, "TF-101", "TF-102", 1))
+	criterion := strings.Replace(validTask, "### C1: It works", "### C1:    ", 1)
+	writeTask(t, root, "ready", "TF-103-criterion.md", strings.Replace(criterion, "TF-101", "TF-103", 1))
+	joined := diagnosticsText(Validate(root, ""))
+	for _, want := range []string{"TF-101-empty.md: heading", "TF-102-title.md: title", "TF-103-criterion.md: Success criteria"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("diagnostics missing %q:\n%s", want, joined)
+		}
+	}
+}
+
+func TestValidateRejectsDuplicateClaimKeyAfterEmptyValue(t *testing.T) {
+	root := project(t)
+	active := strings.Replace(validTask, "TF-101", "TF-104", 1) + "\n## Claim\n\nOwner: \nOwner: worker\nBranch: feature/task\nWorktree: /tmp/TF-104\nBase commit: abc\nStarted at: yesterday\n"
+	writeTask(t, root, "active", "TF-104-claim.md", active)
+	joined := diagnosticsText(Validate(root, ""))
+	if !strings.Contains(joined, "Owner: must appear once") {
+		t.Fatalf("diagnostics missing duplicate Owner key:\n%s", joined)
+	}
+}
+
+func TestValidateRejectsUnknownMarkdownHeadingsInProseFields(t *testing.T) {
+	root := project(t)
+	content := strings.Replace(validTask, "Implement it.", "### Notes\n\nImplement it.", 1)
+	writeTask(t, root, "ready", "TF-105-heading.md", strings.Replace(content, "TF-101", "TF-105", 1))
+	joined := diagnosticsText(Validate(root, ""))
+	if !strings.Contains(joined, "Scope: unsupported heading") {
+		t.Fatalf("diagnostics missing unsupported heading:\n%s", joined)
+	}
+}
+
+func diagnosticsText(diagnostics []Diagnostic) string {
+	var joined strings.Builder
+	for _, diagnostic := range diagnostics {
+		joined.WriteString(diagnostic.Error())
+		joined.WriteByte('\n')
+	}
+	return joined.String()
+}
+
 func project(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
