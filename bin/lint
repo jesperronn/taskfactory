@@ -2,23 +2,130 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: bin/lint [--autofix]" >&2
+  echo "Usage: bin/lint [--autofix] [PATH...]" >&2
 }
 
-case "${1-}" in
-  '') mode=check ;;
-  --autofix) mode=fix ;;
-  *) usage; exit 2 ;;
-esac
+start_dir=$PWD
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+repo_root=$PWD
 
-if (( $# > 1 )); then
-  usage
-  exit 2
+# Pinned mdsmith; rules and conventions live in .mdsmith.yml.
+mdsmith_pkg=github.com/jeduden/mdsmith/cmd/mdsmith@v0.57.0
+
+mode=check
+paths=()
+for arg in "$@"; do
+  case "$arg" in
+    --autofix) mode=fix ;;
+    -*) usage; exit 2 ;;
+    *)
+      abs=$arg
+      [[ $abs == /* ]] || abs="$start_dir/$abs"
+      if [[ ! -e $abs ]]; then
+        echo "bin/lint: no such path: $arg" >&2
+        usage
+        exit 2
+      fi
+      # Lint paths are relative to the repository root, where we run.
+      if [[ $abs == "$repo_root"/* ]]; then abs=${abs#"$repo_root"/}; fi
+      paths+=("$abs")
+      ;;
+  esac
+done
+
+# is_shell FILE: a *.sh file, or a file whose first line is a bash/sh shebang.
+is_shell() {
+  local first re='^#!.*(bash|/sh)([[:space:]]|$)'
+  [[ $1 == *.sh ]] && return 0
+  [[ -f $1 ]] || return 1
+  IFS= read -r first < "$1" || true
+  [[ $first =~ $re ]]
+}
+
+# Collect Go, Bash, and Markdown targets. Directories are walked for Go and
+# Bash; Markdown directories go to mdsmith, which walks them itself.
+go_files=()
+sh_files=()
+md_targets=()
+vet_pkgs=()
+whole_project=0
+
+if (( ${#paths[@]} == 0 )); then
+  whole_project=1
+  while IFS= read -r f; do go_files+=("${f#./}"); done < <(
+    find . \( -name .git -o -name .claude -o -name node_modules \) -prune -o -name '*.go' -type f -print)
+  while IFS= read -r f; do sh_files+=("${f#./}"); done < <(
+    find . \( -name .git -o -name .claude -o -name node_modules \) -prune -o -name '*.sh' -type f -print)
+  for f in bin/*; do
+    if [[ -f $f ]] && is_shell "$f"; then sh_files+=("$f"); fi
+  done
+  vet_pkgs=("./...")
+  if (( ${#go_files[@]} == 0 )); then vet_pkgs=(); fi
+else
+  for p in ${paths[@]+"${paths[@]}"}; do
+    if [[ -d $p ]]; then
+      md_targets+=("$p")
+      while IFS= read -r f; do go_files+=("$f"); done < <(find "$p" -name '*.go' -type f)
+      while IFS= read -r f; do sh_files+=("$f"); done < <(find "$p" -name '*.sh' -type f)
+      if compgen -G "$p/*.go" >/dev/null; then vet_pkgs+=("./$p"); fi
+    else
+      case "$p" in
+        *.md|*.markdown) md_targets+=("$p") ;;
+        *.go) go_files+=("$p") ;;
+        *)
+          if is_shell "$p"; then
+            sh_files+=("$p")
+          else
+            echo "bin/lint: no linter for path: $p" >&2
+            usage
+            exit 2
+          fi
+          ;;
+      esac
+    fi
+  done
 fi
 
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+failed=0
+md_status=0
 
-# TODO: lint Bash files.
-# TODO: lint Go files.
-# Pinned mdsmith; rules and conventions live in .mdsmith.yml.
-exec go run github.com/jeduden/mdsmith/cmd/mdsmith@v0.57.0 "$mode"
+# Markdown: mdsmith, pinned. Runs on the whole project or the given targets.
+if (( whole_project )) || (( ${#md_targets[@]} )); then
+  mdsmith_args=("$mode")
+  if (( ! whole_project )); then mdsmith_args+=(${md_targets[@]+"${md_targets[@]}"}); fi
+  go run "$mdsmith_pkg" "${mdsmith_args[@]}" || md_status=$?
+fi
+
+# Go formatting: gofmt. gofmt exits 0 even when it lists files, so the
+# listing itself decides the result.
+if (( ${#go_files[@]} )); then
+  if [[ $mode == fix ]]; then
+    gofmt -w "${go_files[@]}" || failed=1
+  fi
+  if ! listed=$(gofmt -l "${go_files[@]}"); then
+    echo "FAIL: gofmt could not parse the Go files" >&2
+    failed=1
+  fi
+  if [[ -n $listed ]]; then
+    printf 'FAIL: gofmt needs formatting:\n%s\n' "$listed" >&2
+    failed=1
+  fi
+fi
+
+# Go vet: per package. The whole project is "./...".
+for pkg in ${vet_pkgs[@]+"${vet_pkgs[@]}"}; do
+  go vet "$pkg" || failed=1
+done
+
+# Bash: shellcheck, only when installed.
+if (( ${#sh_files[@]} )); then
+  if command -v shellcheck >/dev/null 2>&1; then
+    shellcheck ${sh_files[@]+"${sh_files[@]}"} || failed=1
+  else
+    echo "SKIP: shellcheck not installed; Bash files were not linted" >&2
+  fi
+fi
+
+if (( md_status != 0 )); then exit "$md_status"; fi
+if (( failed )); then exit 1; fi
+exit 0
