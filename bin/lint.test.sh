@@ -6,23 +6,25 @@ repo_dir=$PWD
 stub_dir=$(mktemp -d)
 trap 'rm -rf "$stub_dir"' EXIT
 
-cat > "$stub_dir/npx" <<'EOF'
+cat > "$stub_dir/go" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" > "$LINT_ARGS_FILE"
 exit "$LINT_STUB_EXIT"
 EOF
-chmod +x "$stub_dir/npx"
+chmod +x "$stub_dir/go"
 
+mdsmith='run github.com/jeduden/mdsmith/cmd/mdsmith@v0.57.0'
 args_file="$stub_dir/args"
 for mode in check autofix; do
-  for expected_status in 0 1; do
+  for expected_status in 0 1 2; do
     if [[ $mode == autofix ]]; then
       option=--autofix
-      expected_args='prettier --write --prose-wrap always **/*.md'
+      expected_args="$mdsmith fix"
     else
       option=
-      expected_args='prettier --check --prose-wrap always **/*.md'
+      expected_args="$mdsmith check"
     fi
+    # The stub stands in for mdsmith's own exit codes: 0, 1 and 2 must pass through.
 
     actual_status=0
     PATH="$stub_dir:$PATH" LINT_ARGS_FILE="$args_file" LINT_STUB_EXIT="$expected_status" \

@@ -6,8 +6,8 @@ usage() {
 }
 
 case "${1-}" in
-  '') mode=--check ;;
-  --autofix) mode=--write ;;
+  '') mode=check ;;
+  --autofix) mode=fix ;;
   *) usage; exit 2 ;;
 esac
 
@@ -20,4 +20,5 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # TODO: lint Bash files.
 # TODO: lint Go files.
-exec npx prettier "$mode" --prose-wrap always '**/*.md'
+# Pinned mdsmith; rules and conventions live in .mdsmith.yml.
+exec go run github.com/jeduden/mdsmith/cmd/mdsmith@v0.57.0 "$mode"
