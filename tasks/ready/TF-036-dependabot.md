@@ -2,8 +2,8 @@
 
 ## Goal
 
-Get automatic update pull requests for Go modules, npm packages and GitHub
-Actions so CI warnings such as deprecated action runtimes are caught early.
+Get automatic update pull requests for Go modules and GitHub Actions so CI
+warnings such as deprecated action runtimes are caught early.
 
 ## Dependencies
 
@@ -12,11 +12,11 @@ Actions so CI warnings such as deprecated action runtimes are caught early.
 ## Scope
 
 Add `.github/dependabot.yml` (version 2) with three update entries rooted at
-`/`: `gomod`, `npm` and `github-actions`. Use a weekly schedule, group minor and
-patch updates per ecosystem, and cap open pull requests at 5 each. Label the
-pull requests `dependencies`. Document the policy in `docs/ci.md`: Dependabot
-pull requests must pass the same `bin/test` and `bin/lint` workflow, and they
-are reviewed and merged by a human.
+`/`: `gomod` and `github-actions` (the project has no npm packages since
+TF-038). Use a weekly schedule, group minor and patch updates per ecosystem, and
+cap open pull requests at 5 each. Label the pull requests `dependencies`.
+Document the policy in `docs/ci.md`: Dependabot pull requests must pass the same
+`bin/test` and `bin/lint` workflow, and they are reviewed and merged by a human.
 
 ## Constraints
 
@@ -26,13 +26,13 @@ the repository does not use.
 
 ## Success criteria
 
-### C1: Dependabot config covers gomod, npm and github-actions
+### C1: Dependabot config covers gomod and github-actions
 
 Check: grep -c "package-ecosystem" .github/dependabot.yml
 
 ### C2: Config is valid YAML with version 2
 
-Check: npx prettier --check .github/dependabot.yml
+Check: grep -q "^version: 2" .github/dependabot.yml
 
 ### C3: CI documentation describes the Dependabot policy
 
