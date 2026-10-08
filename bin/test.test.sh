@@ -110,3 +110,19 @@ failure_status=0
 failure_output=$(cd / && PATH="${fixture_root}/go-failure/stubs:${PATH}" GO_LOG="${fixture_root}/go-failure-call" GO_STATUS=8 "${fixture_root}/go-failure/bin/test" 2>&1) || failure_status=$?
 assert_status "${failure_status}" 1 'propagates Go test failure'
 assert_contains "${failure_output}" 'FAIL: Go tests: go test ./...' 'identifies failing Go check'
+
+real_fixture=${fixture_root}/real-invalid-task
+mkdir -p "${real_fixture}"
+cp -R "${repo_root}/bin" "${repo_root}/cmd" "${repo_root}/internal" "${repo_root}/tasks" "${repo_root}/.taskfactory" "${real_fixture}/"
+cp "${repo_root}/go.mod" "${repo_root}/go.sum" "${real_fixture}/"
+ln -s "${repo_root}/node_modules" "${real_fixture}/node_modules"
+git -C "${real_fixture}" init --quiet
+# Avoid recursively re-running this fixture test from the copied repository.
+rm "${real_fixture}/bin/test.test.sh"
+printf '# TF-998: Broken task\n' > "${real_fixture}/tasks/ready/TF-998-broken.md"
+real_status=0
+real_output=$(cd / && "${real_fixture}/bin/test" 2>&1) || real_status=$?
+assert_status "${real_status}" 1 'real Go project wrapper rejects an invalid task after Go tests pass'
+assert_contains "${real_output}" 'ok  ' 'real fixture Go tests pass before task validation'
+assert_contains "${real_output}" 'tasks/ready/TF-998-broken.md: Goal:' 'real fixture reports the invalid task and field'
+assert_contains "${real_output}" 'FAIL: task validation: go run ./cmd/taskfactory validate' 'real fixture attributes wrapper failure to validation'

@@ -78,6 +78,7 @@ func Validate(root, selected string) []Diagnostic {
 				continue
 			}
 			if len(data) == 0 {
+				diagnostics = append(diagnostics, Diagnostic{relPath(root, path), "heading", "empty task file must contain # TF-NNN: title"})
 				continue
 			}
 			item := task{rel: relPath(root, path), state: state}
@@ -104,6 +105,8 @@ func Validate(root, selected string) []Diagnostic {
 				heading := regexp.MustCompile(`^# (TF-[0-9]{3}): (.+)$`).FindStringSubmatch(lines[0])
 				if heading == nil {
 					diagnostics = append(diagnostics, Diagnostic{item.rel, "heading", "must match # TF-NNN: non-empty title"})
+				} else if strings.TrimSpace(heading[2]) == "" {
+					diagnostics = append(diagnostics, Diagnostic{item.rel, "title", "must not be empty or whitespace"})
 				} else if item.id != "" && heading[1] != item.id {
 					diagnostics = append(diagnostics, Diagnostic{item.rel, "heading ID", fmt.Sprintf("%s does not match filename ID %s", heading[1], item.id)})
 				} else if item.id == "" {
@@ -206,6 +209,9 @@ func validateContract(root string, item task, lines []string, ds *[]Diagnostic) 
 			sections[current] = nil
 			continue
 		}
+		if strings.HasPrefix(line, "#") && (current != "## Success criteria" || !criterionPattern.MatchString(line)) {
+			*ds = append(*ds, Diagnostic{item.rel, strings.TrimPrefix(current, "## "), "unsupported heading"})
+		}
 		plainLine := inlineCodePattern.ReplaceAllString(line, "")
 		if current != "" && (strings.HasPrefix(strings.TrimSpace(line), "```") || htmlPattern.MatchString(plainLine) || strings.HasPrefix(strings.TrimSpace(line), "|") || regexp.MustCompile(`\[[^]]+\]\(`).MatchString(plainLine) || strings.HasPrefix(line, "  - ") || strings.HasPrefix(line, "\t- ")) {
 			*ds = append(*ds, Diagnostic{item.rel, strings.TrimPrefix(current, "## "), "unsupported Markdown syntax"})
@@ -296,6 +302,9 @@ func validateCriteria(item task, lines []string, ds *[]Diagnostic) {
 			continue
 		}
 		if m := criterionPattern.FindStringSubmatch(line); m != nil {
+			if strings.TrimSpace(m[2]) == "" {
+				*ds = append(*ds, Diagnostic{item.rel, "Success criteria", "criterion text must not be empty or whitespace"})
+			}
 			if active && !hasCheck {
 				*ds = append(*ds, Diagnostic{item.rel, "Success criteria", "criterion is missing its Check line"})
 			}
@@ -342,14 +351,16 @@ func legacyCriteria(lines []string) bool {
 func validateClaim(root string, item task, lines []string, ds *[]Diagnostic) {
 	required := []string{"Owner:", "Branch:", "Worktree:", "Base commit:", "Started at:"}
 	values := map[string]string{}
+	seen := map[string]bool{}
 	for _, line := range nonempty(lines) {
 		matched := false
 		for _, key := range required {
 			if strings.HasPrefix(line, key+" ") {
-				if values[key] != "" {
+				if seen[key] {
 					*ds = append(*ds, Diagnostic{item.rel, "Claim", key + " must appear once"})
 				}
 				values[key] = strings.TrimSpace(strings.TrimPrefix(line, key))
+				seen[key] = true
 				matched = true
 				break
 			}
