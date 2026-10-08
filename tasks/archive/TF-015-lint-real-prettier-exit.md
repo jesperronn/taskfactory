@@ -7,7 +7,7 @@ returns exit code 0.
 
 ## Dependencies
 
-TF-014.
+- TF-014
 
 ## Scope
 

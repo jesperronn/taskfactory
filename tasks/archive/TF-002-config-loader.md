@@ -6,7 +6,8 @@ Implement the v1 Go configuration loader using the approved TOML contract.
 
 ## Dependencies
 
-TF-001 and TF-007 are archived.
+- TF-001
+- TF-007
 
 ## Scope
 
@@ -16,17 +17,29 @@ Add a focused `internal/config` package with a
 defaults, rejection rules, and parser choice in `docs/config-v1.md`. Add
 table-driven tests for a valid full config, defaults, unknown keys, bad types,
 unsupported protocol version, and worker limits 0 and 5. Do not implement CLI
-`init`, task parsing, or Git operations. Missing config is an error rather than
-an implicit default project.
+`init`, task parsing, or Git operations.
+
+## Constraints
+
+A missing config is an error rather than an implicit default project.
 
 ## Success criteria
 
-- The loader returns explicit errors naming the offending key or missing file.
-- The documented valid config loads with maximum parallel workers 4 and ff-only
-  integration.
-- Invalid examples from `docs/config-v1.md` are rejected; errors identify the
-  key and source file.
-- `go test ./...` and `go vet ./...` pass.
+### C1: Loader errors identify invalid or missing configuration
+
+Check: go test ./...
+
+### C2: The valid config loads with the documented defaults and policy
+
+Check: go test ./...
+
+### C3: Invalid examples are rejected with key and source file identified
+
+Check: go test ./...
+
+### C4: Go tests and vet pass
+
+Check: go test ./... && go vet ./...
 
 ## Verification
 

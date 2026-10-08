@@ -7,7 +7,7 @@ nonzero exit status.
 
 ## Dependencies
 
-TF-005.
+- TF-005
 
 ## Scope
 

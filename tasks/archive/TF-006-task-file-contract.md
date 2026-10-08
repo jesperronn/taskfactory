@@ -7,7 +7,7 @@ ambiguous parsing rules.
 
 ## Dependencies
 
-None.
+None
 
 ## Scope
 

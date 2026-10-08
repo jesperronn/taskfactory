@@ -7,7 +7,7 @@ deterministic `init` output.
 
 ## Dependencies
 
-None.
+None
 
 ## Scope
 
