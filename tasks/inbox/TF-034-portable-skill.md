@@ -22,3 +22,13 @@ adopting it in a scratch repository.
 - A SKILL.md with valid frontmatter exists and is referenced from the README.
 - In a fresh scratch repo, `taskfactory init` plus the skill is enough to
   create, validate and claim a task.
+
+## Delivery note
+
+Delivered in `skills/taskfactory/SKILL.md`, with a README section explaining how
+to copy it into `.claude/skills/`. The skill documents only the implemented
+commands (`init`, `status`, `validate`, `claim`, `verify`, `integrate`) and
+marks lifecycle commands (TF-033) and worker adapters (TF-024 to TF-026) as not
+implemented. Remaining for the criteria: the scratch-repo adoption check, and
+whether the skill needs a `taskfactory init` path that copies it. This task
+stays in inbox.
