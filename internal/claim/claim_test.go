@@ -13,6 +13,7 @@ import (
 
 func TestWithClaimLockSerializesProcesses(t *testing.T) {
 	root := t.TempDir()
+	ready := filepath.Join(root, "ready")
 	acquired := filepath.Join(root, "acquired")
 	locked := make(chan struct{})
 	release := make(chan struct{})
@@ -29,19 +30,18 @@ func TestWithClaimLockSerializesProcesses(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestClaimLockHelperProcess$")
-	cmd.Env = append(os.Environ(), "TASKFACTORY_LOCK_HELPER=1", "TASKFACTORY_LOCK_ROOT="+root, "TASKFACTORY_LOCK_MARKER="+acquired)
+	cmd.Env = append(os.Environ(), "TASKFACTORY_LOCK_HELPER=1", "TASKFACTORY_LOCK_ROOT="+root,
+		"TASKFACTORY_LOCK_READY="+ready, "TASKFACTORY_LOCK_MARKER="+acquired)
 	childDone := make(chan error, 1)
 	go func() { childDone <- cmd.Run() }()
 
-	select {
-	case <-time.After(200 * time.Millisecond):
-	case err := <-childDone:
+	if err := waitForFile(ready, childDone, 5*time.Second); err != nil {
 		close(release)
-		t.Fatalf("subprocess exited before lock was released: %v", err)
+		t.Fatalf("subprocess did not reach lock attempt: %v", err)
 	}
-	if _, err := os.Stat(acquired); !os.IsNotExist(err) {
+	if err := assertFileRemainsAbsent(acquired, childDone, 200*time.Millisecond); err != nil {
 		close(release)
-		t.Fatalf("subprocess acquired lock concurrently; marker stat error = %v", err)
+		t.Fatalf("subprocess was not blocked by claim lock: %v", err)
 	}
 	close(release)
 	if err := <-parentDone; err != nil {
@@ -55,12 +55,58 @@ func TestWithClaimLockSerializesProcesses(t *testing.T) {
 	}
 }
 
+func waitForFile(path string, childDone <-chan error, timeout time.Duration) error {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return nil
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("inspect handshake file: %w", err)
+		}
+		select {
+		case err := <-childDone:
+			return fmt.Errorf("subprocess exited before handshake: %v", err)
+		case <-deadline.C:
+			return fmt.Errorf("timed out waiting for %s", path)
+		case <-ticker.C:
+		}
+	}
+}
+
+func assertFileRemainsAbsent(path string, childDone <-chan error, timeout time.Duration) error {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return fmt.Errorf("acquisition marker appeared before lock release")
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("inspect acquisition marker: %w", err)
+		}
+		select {
+		case err := <-childDone:
+			return fmt.Errorf("subprocess exited before lock release: %v", err)
+		case <-deadline.C:
+			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
 func TestClaimLockHelperProcess(t *testing.T) {
 	if os.Getenv("TASKFACTORY_LOCK_HELPER") != "1" {
 		return
 	}
 	root := os.Getenv("TASKFACTORY_LOCK_ROOT")
+	ready := os.Getenv("TASKFACTORY_LOCK_READY")
 	marker := os.Getenv("TASKFACTORY_LOCK_MARKER")
+	if err := os.WriteFile(ready, []byte("attempting"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := WithClaimLock(root, func() error { return os.WriteFile(marker, []byte("acquired"), 0o600) }); err != nil {
 		t.Fatal(err)
 	}
