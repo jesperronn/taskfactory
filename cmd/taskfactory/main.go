@@ -23,25 +23,53 @@ import (
 // go run; bin/build overrides it at link time with -ldflags "-X main.version=...".
 var version = "dev"
 
-// usage returns the help text printed by --help and -h. It names the command and
-// both global flags so that "taskfactory --help" documents the supported
-// top-level flags. Styling is applied only when p is enabled, so plain output is
-// unchanged when color is off.
+// commandSummary is one top-level command: its name, its usage synopsis and a
+// short description shown in the top-level usage.
+type commandSummary struct {
+	name     string
+	synopsis string
+	summary  string
+}
+
+// commandSummaries lists every command in top-level usage order.
+var commandSummaries = []commandSummary{
+	{"init", "init", "initialize project config"},
+	{"status", "status", "show tasks by state"},
+	{"validate", "validate [task-file]", "check task files"},
+	{"claim", "claim <ID> --owner <name>", "claim a ready task"},
+	{"verify", "verify <ID>", "run a task's checks"},
+	{"integrate", "integrate <ID>", "fast-forward a verified task"},
+	{"check-main", "check-main", "recheck a stopped main"},
+}
+
+// usage returns the help text printed by --help and -h. It lists every command
+// with a description aligned in one column, and documents only the global flags
+// --help and --version. Styling is applied only when p is enabled, so plain
+// output is unchanged when color is off.
 func usage(p ui.Painter) string {
-	cmd := "  " + p.Cyan("taskfactory") + " "
-	return "taskfactory coordinates software work into explicit, verifiable tasks.\n\n" +
-		p.Bold("Usage:") + "\n" +
-		cmd + p.Dim("[global flags]") + "\n" +
-		cmd + p.Dim("<command>") + " " + p.Dim("[flags]") + "\n" +
-		cmd + p.Cyan("status") + "\n" +
-		cmd + p.Cyan("validate") + " " + p.Dim("[task-file]") + "\n" +
-		cmd + p.Cyan("claim") + " " + p.Dim("<ID>") + " " + p.Cyan("--owner") + " " + p.Dim("<name>") + "\n" +
-		cmd + p.Cyan("verify") + " " + p.Dim("<ID>") + "\n" +
-		cmd + p.Cyan("integrate") + " " + p.Dim("<ID>") + "\n" +
-		cmd + p.Cyan("check-main") + "\n\n" +
-		p.Bold("Global flags:") + "\n" +
-		"  " + p.Cyan("-help, --help") + "      print this usage and exit successfully.\n" +
-		"  " + p.Cyan("-version, --version") + " print the CLI version string and exit successfully."
+	synopsisWidth := 0
+	for _, command := range commandSummaries {
+		if len(command.synopsis) > synopsisWidth {
+			synopsisWidth = len(command.synopsis)
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString("taskfactory coordinates software work into explicit, verifiable tasks.\n\n")
+	b.WriteString(p.Bold("Usage:") + "\n")
+	b.WriteString("  " + p.Cyan("taskfactory") + " " + p.Dim("[global flags]") + "\n")
+	b.WriteString("  " + p.Cyan("taskfactory") + " " + p.Dim("<command> [flags]") + "\n\n")
+	b.WriteString(p.Bold("Commands:") + "\n")
+	for _, command := range commandSummaries {
+		rest := strings.TrimPrefix(command.synopsis, command.name)
+		padding := strings.Repeat(" ", synopsisWidth-len(command.synopsis)+2)
+		b.WriteString("  " + p.Cyan(command.name) + p.Dim(rest) + padding + command.summary + "\n")
+	}
+	b.WriteString("\n" + p.Bold("Global flags:") + "\n")
+	b.WriteString("  " + p.Cyan("--help") + "     print this usage and exit successfully\n")
+	b.WriteString("  " + p.Cyan("--version") + "  print the CLI version string and exit successfully\n\n")
+	b.WriteString("Run \"taskfactory <command> --help\" for details on one command.\n")
+	return b.String()
 }
 
 // errorLine formats a stderr error as "<prefix>: <msg>" with a red prefix when
@@ -182,7 +210,7 @@ func main() {
 		return
 	}
 
-	fmt.Fprintln(os.Stderr, usage(stderrStyle))
+	fmt.Fprint(os.Stderr, usage(stderrStyle))
 	os.Exit(exitUsage)
 }
 
