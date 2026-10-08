@@ -28,7 +28,10 @@ structure), MDS028 (token budget) and MDS036 (section length) as well.
 
 Do not enable the rule repo-wide without measuring benefit. Keep it out of
 `bin/lint` failures until the existing docs conform or a per-file threshold is
-agreed. Do not reword specifications in ways that change meaning.
+agreed. Do not reword specifications in ways that change meaning. Archived tasks
+may be simplified too, as decided by the owner, under the same limits as TF-040:
+prose only, no change to IDs, dependencies, `Check:` lines or evidence, and in a
+separate commit.
 
 ## Notes
 

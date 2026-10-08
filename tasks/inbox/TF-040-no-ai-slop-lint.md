@@ -27,8 +27,12 @@ is cleaned. Add project terms through the rule's append-only lists.
 ## Constraints
 
 Do not change the meaning of specifications or acceptance criteria while
-rewording. Do not weaken other lint rules to make room. Keep rewording of
-existing archived tasks out of scope; archived records are history.
+rewording. Do not weaken other lint rules to make room. Archived tasks are
+in scope: the owner decided to modify them so the whole tree passes the same
+rules. Reword only prose, never task IDs, dependencies, `Check:` lines, exit
+codes or recorded evidence, and confirm `taskfactory validate tasks` still
+passes after each batch of archive edits. Land archive rewording in its own
+commit.
 
 ## Notes
 

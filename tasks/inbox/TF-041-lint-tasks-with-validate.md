@@ -9,6 +9,8 @@ of defect.
 ## Dependencies
 
 - TF-038 must conclude with mdsmith in place of Prettier.
+- TF-045 (`taskfactory validate` takes several files and folders) should land
+  first so the combined check can pass the same paths to both halves.
 - TF-030 (Go and shell lint with path arguments) is related and should land
   first or be merged with this task.
 
@@ -33,6 +35,10 @@ Keep exit codes 0, 1 and 2 unchanged. Do not make the Go CLI depend on mdsmith.
 Failures must name the file and which of the two checks failed.
 
 ## Notes
+
+Show the result on a real task: run the combined check on one inbox task before
+and after the tightened TF-039 and TF-040 rules are on, and record that the new
+findings appear.
 
 Success criteria to write when promoting to ready: a deliberately misformatted
 task file fails the combined check on the lint half, a task file with a broken
