@@ -7,7 +7,7 @@ the whole task tree before claiming work.
 
 ## Dependencies
 
-TF-001 and TF-006 must be archived before promotion to ready.
+TF-001, TF-006, and TF-019 must be archived before promotion to ready.
 
 ## Scope
 
