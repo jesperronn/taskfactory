@@ -42,6 +42,19 @@ else
   printf 'SKIP: Go tests (go.mod not found)\n'
 fi
 
+if [[ -f go.mod ]]; then
+  if [[ -f .taskfactory/config.toml ]]; then
+    printf '==> go run ./cmd/taskfactory validate\n'
+    if ! go run ./cmd/taskfactory validate; then
+      printf 'FAIL: task validation: go run ./cmd/taskfactory validate\n' >&2
+      failed=1
+    fi
+  else
+    printf 'FAIL: task validation: .taskfactory/config.toml is missing; run taskfactory init\n' >&2
+    failed=1
+  fi
+fi
+
 if (( failed )); then
   exit 1
 fi

@@ -70,9 +70,11 @@ assert_contains "${failure_output}" 'rerun with: ./bin/fail.test.sh' 'provides a
 new_fixture go-success
 : > "${fixture_root}/go-success/go.mod"
 mkdir -p "${fixture_root}/go-success/stubs"
+mkdir -p "${fixture_root}/go-success/.taskfactory"
+: > "${fixture_root}/go-success/.taskfactory/config.toml"
 cat > "${fixture_root}/go-success/stubs/go" <<'EOF'
 #!/usr/bin/env bash
-printf '%s|%s\n' "$PWD" "$*" > "${GO_LOG}"
+printf '%s|%s\n' "$PWD" "$*" >> "${GO_LOG}"
 exit "${GO_STATUS}"
 EOF
 chmod +x "${fixture_root}/go-success/stubs/go"
@@ -81,15 +83,28 @@ output=$(cd / && PATH="${fixture_root}/go-success/stubs:${PATH}" GO_LOG="${go_lo
 assert_contains "${output}" '==> go test ./...' 'runs Go checks when go.mod exists'
 go_call=$(cat "${go_log}")
 expected_go_call="${fixture_root}/go-success|test ./..."
-if [[ "${go_call}" != "${expected_go_call}" ]]; then
+if ! grep -Fqx "${expected_go_call}" "${go_log}"; then
   printf '[FAIL] Go command root and arguments: expected=%q actual=%q\n' "${expected_go_call}" "${go_call}" >&2
   exit 1
 fi
-printf '[PASS] Go tests run from fixture root with go test ./...\n'
+if ! grep -Fqx "${fixture_root}/go-success|run ./cmd/taskfactory validate" "${go_log}"; then
+  printf '[FAIL] whole-tree validation command was not run: %s\n' "${go_call}" >&2
+  exit 1
+fi
+printf '[PASS] Go tests and whole-tree validation run from fixture root\n'
+
+new_fixture missing-config
+: > "${fixture_root}/missing-config/go.mod"
+missing_status=0
+missing_output=$(cd / && "${fixture_root}/missing-config/bin/test" 2>&1) || missing_status=$?
+assert_status "${missing_status}" 1 'requires project config when a Go project is present'
+assert_contains "${missing_output}" 'run taskfactory init' 'explains how to initialize missing task config'
 
 new_fixture go-failure
 : > "${fixture_root}/go-failure/go.mod"
 mkdir -p "${fixture_root}/go-failure/stubs"
+mkdir -p "${fixture_root}/go-failure/.taskfactory"
+: > "${fixture_root}/go-failure/.taskfactory/config.toml"
 cp "${fixture_root}/go-success/stubs/go" "${fixture_root}/go-failure/stubs/go"
 failure_status=0
 failure_output=$(cd / && PATH="${fixture_root}/go-failure/stubs:${PATH}" GO_LOG="${fixture_root}/go-failure-call" GO_STATUS=8 "${fixture_root}/go-failure/bin/test" 2>&1) || failure_status=$?
