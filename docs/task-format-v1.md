@@ -173,8 +173,8 @@ one UTF-8 JSON object with exactly these top-level keys and types:
   `command` (string: exact configured command), `exit_code` (integer, or null if
   the shell could not be started), `output` (string: combined stdout and stderr,
   empty if none), and `error` (string: process-start error, or empty).
-- `note`: string; optional human context, which does not replace structured
-  command results.
+- `note`: required string; it may be empty and carries optional human context,
+  but never replaces structured command results.
 
 A verification runs every task criterion check in listed order, followed by
 `verification.worker` commands in array order. Both sets use the command
@@ -276,17 +276,21 @@ A blocked attempt records a shell start failure with a null exit code:
 
 To append safely, a verifier acquires an exclusive per-task lock before reading
 evidence or choosing an attempt number. While holding it, the verifier validates
-existing complete JSONL records, chooses one greater than the last attempt
-(number 1 for a missing or empty file), and appends exactly one complete JSON
-object followed by LF. It releases the lock after the append. Concurrent
-verifiers for the same task therefore serialize and receive distinct consecutive
-numbers. If existing evidence is malformed or does not end in LF, the verifier
-must report an error and leave it byte-for-byte unchanged; it must not repair,
-truncate, or reuse an attempt number. Evidence from prior runs is never inferred
-or fabricated. A successful worker report alone does not archive a task:
-integration must succeed before the task moves to `tasks/archive/`. Evidence
-records worker attempts and do not replace integration evidence required by the
-protocol.
+every existing line as a complete JSON object with exactly the schema keys and
+types above. It rejects malformed JSON, non-object lines, unknown or missing
+keys, wrong field types or values, and records whose `task_id` does not match
+the task. It also requires positive attempt numbers starting at 1 with no
+duplicates or gaps, in line order. For a missing or empty file, the next attempt
+is 1; otherwise it is one greater than the final validated attempt. It appends
+exactly one complete JSON object followed by LF and releases the lock after the
+append. Concurrent verifiers for the same task therefore serialize and receive
+distinct consecutive numbers. If any existing line is invalid or the file does
+not end in LF, the verifier must report an error and leave all existing bytes
+byte-for-byte unchanged; it must not repair, truncate, or reuse an attempt
+number. Evidence from prior runs is never inferred or fabricated. A successful
+worker report alone does not archive a task: integration must succeed before the
+task moves to `tasks/archive/`. Evidence records worker attempts and do not
+replace integration evidence required by the protocol.
 
 ## Complete valid ready task
 

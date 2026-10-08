@@ -34,11 +34,15 @@ Check: go test ./...
 
 Check: go test ./...
 
-### C4: Missing worktree, malformed active metadata, or malformed prior evidence fails clearly without corrupting evidence
+### C4: Missing worktree or malformed active metadata fails clearly
 
 Check: go test ./...
 
-### C5: The repository tests and vet pass
+### C5: Malformed or logically inconsistent prior JSONL fails without changing any evidence bytes
+
+Check: go test ./...
+
+### C6: The repository tests and vet pass
 
 Check: go test ./... && go vet ./...
 
@@ -49,4 +53,6 @@ execution order, stop behavior, recorded output and exit codes, and PASS,
 FAILED, and BLOCKED outcomes. Compare changed files with the worktree snapshot.
 Run two verifies against the same task concurrently; confirm distinct
 consecutive attempt numbers and byte-for-byte preservation of earlier JSONL
-lines. Also confirm malformed existing JSONL is reported without modification.
+lines. Confirm malformed JSON and valid JSON with a wrong task ID, unknown or
+missing key, wrong field type, duplicate attempt, or attempt gap are rejected
+without modifying any evidence bytes.
