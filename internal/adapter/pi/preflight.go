@@ -5,10 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"os/exec"
 	"strings"
-	"time"
+
+	"taskfactory/internal/adapter/common"
 )
 
 // Options configures the preflight and run. The zero value uses the real
@@ -21,45 +21,28 @@ type Options struct {
 	Dial func(ctx context.Context, addr string) error
 }
 
-const preflightTimeout = 30 * time.Second
-
 // Preflight runs every check before launch and never starts a model run. The
 // checks are: the binary resolves on PATH, the model is listed by
 // `pi --list-models` under the omlx provider, and the project-local endpoint
 // accepts connections.
 func Preflight(ctx context.Context, req Request, opts Options) PreflightResult {
 	var result PreflightResult
-	binPath, err := exec.LookPath(Binary)
-	result.Checks = append(result.Checks, PreflightCheck{
-		Name: "adapter binary " + Binary,
-		Err:  err,
-	})
+	binPath, binCheck := common.BinaryCheck(Binary)
+	result.Checks = append(result.Checks, binCheck)
 
 	var modelErr error
-	if err == nil {
+	if binCheck.Err == nil {
 		modelErr = checkModelListed(ctx, binPath, req.Model)
 	} else {
 		modelErr = errors.New("skipped because adapter binary is unavailable")
 	}
-	result.Checks = append(result.Checks, PreflightCheck{
+	result.Checks = append(result.Checks, common.PreflightCheck{
 		Name: "model " + Provider + "/" + req.Model,
 		Err:  modelErr,
 	})
 
-	endpoint := opts.Endpoint
-	if endpoint == "" {
-		endpoint = DefaultEndpoint
-	}
-	dial := opts.Dial
-	if dial == nil {
-		dial = dialTCP
-	}
-	dialCtx, cancel := context.WithTimeout(ctx, preflightTimeout)
-	defer cancel()
-	result.Checks = append(result.Checks, PreflightCheck{
-		Name: "endpoint " + endpoint,
-		Err:  dial(dialCtx, endpoint),
-	})
+	endpoint := common.Endpoint(opts.Endpoint, DefaultEndpoint)
+	result.Checks = append(result.Checks, common.EndpointCheck(ctx, endpoint, opts.Dial))
 	return result
 }
 
@@ -68,7 +51,7 @@ func Preflight(ctx context.Context, req Request, opts Options) PreflightResult {
 // format is not documented in `pi --help`; this matches either the
 // provider/id form or a line containing both the provider and the id.
 func checkModelListed(ctx context.Context, binPath, model string) error {
-	listCtx, cancel := context.WithTimeout(ctx, preflightTimeout)
+	listCtx, cancel := context.WithTimeout(ctx, common.PreflightTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(listCtx, binPath, "--list-models")
 	var stdout, stderr bytes.Buffer
@@ -102,14 +85,4 @@ func listsModel(line, model string) bool {
 		}
 	}
 	return hasProvider && hasModel
-}
-
-// dialTCP succeeds when a TCP connection to addr opens and closes cleanly.
-func dialTCP(ctx context.Context, addr string) error {
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "tcp", addr)
-	if err != nil {
-		return fmt.Errorf("endpoint %s is unreachable: %w", addr, err)
-	}
-	return conn.Close()
 }
