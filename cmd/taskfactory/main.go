@@ -18,10 +18,9 @@ import (
 	"taskfactory/internal/verify"
 )
 
-// version is the stable development version string printed by --version. It is a
-// fixed, human-readable constant; do not derive it from build metadata here so
-// that output stays predictable across checkouts and builds.
-const version = "dev"
+// version is printed by --version. It defaults to "dev" for plain go build or
+// go run; bin/build overrides it at link time with -ldflags "-X main.version=...".
+var version = "dev"
 
 // usageText is the help text printed by --help and -h. It names the command and
 // both global flags so that "taskfactory --help" documents the supported

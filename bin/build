@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "Usage: bin/build [output-path]" >&2
+}
+
+if (( $# > 1 )); then
+  usage
+  exit 2
+fi
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+output=${1:-bin/out/taskfactory}
+
+# The version comes from git when available; plain builds outside a Git
+# checkout (or without commits) keep the development default.
+if ! version=$(git describe --always --dirty 2>/dev/null) || [[ -z "${version}" ]]; then
+  version=dev
+fi
+
+mkdir -p "$(dirname "${output}")"
+go build -ldflags "-X main.version=${version}" -o "${output}" ./cmd/taskfactory
+printf 'built %s (version %s)\n' "${output}" "${version}"
