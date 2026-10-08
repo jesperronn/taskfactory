@@ -15,9 +15,9 @@ Close the gap between the protocol roles and the CLI, which only has `status`,
 Specify then implement commands for planner and orchestrator transitions that
 today require hand-moving files: promote inbox to ready (only if the ready
 contract validates), mark active work failed or blocked with retained evidence,
-and requeue a failed task. Each command is atomic, validates the whole task
-tree afterwards and commits only the task file moves. Check the spec first and
-split into one task per command if large.
+and requeue a failed task. Each command is atomic, validates the whole task tree
+afterwards and commits only the task file moves. Check the spec first and split
+into one task per command if large.
 
 ## Success criteria
 
