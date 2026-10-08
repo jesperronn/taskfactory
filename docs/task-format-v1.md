@@ -150,35 +150,143 @@ archive files without one. Failed tasks may omit the block only when they were
 never claimed. Missing metadata is not inferred or fabricated. If an optional
 Claim block is present, it must be complete and valid.
 
-Each attempt is recorded by appending one JSON object and LF to
-`.taskfactory/evidence/<ID>.jsonl`. This file is append-only: existing bytes
+Each worker verification attempt is recorded by appending one JSON object and LF
+to `.taskfactory/evidence/<ID>.jsonl`. This file is append-only: existing bytes
 must never be changed or removed. It is created on first attempt. Each line is
-one UTF-8 JSON object with exactly these keys:
+one UTF-8 JSON object with exactly these top-level keys and types:
+
+- `task_id`: string; the task ID.
+- `attempt`: positive integer; starts at 1 and increases by one for each
+  successfully appended attempt for this task.
+- `recorded_at`: string; RFC 3339 UTC timestamp.
+- `outcome`: string; exactly `PASS`, `FAILED`, or `BLOCKED`.
+- `branch`: string; claimed branch.
+- `base_commit`: string; full lowercase hexadecimal Git object ID (40 or 64
+  characters).
+- `result_commit`: string; full lowercase hexadecimal Git object ID (40 or 64
+  characters), or the empty string if no result commit exists.
+- `changed_files`: array of strings; sorted, unique, repository-relative paths
+  changed from `base_commit` in the worker worktree, including untracked files.
+- `checks`: array of command-result objects, in execution order. Each object has
+  exactly `source` (string: `task` or `worker`), `criterion` (string: the
+  criterion ID such as `C1`, or empty for a configured worker command),
+  `command` (string: exact configured command), `exit_code` (integer, or null if
+  the shell could not be started), `output` (string: combined stdout and stderr,
+  empty if none), and `error` (string: process-start error, or empty).
+- `note`: string; optional human context, which does not replace structured
+  command results.
+
+A verification runs every task criterion check in listed order, followed by
+`verification.worker` commands in array order. Both sets use the command
+execution rules in `docs/config-v1.md` and run at the claimed task worktree
+root. The first non-zero exit code or shell start error stops the sequence;
+checks that did not run are omitted. A non-zero exit code makes the outcome
+`FAILED`. A shell start error records `exit_code: null` and its message in
+`error`, stops the sequence, and makes the outcome `BLOCKED`. `PASS` means all
+checks in both sets ran and exited zero. `changed_files` is a snapshot taken
+when the attempt is recorded. An attempt with no changes uses an empty array.
+
+The following are independent examples; each uses attempt 1 and is not part of a
+claimed historical sequence. A passing attempt has this shape:
 
 ```json
 {
   "task_id": "TF-123",
   "attempt": 1,
   "recorded_at": "2026-10-08T12:00:00Z",
-  "outcome": "FAILED",
+  "outcome": "PASS",
   "branch": "feature/TF-123",
   "base_commit": "0123456789abcdef0123456789abcdef01234567",
-  "result_commit": "",
-  "checks": [{ "criterion": "C1", "command": "go test ./...", "exit_code": 1 }],
-  "note": "test failed"
+  "result_commit": "1123456789abcdef0123456789abcdef01234567",
+  "changed_files": ["cmd/app/main.go", "cmd/app/main_test.go"],
+  "checks": [
+    {
+      "source": "task",
+      "criterion": "C1",
+      "command": "go test ./...",
+      "exit_code": 0,
+      "output": "ok\t./...",
+      "error": ""
+    },
+    {
+      "source": "worker",
+      "criterion": "",
+      "command": "go vet ./...",
+      "exit_code": 0,
+      "output": "",
+      "error": ""
+    }
+  ],
+  "note": ""
 }
 ```
 
-`task_id` matches the task; `attempt` is a positive integer, consecutive per
-task; `recorded_at` is an RFC 3339 UTC timestamp; `outcome` is `PASS`, `FAILED`,
-or `BLOCKED`; commits are full lowercase hexadecimal Git object IDs (40 or 64
-characters; result may be empty before a commit exists); `checks` records every
-criterion check in criterion order with its exact command and integer exit code;
-`note` is a string and may be empty. Repeated attempts append new lines with the
-next attempt number. A successful worker report alone does not archive a task:
+A failed attempt records the first non-zero result and omits commands that did
+not run:
+
+```json
+{
+  "task_id": "TF-123",
+  "attempt": 1,
+  "recorded_at": "2026-10-08T12:05:00Z",
+  "outcome": "FAILED",
+  "branch": "feature/TF-123",
+  "base_commit": "0123456789abcdef0123456789abcdef01234567",
+  "result_commit": "1123456789abcdef0123456789abcdef01234567",
+  "changed_files": ["cmd/app/main.go"],
+  "checks": [
+    {
+      "source": "task",
+      "criterion": "C1",
+      "command": "go test ./...",
+      "exit_code": 1,
+      "output": "FAIL\t./...",
+      "error": ""
+    }
+  ],
+  "note": ""
+}
+```
+
+A blocked attempt records a shell start failure with a null exit code:
+
+```json
+{
+  "task_id": "TF-123",
+  "attempt": 1,
+  "recorded_at": "2026-10-08T12:06:00Z",
+  "outcome": "BLOCKED",
+  "branch": "feature/TF-123",
+  "base_commit": "0123456789abcdef0123456789abcdef01234567",
+  "result_commit": "",
+  "changed_files": [],
+  "checks": [
+    {
+      "source": "task",
+      "criterion": "C1",
+      "command": "go test ./...",
+      "exit_code": null,
+      "output": "",
+      "error": "start sh: executable not found"
+    }
+  ],
+  "note": ""
+}
+```
+
+To append safely, a verifier acquires an exclusive per-task lock before reading
+evidence or choosing an attempt number. While holding it, the verifier validates
+existing complete JSONL records, chooses one greater than the last attempt
+(number 1 for a missing or empty file), and appends exactly one complete JSON
+object followed by LF. It releases the lock after the append. Concurrent
+verifiers for the same task therefore serialize and receive distinct consecutive
+numbers. If existing evidence is malformed or does not end in LF, the verifier
+must report an error and leave it byte-for-byte unchanged; it must not repair,
+truncate, or reuse an attempt number. Evidence from prior runs is never inferred
+or fabricated. A successful worker report alone does not archive a task:
 integration must succeed before the task moves to `tasks/archive/`. Evidence
-records worker attempts and does not replace integration evidence required by
-the protocol.
+records worker attempts and do not replace integration evidence required by the
+protocol.
 
 ## Complete valid ready task
 
