@@ -109,7 +109,15 @@ func Claim(projectRoot, id, owner string) error {
 	if strings.TrimSpace(owner) == "" {
 		return errors.New("claim owner must be non-empty")
 	}
+	canonicalRoot, err := filepath.EvalSymlinks(projectRoot)
+	if err != nil {
+		return fmt.Errorf("resolve project root %s: %w", projectRoot, err)
+	}
+	projectRoot = canonicalRoot
 	return WithClaimLock(projectRoot, func() error {
+		if err := validateTaskStateDirectories(projectRoot); err != nil {
+			return err
+		}
 		if err := CheckEligibility(projectRoot, id); err != nil {
 			return err
 		}
@@ -142,13 +150,13 @@ func Claim(projectRoot, id, owner string) error {
 		} else if !os.IsNotExist(err) {
 			return fmt.Errorf("inspect worktree path %s: %w", worktree, err)
 		}
-		base, err := runGit(projectRoot, "rev-parse", "--verify", "HEAD^{commit}")
+		base, err := runGit(projectRoot, "rev-parse", "--verify", "refs/heads/main^{commit}")
 		if err != nil {
-			return fmt.Errorf("resolve current main commit: %w", err)
+			return fmt.Errorf("resolve local main commit refs/heads/main: %w", err)
 		}
 		base = strings.TrimSpace(base)
 		if !regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`).MatchString(base) {
-			return fmt.Errorf("resolve current main commit: Git returned invalid full object ID %q", base)
+			return fmt.Errorf("resolve local main commit refs/heads/main: Git returned invalid full object ID %q", base)
 		}
 		data, err := os.ReadFile(readyPath)
 		if err != nil {
@@ -262,6 +270,38 @@ func Claim(projectRoot, id, owner string) error {
 		}
 		return nil
 	})
+}
+
+func validateTaskStateDirectories(projectRoot string) error {
+	root, err := filepath.EvalSymlinks(projectRoot)
+	if err != nil {
+		return fmt.Errorf("resolve project root %s: %w", projectRoot, err)
+	}
+	paths := []string{filepath.Join(root, "tasks")}
+	for _, state := range []string{"inbox", "ready", "active", "failed", "archive"} {
+		paths = append(paths, filepath.Join(root, "tasks", state))
+	}
+	for _, path := range paths {
+		info, err := os.Lstat(path)
+		if err != nil {
+			return fmt.Errorf("inspect task state directory %s: %w", path, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("task state directory %s must not be a symlink", path)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("task state path %s is not a directory", path)
+		}
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return fmt.Errorf("resolve task state directory %s: %w", path, err)
+		}
+		rel, err := filepath.Rel(root, resolved)
+		if err != nil || rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("task state directory %s resolves outside project root %s", path, root)
+		}
+	}
+	return nil
 }
 
 func findTaskPath(directory, id string) (string, error) {

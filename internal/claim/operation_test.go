@@ -87,6 +87,52 @@ func TestClaimCreatesIndependentWorktreesForDifferentTasks(t *testing.T) {
 	}
 }
 
+func TestClaimRejectsSymlinkedActiveDirectoryWithoutWritingOutsideProject(t *testing.T) {
+	root := newGitProject(t, 4, "TF-001")
+	external := t.TempDir()
+	activeDir := filepath.Join(root, "tasks", "active")
+	if err := os.Remove(activeDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(external, activeDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := Claim(root, "TF-001", "worker"); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("symlinked active directory error = %v", err)
+	}
+	entries, err := os.ReadDir(external)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("claim wrote into external active directory: %v", entries)
+	}
+	if _, err := os.Stat(filepath.Join(root, "tasks", "ready", "TF-001-target.md")); err != nil {
+		t.Fatalf("ready task changed: %v", err)
+	}
+}
+
+func TestClaimUsesLocalMainCommitWhenInvokedFromAnotherBranch(t *testing.T) {
+	root := newGitProject(t, 4, "TF-001")
+	mainCommit := gitOutput(t, root, "rev-parse", "refs/heads/main^{commit}")
+	gitRun(t, root, "switch", "-c", "feature/unrelated")
+	if err := os.WriteFile(filepath.Join(root, "feature.txt"), []byte("feature change\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, root, "add", "feature.txt")
+	gitRun(t, root, "commit", "--quiet", "-m", "feature change")
+	if err := Claim(root, "TF-001", "worker"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "tasks", "active", "TF-001-target.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "Base commit: "+mainCommit) {
+		t.Fatalf("claim base commit did not use main %s:\n%s", mainCommit, data)
+	}
+}
+
 func TestClaimGitFailureLeavesReadyTaskAndUnownedResourcesUntouched(t *testing.T) {
 	root := newGitProject(t, 4, "TF-001")
 	realGit, err := exec.LookPath("git")
@@ -183,7 +229,7 @@ func TestClaimSerializesSameTaskClaims(t *testing.T) {
 func newGitProject(t *testing.T, capacity int, ids ...string) string {
 	t.Helper()
 	root := t.TempDir()
-	gitRun(t, root, "init", "--quiet")
+	gitRun(t, root, "init", "--quiet", "--initial-branch=main")
 	gitRun(t, root, "config", "user.name", "TaskFactory Test")
 	gitRun(t, root, "config", "user.email", "taskfactory@example.invalid")
 	for _, state := range []string{"inbox", "ready", "active", "failed", "archive"} {
