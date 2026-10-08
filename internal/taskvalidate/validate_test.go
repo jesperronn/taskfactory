@@ -100,13 +100,18 @@ func TestValidateRejectsDependencyCyclesAndUnknownStates(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeTask(t, root, "planned", "TF-103-other.md", "# TF-103: Other\n")
+	writeTask(t, root, "planned", "TF-104-empty.md", "")
+	writeTask(t, root, "planned", ".gitkeep", "")
 	got := Validate(root, "")
 	joined := ""
 	for _, d := range got {
 		joined += d.Error() + "\n"
 	}
-	if !strings.Contains(joined, "dependency cycle") || !strings.Contains(joined, "state") {
-		t.Fatalf("diagnostics = %s, want cycle and state errors", joined)
+	if !strings.Contains(joined, "dependency cycle") || !strings.Contains(joined, "TF-103-other.md: state") || !strings.Contains(joined, "TF-104-empty.md: state") {
+		t.Fatalf("diagnostics = %s, want cycle and both state errors", joined)
+	}
+	if strings.Contains(joined, ".gitkeep: state") {
+		t.Fatalf("empty placeholder should be ignored: %s", joined)
 	}
 }
 

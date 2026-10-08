@@ -131,9 +131,15 @@ func Validate(root, selected string) []Diagnostic {
 					continue
 				}
 				data, e := os.ReadFile(filepath.Join(dir, child.Name()))
-				if e == nil && len(data) > 0 {
-					diagnostics = append(diagnostics, Diagnostic{filepath.ToSlash(filepath.Join("tasks", entry.Name(), child.Name())), "state", "task files must be under inbox, ready, active, failed, or archive"})
+				if child.Name() == ".gitkeep" && e == nil && len(data) == 0 {
+					continue
 				}
+				path := filepath.ToSlash(filepath.Join("tasks", entry.Name(), child.Name()))
+				if e != nil {
+					diagnostics = append(diagnostics, Diagnostic{path, "file", e.Error()})
+					continue
+				}
+				diagnostics = append(diagnostics, Diagnostic{path, "state", "task files must be under inbox, ready, active, failed, or archive"})
 			}
 		}
 	}
