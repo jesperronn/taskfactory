@@ -5,6 +5,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -32,17 +33,15 @@ const exitUsage = 2
 
 func main() {
 	fs := flag.NewFlagSet("taskfactory", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), usageText)
-	}
+	fs.SetOutput(io.Discard)
+	// Keep flag.Parse from printing the full usage text on invalid input.
+	fs.Usage = func() {}
 
 	help := fs.Bool("help", false, "print this usage and exit successfully")
 	showVersion := fs.Bool("version", false, "print the CLI version string and exit successfully")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
-		// Parse already printed "taskfactory: <error>" via fs.Usage on failure
-		// with ContinueOnError; exit with the conventional usage code.
+		fmt.Fprintf(os.Stderr, "taskfactory: %v\n", err)
 		os.Exit(exitUsage)
 	}
 
@@ -56,6 +55,6 @@ func main() {
 		return
 	}
 
-	fs.Usage()
+	fmt.Fprintln(os.Stderr, usageText)
 	os.Exit(exitUsage)
 }
