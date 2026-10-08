@@ -95,17 +95,24 @@ quoting, expansions, and pipelines therefore have shell meaning. It does not
 split a command string itself. Git operations are invoked directly without a
 shell. Repository verification commands are trusted project policy.
 
-The loader rejects empty strings but does not try to parse shell syntax. A
-missing `sh` or a command that exits unsuccessfully is a verification failure.
-The process inherits the caller's environment, runs synchronously, and exposes
-combined stdout and stderr as evidence while preserving the command's exit
-status. A non-zero command stops the current verification list; later commands
-in that list are not run. Worker commands run at the claimed task worktree root.
-Integration commands run at the integration candidate worktree root after
-rebasing onto the current main branch and before advancing main. Optional main
-commands run at the repository root after a successful fast-forward update of
-main. If `stop_on_main_failure` is true and main verification fails, stop the
-pipeline and do not archive the task.
+The loader rejects empty strings but does not try to parse shell syntax. For
+worker verification, failure to start `sh` produces `BLOCKED`; a command that
+starts and exits non-zero produces `FAILED`. The process inherits the caller's
+environment, runs synchronously, and exposes combined stdout and stderr as
+evidence while preserving the command's exit status. A non-zero command stops
+the current verification list; later commands in that list are not run. For
+`taskfactory verify <ID>`, run the task's criterion checks in their listed order
+first, then run `verification.worker` in array order. These two lists form one
+sequence: the first non-zero exit code or shell start error stops the sequence,
+and later commands are not run. Record each command that ran, including combined
+stdout and stderr and its exit status, in that order; do not add results for
+commands that were skipped. Use the same `sh -c` execution rules for criterion
+checks and configured worker commands. Worker commands run at the claimed task
+worktree root. Integration commands run at the integration candidate worktree
+root after rebasing onto the current main branch and before advancing main.
+Optional main commands run at the repository root after a successful
+fast-forward update of main. If `stop_on_main_failure` is true and main
+verification fails, stop the pipeline and do not archive the task.
 
 The initial supported platforms are macOS and Linux. On another platform,
 verification requires a POSIX-compatible `sh` available on `PATH`; failure to
