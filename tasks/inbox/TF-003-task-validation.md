@@ -7,7 +7,7 @@ the whole task tree before claiming work.
 
 ## Dependencies
 
-TF-001, TF-006, and TF-019 must be archived before promotion to ready.
+TF-001, TF-004, TF-006, and TF-019 must be archived before promotion to ready.
 
 ## Scope
 
@@ -27,7 +27,10 @@ these contracts. Print diagnostics in stable path order, each with file path and
 field; exit 0 only if all selected contracts are valid and nonzero if any error
 exists. A single-file check must inspect the tree to resolve uniqueness and
 dependencies, while reporting errors for the selected file only. Do not move
-tasks or create worktrees. Do not add a separate validation script.
+tasks or create worktrees. Do not add a separate validation script. Once the
+validator passes on the TaskFactory repository, invoke it from `bin/test` and
+document its use for task transitions in `AGENTS.md` and
+`docs/worker-instructions.md`.
 
 ## Success criteria
 
@@ -38,6 +41,8 @@ tasks or create worktrees. Do not add a separate validation script.
 - Duplicate IDs, missing dependency references, and invalid state directory
   names are tested.
 - Validation does not modify any task file.
+- `bin/test` runs whole-tree validation, and worker instructions require it
+  before a task is promoted, claimed, or archived.
 - `go test ./...` and `go vet ./...` pass.
 
 ## Verification
