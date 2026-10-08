@@ -91,7 +91,7 @@ func Run(root, id string) (runErr error) {
 		return fmt.Errorf("task %s base commit %s is unavailable in worktree", id, base)
 	}
 	result, resultErr := git(worktree, "rev-parse", "HEAD")
-	if resultErr != nil {
+	if resultErr != nil || result == base {
 		result = ""
 	}
 	commands := []check{}
