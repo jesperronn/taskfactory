@@ -7,7 +7,7 @@ result.
 
 ## Dependencies
 
-TF-002, TF-003, and TF-010 must be archived before promotion to ready.
+TF-002, TF-003, TF-010, and TF-021 must be archived before promotion to ready.
 
 ## Scope
 
