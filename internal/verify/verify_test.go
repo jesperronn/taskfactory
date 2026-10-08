@@ -66,6 +66,79 @@ func TestRunExecutesWorkerCommandsAfterAllCriteria(t *testing.T) {
 	}
 }
 
+func TestRunResultCommitTracksCommittedWorktreeHead(t *testing.T) {
+	t.Run("unchanged", func(t *testing.T) {
+		root, _, base := fixture(t, []string{"true"}, []string{"true"})
+		if err := Run(root, "TF-099"); err != nil {
+			t.Fatal(err)
+		}
+		got := readRecord(t, root)
+		if got.ResultCommit != "" || got.BaseCommit != base {
+			t.Fatalf("result=%q base=%q", got.ResultCommit, got.BaseCommit)
+		}
+	})
+	t.Run("dirty uncommitted", func(t *testing.T) {
+		root, worktree, _ := fixture(t, []string{"true"}, []string{"true"})
+		if err := os.WriteFile(filepath.Join(worktree, "dirty.txt"), []byte("uncommitted\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := Run(root, "TF-099"); err != nil {
+			t.Fatal(err)
+		}
+		got := readRecord(t, root)
+		if got.ResultCommit != "" || !contains(got.ChangedFiles, "dirty.txt") {
+			t.Fatalf("result=%q changed=%v", got.ResultCommit, got.ChangedFiles)
+		}
+	})
+	t.Run("committed", func(t *testing.T) {
+		root, worktree, base := fixture(t, []string{"true"}, []string{"true"})
+		if err := os.WriteFile(filepath.Join(worktree, "committed.txt"), []byte("committed\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		for _, args := range [][]string{{"add", "committed.txt"}, {"-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "worker result"}} {
+			cmd := exec.Command("git", append([]string{"-C", worktree}, args...)...)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v\n%s", args, err, out)
+			}
+		}
+		headCmd := exec.Command("git", "-C", worktree, "rev-parse", "HEAD")
+		headBytes, err := headCmd.Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		head := strings.TrimSpace(string(headBytes))
+		if err := Run(root, "TF-099"); err != nil {
+			t.Fatal(err)
+		}
+		got := readRecord(t, root)
+		if got.ResultCommit != head || got.ResultCommit == base {
+			t.Fatalf("result=%q want HEAD %q and base %q", got.ResultCommit, head, base)
+		}
+	})
+}
+
+func readRecord(t *testing.T, root string) record {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, ".taskfactory", "evidence", "TF-099.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got record
+	if err := json.Unmarshal(bytesLine(data), &got); err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestRunAppendsConcurrentAttemptsAndRejectsCorruption(t *testing.T) {
 	root, _, _ := fixture(t, []string{"true"}, []string{"true"})
 	if err := Run(root, "TF-099"); err != nil {
