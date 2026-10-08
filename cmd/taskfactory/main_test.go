@@ -270,6 +270,41 @@ func TestClaimCLIRequiresOwnerAndActivatesTask(t *testing.T) {
 	}
 }
 
+func TestVerifyCLIReturnsFailureAfterRecordingEvidence(t *testing.T) {
+	binary := buildCLI(t)
+	root := initGitProject(t)
+	if output, err := runCLI(t, binary, root, "init"); err != nil {
+		t.Fatalf("init: %v\n%s", err, output)
+	}
+	task := strings.Replace(validTask("TF-109"), "Check: go test ./...", "Check: false", 1)
+	taskPath := filepath.Join(root, "tasks", "ready", "TF-109-failing-check.md")
+	if err := os.WriteFile(taskPath, []byte(task), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "-C", root, "add", ".")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v\n%s", err, output)
+	}
+	cmd = exec.Command("git", "-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "fixture")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v\n%s", err, output)
+	}
+	if output, err := runCLI(t, binary, root, "claim", "TF-109", "--owner", "worker"); err != nil {
+		t.Fatalf("claim: %v\n%s", err, output)
+	}
+	output, err := runCLI(t, binary, root, "verify", "TF-109")
+	if processExitCode(err) != 1 || !strings.Contains(string(output), "FAILED") {
+		t.Fatalf("verify exit=%d err=%v output=%s", processExitCode(err), err, output)
+	}
+	evidence, err := os.ReadFile(filepath.Join(root, ".taskfactory", "evidence", "TF-109.jsonl"))
+	if err != nil {
+		t.Fatalf("failed verification evidence missing: %v", err)
+	}
+	if !strings.Contains(string(evidence), `"outcome":"FAILED"`) || !strings.HasSuffix(string(evidence), "\n") {
+		t.Fatalf("unexpected evidence: %s", evidence)
+	}
+}
+
 func TestStatusReportsStableReadOnlyTaskCounts(t *testing.T) {
 	binary := buildCLI(t)
 	root := initGitProject(t)

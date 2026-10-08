@@ -15,8 +15,8 @@ func TestRunOrdersChecksStopsOnFailureAndRecordsOutput(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(worktree, "changed.txt"), []byte("new"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := Run(root, "TF-099"); err != nil {
-		t.Fatal(err)
+	if err := Run(root, "TF-099"); err == nil || !strings.Contains(err.Error(), "FAILED") {
+		t.Fatalf("failed verification error = %v", err)
 	}
 	order, err := os.ReadFile(filepath.Join(worktree, "order"))
 	if err != nil {
@@ -114,6 +114,38 @@ func TestRunAppendsConcurrentAttemptsAndRejectsCorruption(t *testing.T) {
 	}
 }
 
+func TestRunRejectsDuplicateEvidenceKeysWithoutChangingBytes(t *testing.T) {
+	for name, duplicate := range map[string]string{
+		"top-level":    strings.Replace(validRecordJSON(), `"task_id":"TF-099",`, `"task_id":"TF-099","task_id":"TF-099",`, 1),
+		"nested-check": strings.Replace(validRecordJSON(), `"source":"worker",`, `"source":"worker","source":"worker",`, 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			root, worktree, _ := fixture(t, []string{"echo ran > ran"}, []string{"true"})
+			path := filepath.Join(root, ".taskfactory", "evidence", "TF-099.jsonl")
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			before := []byte(duplicate + "\n")
+			if err := os.WriteFile(path, before, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := Run(root, "TF-099"); err == nil || !strings.Contains(err.Error(), "duplicate object key") {
+				t.Fatalf("duplicate-key error = %v", err)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(after) != string(before) {
+				t.Fatal("duplicate-key evidence bytes changed")
+			}
+			if _, err := os.Stat(filepath.Join(worktree, "ran")); !os.IsNotExist(err) {
+				t.Fatalf("task command ran before evidence validation: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidateEvidenceRejectsWrongIdentityAndUnknownKeys(t *testing.T) {
 	base := validRecordJSON()
 	invalid := []string{
@@ -144,8 +176,8 @@ func validRecordJSON() string {
 
 func TestRunRepairCreatesNextAttempt(t *testing.T) {
 	root, _, _ := fixture(t, []string{"false"}, []string{"true"})
-	if err := Run(root, "TF-099"); err != nil {
-		t.Fatal(err)
+	if err := Run(root, "TF-099"); err == nil || !strings.Contains(err.Error(), "FAILED") {
+		t.Fatalf("first failed verification error = %v", err)
 	}
 	taskPath := filepath.Join(root, "tasks", "active", "TF-099-fixture.md")
 	data, err := os.ReadFile(taskPath)
@@ -213,8 +245,8 @@ func TestRunRecordsBlockedShellStartError(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Setenv("PATH", oldPath)
-	if err := Run(root, "TF-099"); err != nil {
-		t.Fatal(err)
+	if err := Run(root, "TF-099"); err == nil || !strings.Contains(err.Error(), "BLOCKED") {
+		t.Fatalf("blocked verification error = %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(root, ".taskfactory", "evidence", "TF-099.jsonl"))
 	if err != nil {

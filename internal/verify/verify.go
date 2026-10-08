@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -153,6 +154,9 @@ func Run(root, id string) (runErr error) {
 	}
 	if err := appendSync(path, encoded); err != nil {
 		return fmt.Errorf("append verification evidence: %w", err)
+	}
+	if entry.Outcome != "PASS" {
+		return fmt.Errorf("verification %s for task %s attempt %d; evidence recorded", entry.Outcome, id, entry.Attempt)
 	}
 	return nil
 }
@@ -325,6 +329,9 @@ func validateEvidence(data []byte, id string) (int, error) {
 	return len(lines), nil
 }
 func validateRecord(line []byte, id string, number, want int) error {
+	if err := rejectDuplicateJSONKeys(line); err != nil {
+		return fmt.Errorf("evidence for %s line %d is malformed: %w", id, number, err)
+	}
 	var v map[string]json.RawMessage
 	if err := json.Unmarshal(line, &v); err != nil {
 		return fmt.Errorf("evidence for %s line %d is malformed: %w", id, number, err)
@@ -425,6 +432,64 @@ func validateRecord(line []byte, id string, number, want int) error {
 		}
 	}
 	return nil
+}
+
+func rejectDuplicateJSONKeys(data []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	if err := consumeJSONValue(decoder); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		if err == nil {
+			return errors.New("multiple JSON values")
+		}
+		return err
+	}
+	return nil
+}
+
+func consumeJSONValue(decoder *json.Decoder) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	delim, ok := token.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch delim {
+	case '{':
+		seen := map[string]bool{}
+		for decoder.More() {
+			keyToken, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			key, ok := keyToken.(string)
+			if !ok {
+				return errors.New("object key is not a string")
+			}
+			if seen[key] {
+				return fmt.Errorf("duplicate object key %q", key)
+			}
+			seen[key] = true
+			if err := consumeJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+		_, err = decoder.Token()
+		return err
+	case '[':
+		for decoder.More() {
+			if err := consumeJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+		_, err = decoder.Token()
+		return err
+	default:
+		return fmt.Errorf("unexpected JSON delimiter %q", delim)
+	}
 }
 
 func isJSONType(raw json.RawMessage, prefix byte) bool {
