@@ -21,8 +21,8 @@ behavior and Bash/Go placeholders intact.
 ## Constraints
 
 Do not reformat existing Markdown files. Do not depend on registry access;
-`npx prettier` may try to download packages in restricted environments.
-Preserve unrelated working-tree changes.
+`npx prettier` may try to download packages in restricted environments. Preserve
+unrelated working-tree changes.
 
 ## Success criteria
 
@@ -39,7 +39,7 @@ script was actually faulty. Do not run `--autofix` against repository Markdown.
 ## Outcome
 
 The original `bin/lint` was already correct: its `exec npx` passes through the
-Prettier exit status. Added `bin/lint.test.sh` to check statuses 0 and 1 in
-both default and `--autofix` modes, plus exact arguments. The check and Bash
-syntax validation pass. The real Prettier command could not be reproduced in
-this environment because the npm registry is unreachable.
+Prettier exit status. Added `bin/lint.test.sh` to check statuses 0 and 1 in both
+default and `--autofix` modes, plus exact arguments. The check and Bash syntax
+validation pass. The real Prettier command could not be reproduced in this
+environment because the npm registry is unreachable.

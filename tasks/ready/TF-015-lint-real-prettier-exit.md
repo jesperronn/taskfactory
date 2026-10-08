@@ -31,8 +31,8 @@ blocker and leave the task unfinished; a mock alone cannot satisfy this task.
 
 - Running real `bin/lint` against an intentionally misformatted Markdown file
   names that file or reports formatting issues and exits nonzero.
-- Running real `bin/lint` against a correctly formatted Markdown file reports
-  no formatting issues and exits 0.
+- Running real `bin/lint` against a correctly formatted Markdown file reports no
+  formatting issues and exits 0.
 - Both results are asserted by an automated regression check using real
   Prettier, with no fake `npx` or fake formatter.
 - Existing `bin/lint.test.sh` checks continue to pass, including `--autofix`
