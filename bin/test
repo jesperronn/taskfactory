@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd "${script_dir}/.." && pwd)
+cd "${repo_root}"
+
+export LC_ALL=C
+
+failed=0
+test_files=()
+
+for test_file in bin/*.test.sh; do
+  [[ -f "${test_file}" ]] || continue
+  if [[ ! -x "${test_file}" ]]; then
+    printf 'FAIL: shell test is not executable: %s\n' "${test_file}" >&2
+    failed=1
+    continue
+  fi
+  test_files+=("${test_file}")
+done
+
+for test_file in "${test_files[@]}"; do
+  if [[ -z "${NO_COLOR:-}" && -t 1 ]]; then
+    printf '\033[1;36m==> %s\033[0m\n' "${test_file}"
+  else
+    printf '==> %s\n' "${test_file}"
+  fi
+  if ! "./${test_file}"; then
+    printf 'FAIL: shell test: %s (rerun with: bin/test %s)\n' "${test_file}" "${test_file}" >&2
+    failed=1
+  fi
+done
+
+if [[ -f go.mod ]]; then
+  printf '==> go test ./...\n'
+  if ! go test ./...; then
+    printf 'FAIL: Go tests: go test ./...\n' >&2
+    failed=1
+  fi
+else
+  printf 'SKIP: Go tests (go.mod not found)\n'
+fi
+
+if (( failed )); then
+  exit 1
+fi
+
+printf 'TEST SUMMARY: all selected checks passed\n'
