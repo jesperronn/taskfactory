@@ -28,6 +28,7 @@ const usageText = `taskfactory coordinates software work into explicit, verifiab
 Usage:
   taskfactory [global flags]
   taskfactory <command> [flags]
+  taskfactory status
   taskfactory validate [task-file]
 
 Global flags:
@@ -101,28 +102,22 @@ func main() {
 		}
 		return
 	}
+	if len(args) == 1 && args[0] == "status" {
+		if err := statusProject(); err != nil {
+			fmt.Fprintf(os.Stderr, "taskfactory status: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	fmt.Fprintln(os.Stderr, usageText)
 	os.Exit(exitUsage)
 }
 
 func validateProject(args []string) error {
-	cwd, err := os.Getwd()
+	root, err := projectRoot()
 	if err != nil {
-		return fmt.Errorf("determine current directory: %w", err)
-	}
-	command := exec.Command("git", "-C", cwd, "rev-parse", "--path-format=absolute", "--show-toplevel")
-	output, err := command.Output()
-	if err != nil {
-		return fmt.Errorf("current directory is not inside a Git working tree")
-	}
-	rootValue := filepath.Clean(strings.TrimSuffix(string(output), "\n"))
-	root, err := filepath.Abs(rootValue)
-	if err == nil {
-		root, err = filepath.EvalSymlinks(root)
-	}
-	if err != nil {
-		return fmt.Errorf("resolve Git project root: %w", err)
+		return err
 	}
 	if _, err := config.Load(root); err != nil {
 		return err
@@ -166,6 +161,71 @@ func validateProject(args []string) error {
 		fmt.Fprintf(os.Stdout, "%s is valid\n", filepath.ToSlash(selected))
 	}
 	return nil
+}
+
+func statusProject() error {
+	root, err := projectRoot()
+	if err != nil {
+		return err
+	}
+	if _, err := config.Load(root); err != nil {
+		return err
+	}
+	for _, state := range taskStates {
+		dir := filepath.Join(root, "tasks", state)
+		info, err := os.Stat(dir)
+		if err != nil {
+			return fmt.Errorf("task state directory %s: %w", dir, err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("task state path %s is not a directory", dir)
+		}
+	}
+	diagnostics := taskvalidate.Validate(root, "")
+	for _, diagnostic := range diagnostics {
+		fmt.Fprintln(os.Stderr, diagnostic.Error())
+	}
+	if len(diagnostics) > 0 {
+		return fmt.Errorf("%d validation error(s)", len(diagnostics))
+	}
+	counts := make(map[string]int, len(taskStates))
+	for _, state := range taskStates {
+		entries, err := os.ReadDir(filepath.Join(root, "tasks", state))
+		if err != nil {
+			return fmt.Errorf("read task state directory %s: %w", filepath.Join(root, "tasks", state), err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || entry.Name() == ".gitkeep" {
+				continue
+			}
+			counts[state]++
+		}
+	}
+	for _, state := range taskStates {
+		fmt.Fprintf(os.Stdout, "%s: %d\n", state, counts[state])
+	}
+	return nil
+}
+
+func projectRoot() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("determine current directory: %w", err)
+	}
+	command := exec.Command("git", "-C", cwd, "rev-parse", "--path-format=absolute", "--show-toplevel")
+	output, err := command.Output()
+	if err != nil {
+		return "", fmt.Errorf("current directory is not inside a Git working tree")
+	}
+	rootValue := filepath.Clean(strings.TrimSuffix(string(output), "\n"))
+	root, err := filepath.Abs(rootValue)
+	if err == nil {
+		root, err = filepath.EvalSymlinks(root)
+	}
+	if err != nil {
+		return "", fmt.Errorf("resolve Git project root: %w", err)
+	}
+	return root, nil
 }
 
 func initializeProject() error {

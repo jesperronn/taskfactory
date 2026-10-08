@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -238,6 +239,123 @@ func TestValidateSupportsWholeTreeAndSingleFile(t *testing.T) {
 	if output, err := runCLI(t, binary, root, "validate", taskPath); processExitCode(err) == 0 || !strings.Contains(string(output), "Goal") {
 		t.Fatalf("invalid selected file should fail with field: %v\n%s", err, output)
 	}
+}
+
+func TestStatusReportsStableReadOnlyTaskCounts(t *testing.T) {
+	binary := buildCLI(t)
+	root := initGitProject(t)
+	if output, err := runCLI(t, binary, root, "init"); err != nil {
+		t.Fatalf("init: %v\n%s", err, output)
+	}
+	for _, state := range []string{"inbox", "ready", "active", "failed", "archive"} {
+		placeholder := filepath.Join(root, "tasks", state, ".gitkeep")
+		if err := os.WriteFile(placeholder, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if output, err := runCLI(t, binary, root, "status"); err != nil || string(output) != "inbox: 0\nready: 0\nactive: 0\nfailed: 0\narchive: 0\n" {
+		t.Fatalf("empty status = %q, err=%v", output, err)
+	}
+
+	for _, item := range []struct{ state, filename, contents string }{
+		{"inbox", "TF-101-proposal.md", "# TF-101: Proposal\nAnything goes.\n"},
+		{"ready", "TF-102-ready.md", validTask("TF-102")},
+		{"active", "TF-103-active.md", activeTask(t, root, "TF-103")},
+		{"failed", "TF-104-failed.md", validTask("TF-104")},
+		{"archive", "TF-105-archived.md", validTask("TF-105")},
+	} {
+		path := filepath.Join(root, "tasks", item.state, item.filename)
+		if err := os.WriteFile(path, []byte(item.contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := "inbox: 1\nready: 1\nactive: 1\nfailed: 1\narchive: 1\n"
+	before := taskTreeHashes(t, root)
+	first, err := runCLI(t, binary, root, "status")
+	if err != nil || string(first) != want {
+		t.Fatalf("populated status = %q, err=%v; want %q", first, err, want)
+	}
+	second, err := runCLI(t, binary, root, "status")
+	if err != nil || !bytes.Equal(first, second) {
+		t.Fatalf("repeated status differs: first=%q second=%q err=%v", first, second, err)
+	}
+	if after := taskTreeHashes(t, root); !equalTaskHashes(before, after) {
+		t.Fatal("status modified task files")
+	}
+}
+
+func TestStatusRejectsMissingStateDirectoryAndInvalidTask(t *testing.T) {
+	binary := buildCLI(t)
+	root := initGitProject(t)
+	if output, err := runCLI(t, binary, root, "init"); err != nil {
+		t.Fatalf("init: %v\n%s", err, output)
+	}
+	missing := filepath.Join(root, "tasks", "failed")
+	if err := os.RemoveAll(missing); err != nil {
+		t.Fatal(err)
+	}
+	output, err := runCLI(t, binary, root, "status")
+	if processExitCode(err) == 0 || !strings.Contains(string(output), missing) {
+		t.Fatalf("missing directory should fail with its path: err=%v output=%s", err, output)
+	}
+	if err := os.Mkdir(missing, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bad := filepath.Join(root, "tasks", "ready", "TF-107-broken.md")
+	if err := os.WriteFile(bad, []byte("# TF-107: Broken\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output, err = runCLI(t, binary, root, "status")
+	if processExitCode(err) == 0 || !strings.Contains(string(output), "tasks/ready/TF-107-broken.md") || !strings.Contains(string(output), "Goal") {
+		t.Fatalf("invalid task should fail with a path-specific diagnostic: err=%v output=%s", err, output)
+	}
+}
+
+func validTask(id string) string {
+	return "# " + id + ": Example\n\n## Goal\n\nDo it.\n\n## Dependencies\n\nNone\n\n## Scope\n\nImplement.\n\n## Constraints\n\nKeep it small.\n\n## Success criteria\n\n### C1: It works\n\nCheck: go test ./...\n\n## Verification\n\nRun check.\n"
+}
+
+func activeTask(t *testing.T, root, id string) string {
+	t.Helper()
+	canonicalRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return validTask(id) + "\n## Claim\n\nOwner: test\nBranch: feature/test\nWorktree: " + filepath.Join(canonicalRoot, ".taskfactory", "worktrees", id) + "\nBase commit: 0123456789abcdef0123456789abcdef01234567\nStarted at: 2026-10-08T12:00:00Z\n"
+}
+
+func taskTreeHashes(t *testing.T, root string) map[string][32]byte {
+	t.Helper()
+	result := make(map[string][32]byte)
+	for _, state := range []string{"inbox", "ready", "active", "failed", "archive"} {
+		entries, err := os.ReadDir(filepath.Join(root, "tasks", state))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range entries {
+			if entry.Name() == ".gitkeep" {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(root, "tasks", state, entry.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			result[state+"/"+entry.Name()] = sha256.Sum256(data)
+		}
+	}
+	return result
+}
+
+func equalTaskHashes(left, right map[string][32]byte) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for path, hash := range left {
+		if right[path] != hash {
+			return false
+		}
+	}
+	return true
 }
 
 func buildCLI(t *testing.T) string {
