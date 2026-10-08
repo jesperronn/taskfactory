@@ -53,6 +53,54 @@ var commandHelps = map[string]string{
 	"check-main": checkMainHelp,
 }
 
+// styleArguments colors the words after a subcommand name: flags starting with
+// "--" are cyan and everything else, such as <ID>, is dim. Words are joined with
+// the original spaces so the plain text is unchanged.
+func styleArguments(p ui.Painter, rest string) string {
+	words := strings.Split(rest, " ")
+	for i, word := range words {
+		if strings.HasPrefix(word, "--") {
+			words[i] = p.Cyan(word)
+		} else {
+			words[i] = p.Dim(word)
+		}
+	}
+	return strings.Join(words, " ")
+}
+
+// styleHelp applies color to a per-command help constant: the subcommand name is
+// yellow, flags are cyan, placeholders are dim and headings are bold. With color
+// disabled the result is byte-identical to text.
+func styleHelp(p ui.Painter, text string) string {
+	var b strings.Builder
+	for _, line := range strings.SplitAfter(text, "\n") {
+		body := strings.TrimSuffix(line, "\n")
+		newline := line[len(body):]
+		switch {
+		case strings.HasPrefix(body, "Usage: taskfactory "):
+			rest := strings.TrimPrefix(body, "Usage: taskfactory ")
+			name := strings.Fields(rest)[0]
+			b.WriteString(p.Bold("Usage:") + " " + p.Cyan("taskfactory") + " " + p.Yellow(name) + p.Dim(rest[len(name):]) + newline)
+		case body == "Flags:" || body == "Exit codes:":
+			b.WriteString(p.Bold(body) + newline)
+		case strings.HasPrefix(body, "  --"):
+			rest := body[2:]
+			flag, tail := rest, ""
+			if k := strings.Index(rest, "  "); k >= 0 {
+				flag, tail = rest[:k], rest[k:]
+			}
+			styled := p.Cyan(flag)
+			if i := strings.Index(flag, " <"); i >= 0 {
+				styled = p.Cyan(flag[:i]) + p.Dim(flag[i:])
+			}
+			b.WriteString("  " + styled + tail + newline)
+		default:
+			b.WriteString(line)
+		}
+	}
+	return b.String()
+}
+
 // wantsHelp reports whether args contain a help flag in any position.
 func wantsHelp(args []string) bool {
 	for _, arg := range args {
@@ -85,7 +133,7 @@ func usage(p ui.Painter) string {
 	for _, command := range commandSummaries {
 		rest := strings.TrimPrefix(command.synopsis, command.name)
 		padding := strings.Repeat(" ", synopsisWidth-len(command.synopsis)+2)
-		b.WriteString("  " + p.Cyan(command.name) + p.Dim(rest) + padding + command.summary + "\n")
+		b.WriteString("  " + p.Yellow(command.name) + styleArguments(p, rest) + padding + command.summary + "\n")
 	}
 	b.WriteString("\n" + p.Bold("Global flags:") + "\n")
 	b.WriteString("  " + p.Cyan("--help") + "     print this usage and exit successfully\n")
@@ -201,7 +249,7 @@ func main() {
 	args := fs.Args()
 	if len(args) > 0 && wantsHelp(args[1:]) {
 		if text, ok := commandHelps[args[0]]; ok {
-			fmt.Fprint(os.Stdout, text)
+			fmt.Fprint(os.Stdout, styleHelp(stdoutStyle, text))
 			return
 		}
 	}

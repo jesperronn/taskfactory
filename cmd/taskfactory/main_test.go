@@ -23,7 +23,7 @@ func TestCLIHelpVersionAndInvalidFlag(t *testing.T) {
 		wantOutput []string
 		wantAbsent []string
 	}{
-		{name: "help", args: []string{"--help"}, exitCode: 0, wantOutput: []string{"taskfactory", "--help", "--version", "integrate <ID>"}},
+		{name: "help", args: []string{"--help"}, exitCode: 0, wantOutput: []string{"taskfactory", "--help", "--version", "init", "initialize project config", "integrate <ID>", "check-main", "recheck a stopped main"}},
 		{name: "version", args: []string{"--version"}, exitCode: 0, wantOutput: []string{"taskfactory version dev"}},
 		{name: "invalid flag", args: []string{"--not-a-global-flag"}, exitCode: 2, wantOutput: []string{"flag provided but not defined", "not-a-global-flag"}, wantAbsent: []string{"Usage:"}},
 	}
@@ -47,6 +47,197 @@ func TestCLIHelpVersionAndInvalidFlag(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestHelpListsAndDocumentsEveryTopLevelCommand(t *testing.T) {
+	binary := buildCLI(t)
+	outsideCheckout := t.TempDir()
+	top, err := runCLI(t, binary, outsideCheckout, "--help")
+	if err != nil {
+		t.Fatalf("--help failed: %v\n%s", err, top)
+	}
+	if len(commandHelps) != len(commandSummaries) {
+		t.Errorf("commandHelps has %d entries, want %d", len(commandHelps), len(commandSummaries))
+	}
+	for _, command := range commandSummaries {
+		if !strings.Contains(string(top), command.synopsis) || !strings.Contains(string(top), command.summary) {
+			t.Errorf("top-level help does not list %q: %s", command.name, top)
+		}
+		help, ok := commandHelps[command.name]
+		if !ok {
+			t.Errorf("command %q has no per-command help", command.name)
+			continue
+		}
+		if !strings.HasPrefix(help, "Usage: taskfactory "+command.synopsis+"\n") {
+			t.Errorf("help for %q does not start with its usage line: %q", command.name, help)
+		}
+	}
+}
+
+func TestHelpPrintsCommandUsageToStdout(t *testing.T) {
+	binary := buildCLI(t)
+	outsideCheckout := t.TempDir()
+	for _, command := range commandSummaries {
+		for _, helpFlag := range []string{"--help", "-h"} {
+			t.Run(command.name+" "+helpFlag, func(t *testing.T) {
+				cmd := exec.Command(binary, command.name, helpFlag)
+				cmd.Dir = outsideCheckout
+				var stdout, stderr bytes.Buffer
+				cmd.Stdout = &stdout
+				cmd.Stderr = &stderr
+				err := cmd.Run()
+				if got := processExitCode(err); got != 0 {
+					t.Fatalf("exit code = %d, want 0; stderr: %s", got, stderr.String())
+				}
+				if wantUsage := "Usage: taskfactory " + command.synopsis + "\n"; !strings.HasPrefix(stdout.String(), wantUsage) {
+					t.Errorf("stdout %q does not start with usage line %q", stdout.String(), wantUsage)
+				}
+				if stdout.String() != commandHelps[command.name] {
+					t.Errorf("stdout differs from the command help constant:\n%s", stdout.String())
+				}
+				if stderr.Len() != 0 {
+					t.Errorf("stderr = %q, want empty", stderr.String())
+				}
+			})
+		}
+	}
+}
+
+func TestHelpColorFollowsFORCEAndNOCOLOR(t *testing.T) {
+	binary := buildCLI(t)
+	outsideCheckout := t.TempDir()
+	run := func(extraEnv ...string) string {
+		t.Helper()
+		var env []string
+		for _, kv := range os.Environ() {
+			if strings.HasPrefix(kv, "NO_COLOR=") || strings.HasPrefix(kv, "FORCE_COLOR=") || strings.HasPrefix(kv, "TERM=") {
+				continue
+			}
+			env = append(env, kv)
+		}
+		cmd := exec.Command(binary, "--help")
+		cmd.Dir = outsideCheckout
+		cmd.Env = append(env, extraEnv...)
+		output, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("--help with %v failed: %v", extraEnv, err)
+		}
+		return string(output)
+	}
+
+	plain := run()
+	if strings.Contains(plain, "\x1b[") {
+		t.Errorf("piped output contains escapes: %q", plain)
+	}
+	if noColor := run("NO_COLOR=1", "FORCE_COLOR=1"); noColor != plain || strings.Contains(noColor, "\x1b[") {
+		t.Errorf("NO_COLOR output must be plain and identical to piped output: %q", noColor)
+	}
+	forced := run("FORCE_COLOR=1")
+	for _, command := range commandSummaries {
+		if want := "\x1b[33m" + command.name + "\x1b[0m"; !strings.Contains(forced, want) {
+			t.Errorf("FORCE_COLOR output lacks yellow %q", command.name)
+		}
+	}
+	if stripped := stripSGR(forced); stripped != plain {
+		t.Errorf("FORCE_COLOR output differs from plain text after stripping escapes")
+	}
+
+	for _, command := range commandSummaries {
+		cmd := exec.Command(binary, command.name, "--help")
+		cmd.Dir = outsideCheckout
+		var env []string
+		for _, kv := range os.Environ() {
+			if !strings.HasPrefix(kv, "NO_COLOR=") && !strings.HasPrefix(kv, "FORCE_COLOR=") && !strings.HasPrefix(kv, "TERM=") {
+				env = append(env, kv)
+			}
+		}
+		cmd.Env = append(env, "FORCE_COLOR=1")
+		output, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("%s --help with FORCE_COLOR failed: %v", command.name, err)
+		}
+		if want := "\x1b[33m" + command.name + "\x1b[0m"; !strings.Contains(string(output), want) {
+			t.Errorf("%s --help lacks yellow subcommand name", command.name)
+		}
+	}
+}
+
+// stripSGR removes ANSI SGR escape sequences of the form ESC [ ... m.
+func stripSGR(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\x1b' {
+			if j := strings.IndexByte(s[i:], 'm'); j >= 0 {
+				i += j
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+func TestHelpWorksOutsideProjectAndChangesNothing(t *testing.T) {
+	binary := buildCLI(t)
+	outside := t.TempDir()
+	project := initGitProject(t)
+	if output, err := runCLI(t, binary, project, "init"); err != nil {
+		t.Fatalf("init: %v\n%s", err, output)
+	}
+	taskPath := filepath.Join(project, "tasks", "ready", "TF-110-help.md")
+	if err := os.WriteFile(taskPath, []byte(validTask("TF-110")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(project, ".taskfactory", "config.toml")
+	configBefore, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := taskTreeHashes(t, project)
+
+	bare := initGitProject(t)
+	cases := []struct {
+		dir  string
+		args []string
+	}{
+		{outside, []string{"init", "--help"}},
+		{outside, []string{"status", "-h"}},
+		{outside, []string{"validate", "--help"}},
+		{outside, []string{"claim", "TF-999", "--help"}},
+		{outside, []string{"verify", "--help", "extra"}},
+		{outside, []string{"integrate", "-h"}},
+		{outside, []string{"check-main", "--help"}},
+		{project, []string{"claim", "TF-110", "--help"}},
+		{project, []string{"claim", "TF-110", "--owner", "", "-h"}},
+		{project, []string{"verify", "TF-110", "--help"}},
+		{project, []string{"integrate", "TF-110", "--help"}},
+		{project, []string{"check-main", "--help"}},
+		{project, []string{"status", "--bogus", "--help"}},
+		{bare, []string{"status", "--help"}},
+		{bare, []string{"init", "--help"}},
+	}
+	for _, tc := range cases {
+		output, err := runCLI(t, binary, tc.dir, tc.args...)
+		if got := processExitCode(err); got != 0 || !strings.HasPrefix(string(output), "Usage: taskfactory "+tc.args[0]) {
+			t.Errorf("%v in %s: exit=%d, output=%q", tc.args, tc.dir, got, output)
+		}
+	}
+
+	if configAfter, err := os.ReadFile(configPath); err != nil || !bytes.Equal(configBefore, configAfter) {
+		t.Errorf("config changed by help: err=%v", err)
+	}
+	if after := taskTreeHashes(t, project); !equalTaskHashes(before, after) {
+		t.Error("help modified task files")
+	}
+	if _, err := os.Stat(filepath.Join(project, ".taskfactory", "evidence")); !os.IsNotExist(err) {
+		t.Errorf("help created evidence directory: err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outside, ".taskfactory")); !os.IsNotExist(err) {
+		t.Errorf("help created project state outside a project: err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(bare, ".taskfactory")); !os.IsNotExist(err) {
+		t.Errorf("help created project state in an uninitialized project: err=%v", err)
 	}
 }
 

@@ -731,6 +731,8 @@ taskfactory validate
 taskfactory claim
 taskfactory verify
 taskfactory integrate
+taskfactory check-main
+taskfactory <command> --help
 ```
 
 The exact interface will evolve while TaskFactory dogfoods itself.
