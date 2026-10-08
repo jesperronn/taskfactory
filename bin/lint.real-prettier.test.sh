@@ -9,7 +9,13 @@ trap 'rm -rf "$fixture"' EXIT
 mkdir -p "$fixture/project/bin" "$fixture/project/docs"
 cp "$repo_dir/bin/lint" "$fixture/project/bin/lint"
 
-prettier_version=$(npx prettier --version)
+prettier_bin="$repo_dir/node_modules/.bin/prettier"
+if [[ ! -x "$prettier_bin" ]]; then
+  printf '[FAIL] project-local Prettier is not installed: %s\n' "$prettier_bin" >&2
+  exit 1
+fi
+prettier_version=$("$prettier_bin" --version)
+export PATH="$repo_dir/node_modules/.bin:$PATH"
 
 printf '# Title\n\n\nBad  spacing.  \n' > "$fixture/project/docs/bad.md"
 bad_status=0
