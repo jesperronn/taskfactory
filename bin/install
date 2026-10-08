@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "Usage: bin/install" >&2
+}
+
+if (( $# > 0 )); then
+  usage
+  exit 2
+fi
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+
+# Destination precedence: PREFIX, then GOBIN, then the first GOPATH entry.
+if [[ -n "${PREFIX:-}" ]]; then
+  destination=${PREFIX}
+elif [[ -n "${GOBIN:-}" ]]; then
+  destination=${GOBIN}
+else
+  gopath=$(go env GOPATH)
+  destination="${gopath%%:*}/bin"
+fi
+
+# Resolve relative destinations against the caller's directory, not the
+# repository root, before bin/build runs from there.
+mkdir -p "${destination}"
+destination=$(cd "${destination}" && pwd)
+target="${destination}/taskfactory"
+
+cd "${repo_root}"
+bin/build "${target}" >/dev/null
+printf 'installed %s\n' "${target}"
+"${target}" --version
+
+case ":${PATH}:" in
+  *":${destination}:"*) ;;
+  *) printf 'hint: %s is not on PATH\n' "${destination}" >&2 ;;
+esac

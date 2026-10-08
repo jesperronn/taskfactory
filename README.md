@@ -737,6 +737,13 @@ taskfactory <command> --help
 
 The exact interface will evolve while TaskFactory dogfoods itself.
 
+## Install
+
+From a checkout, `bin/install` builds `taskfactory` with the same embedded
+version as `bin/build` and writes it to the first of PREFIX, GOBIN, or the
+GOPATH bin directory that applies. Set PREFIX to choose a directory. The script
+takes no arguments and prints a hint when the directory is not on `PATH`.
+
 ## Agent skill
 
 `skills/taskfactory/SKILL.md` is a portable agent skill covering planner,
