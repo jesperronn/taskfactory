@@ -478,24 +478,25 @@ func resolveValidateArg(root, arg string) ([]string, error) {
 	}
 	path := arg
 	if !filepath.IsAbs(path) {
-		path = filepath.Join(resolvedRoot, path)
+		path = filepath.Join(root, path)
 	}
 	path, err = filepath.Abs(path)
 	if err != nil {
 		return nil, usageError{fmt.Sprintf("resolve task path: %v", err)}
 	}
-	path, err = filepath.EvalSymlinks(path)
+	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
+		if !insideTasks(root, path) && !insideTasks(resolvedRoot, path) {
+			return nil, outside
+		}
 		return nil, usageError{fmt.Sprintf("task path %s cannot be read", arg)}
 	}
+	path = resolved
 	rel, err := filepath.Rel(resolvedRoot, path)
-	if err != nil {
+	if err != nil || !insideTasks(resolvedRoot, path) {
 		return nil, outside
 	}
 	rel = filepath.ToSlash(rel)
-	if rel != "tasks" && !strings.HasPrefix(rel, "tasks/") {
-		return nil, outside
-	}
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, usageError{fmt.Sprintf("task path %s cannot be read", arg)}
@@ -510,6 +511,16 @@ func resolveValidateArg(root, arg string) ([]string, error) {
 		return nil, usageError{fmt.Sprintf("%s is not a task file", rel)}
 	}
 	return []string{rel}, nil
+}
+
+// insideTasks reports whether path is the tasks directory under root or below it.
+func insideTasks(root, path string) bool {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	return rel == "tasks" || strings.HasPrefix(rel, "tasks/")
 }
 
 // listDirectoryFiles returns the regular files directly inside the directory
