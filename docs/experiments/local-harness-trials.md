@@ -35,6 +35,15 @@ produced no finished result in 30 minutes. Parallel runs share one model server
 and slow each other; run local workers one at a time, or give each a small
 slice.
 
+## Full lint task on pi alone (10 minute limit)
+
+The real TF-030 task, run on pi with nothing else on the server, hit the limit
+with no commit. Its edits set the toolchain inside `bin/lint`, its own lint test
+failed, and `bin/lint` exited 1 even on a clean Markdown file. The same task
+then went to a haiku worker, which finished it with tests and a misformatted
+Go file proof. The takeaway is that pi handled a 22 second slice but not the
+whole task, so keep local-model tasks to one small, well-checked slice.
+
 ## Practical notes
 
 - Claude Code: pass the prompt on stdin when `--allowedTools` is used; the flag
