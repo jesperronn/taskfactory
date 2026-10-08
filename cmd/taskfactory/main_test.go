@@ -439,7 +439,7 @@ func initGitProject(t *testing.T) string {
 	if err := os.Mkdir(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("git", "init", "--quiet", root)
+	cmd := exec.Command("git", "init", "--quiet", "--initial-branch=main", root)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git init temporary project: %v\n%s", err, output)
 	}
