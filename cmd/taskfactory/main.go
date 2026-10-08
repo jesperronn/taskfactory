@@ -42,6 +42,28 @@ var commandSummaries = []commandSummary{
 	{"check-main", "check-main", "recheck a stopped main"},
 }
 
+// commandHelps maps each command in commandSummaries to its per-command help.
+var commandHelps = map[string]string{
+	"init":       initHelp,
+	"status":     statusHelp,
+	"validate":   validateHelp,
+	"claim":      claimHelp,
+	"verify":     verifyHelp,
+	"integrate":  integrateHelp,
+	"check-main": checkMainHelp,
+}
+
+// wantsHelp reports whether args contain a help flag in any position.
+func wantsHelp(args []string) bool {
+	for _, arg := range args {
+		switch arg {
+		case "-h", "-help", "--h", "--help":
+			return true
+		}
+	}
+	return false
+}
+
 // usage returns the help text printed by --help and -h. It lists every command
 // with a description aligned in one column, and documents only the global flags
 // --help and --version. Styling is applied only when p is enabled, so plain
@@ -102,6 +124,53 @@ integration = ["go test ./...", "go vet ./..."]
 
 var taskStates = []string{"inbox", "ready", "active", "failed", "archive"}
 
+// verifyHelp is printed by "verify --help" and "verify -h".
+const verifyHelp = `Usage: taskfactory verify <ID>
+
+Run the success-criteria checks of the claimed task <ID> and record each outcome
+in .taskfactory/evidence/<ID>.jsonl. The command exits 1 when any check fails.
+
+Flags:
+  --help, -h  print this help and exit successfully
+
+Exit codes:
+  0  every check passed
+  1  a check failed or verification could not run
+  2  invalid usage
+`
+
+// integrateHelp is printed by "integrate --help" and "integrate -h".
+const integrateHelp = `Usage: taskfactory integrate <ID>
+
+Fast-forward main to the verified task <ID> using the configured integration
+strategy, after running the integration verification commands. On success it
+prints "integrated <ID>". A failed check or fast-forward stops integration and
+is reported on stderr.
+
+Flags:
+  --help, -h  print this help and exit successfully
+
+Exit codes:
+  0  the task was integrated
+  1  integration failed
+  2  invalid usage
+`
+
+// checkMainHelp is printed by "check-main --help" and "check-main -h".
+const checkMainHelp = `Usage: taskfactory check-main
+
+Recheck main after integration has stopped it by running the integration
+verification commands again. It prints "check-main: ok" when they pass.
+
+Flags:
+  --help, -h  print this help and exit successfully
+
+Exit codes:
+  0  main passes the integration checks
+  1  a check failed or main could not be checked
+  2  invalid usage
+`
+
 func main() {
 	fs := flag.NewFlagSet("taskfactory", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -130,6 +199,12 @@ func main() {
 	}
 
 	args := fs.Args()
+	if len(args) > 0 && wantsHelp(args[1:]) {
+		if text, ok := commandHelps[args[0]]; ok {
+			fmt.Fprint(os.Stdout, text)
+			return
+		}
+	}
 	if len(args) == 1 && args[0] == "init" {
 		if err := initializeProject(); err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory init", err.Error()))
@@ -214,6 +289,22 @@ func main() {
 	os.Exit(exitUsage)
 }
 
+// claimHelp is printed by "claim --help" and "claim -h".
+const claimHelp = `Usage: taskfactory claim <ID> --owner <name>
+
+Claim the ready task <ID> for the named worker. The task file moves from
+tasks/ready to tasks/active and records the claim details, including the owner.
+The owner must be non-empty.
+
+Flags:
+  --owner <name>  worker identifier (required)
+  --help, -h      print this help and exit successfully
+
+Exit codes:
+  0  the task was claimed
+  1  the claim was refused or the arguments were invalid
+`
+
 func claimTask(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: taskfactory claim <ID> --owner <name>")
@@ -241,6 +332,23 @@ func claimTask(args []string) error {
 	fmt.Fprintf(os.Stdout, "claimed %s for %s\n", id, *owner)
 	return nil
 }
+
+// validateHelp is printed by "validate --help" and "validate -h".
+const validateHelp = `Usage: taskfactory validate [task-file]
+
+Validate the whole task tree, or only the task file given. A task file must be
+inside the project's tasks directory; relative paths are resolved from the
+project root. Checking one file still checks task ID uniqueness and dependency
+references across the tree, but reports only diagnostics for the selected file.
+
+Flags:
+  --help, -h  print this help and exit successfully
+
+Exit codes:
+  0  the task tree or task file is valid
+  1  validation failed or the project configuration is invalid
+  2  invalid usage
+`
 
 func validateProject(args []string) error {
 	root, err := projectRoot()
@@ -291,6 +399,22 @@ func validateProject(args []string) error {
 	}
 	return nil
 }
+
+// statusHelp is printed by "status --help" and "status -h".
+const statusHelp = `Usage: taskfactory status
+
+Print the number of task files in each state: inbox, ready, active, failed and
+archive. The whole task tree is validated first; any diagnostics are printed to
+stderr and no task file is changed.
+
+Flags:
+  --help, -h  print this help and exit successfully
+
+Exit codes:
+  0  the counts were printed
+  1  the configuration, a state directory or a task file is invalid
+  2  invalid usage
+`
 
 func statusProject() error {
 	root, err := projectRoot()
@@ -356,6 +480,22 @@ func projectRoot() (string, error) {
 	}
 	return root, nil
 }
+
+// initHelp is printed by "init --help" and "init -h".
+const initHelp = `Usage: taskfactory init
+
+Create the project configuration and the task state directories in the Git
+repository that contains the current directory. An existing valid configuration
+is kept unchanged, and missing task state directories are restored.
+
+Flags:
+  --help, -h  print this help and exit successfully
+
+Exit codes:
+  0  the project is initialized
+  1  initialization failed
+  2  invalid usage
+`
 
 func initializeProject() error {
 	cwd, err := os.Getwd()
