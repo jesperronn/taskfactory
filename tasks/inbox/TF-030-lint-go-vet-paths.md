@@ -1,4 +1,4 @@
-# TF-024: Lint Go and shell, accept path arguments
+# TF-030: Lint Go and shell, accept path arguments
 
 ## Goal
 

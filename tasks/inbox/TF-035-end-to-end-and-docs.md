@@ -1,4 +1,4 @@
-# TF-029: End-to-end run and user docs
+# TF-035: End-to-end run and user docs
 
 ## Goal
 
@@ -8,7 +8,7 @@ Prove the full loop works and document it.
 
 - TF-013
 - TF-016
-- TF-027
+- TF-033
 
 ## Scope
 

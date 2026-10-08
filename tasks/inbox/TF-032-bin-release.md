@@ -1,4 +1,4 @@
-# TF-026: Add bin/release
+# TF-032: Add bin/release
 
 ## Goal
 
@@ -7,7 +7,7 @@ projects.
 
 ## Dependencies
 
-- TF-025
+- TF-031
 
 ## Scope
 

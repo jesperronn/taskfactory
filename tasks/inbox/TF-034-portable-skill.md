@@ -1,4 +1,4 @@
-# TF-028: Portable TaskFactory skill for other projects
+# TF-034: Portable TaskFactory skill for other projects
 
 ## Goal
 
@@ -7,7 +7,7 @@ Let any project adopt TaskFactory through an installable agent skill.
 ## Dependencies
 
 - TF-004
-- TF-025
+- TF-031
 
 ## Scope
 
