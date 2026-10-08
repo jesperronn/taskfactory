@@ -732,6 +732,7 @@ taskfactory claim
 taskfactory verify
 taskfactory integrate
 taskfactory check-main
+taskfactory promote <ID>
 taskfactory <command> --help
 ```
 

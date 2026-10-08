@@ -27,15 +27,15 @@ authoritative. This skill is self-contained and works without them.
 | `taskfactory verify <ID>`               | Run the task's checks in its worktree and append attempt evidence.         |
 | `taskfactory integrate <ID>`            | Rebase, verify, fast-forward main and archive an accepted task.            |
 | `taskfactory check-main`                | Rerun main's verification after integration stopped it.                    |
+| `taskfactory promote <ID>`              | Move an inbox task to ready and commit only that move.                     |
 
 Anything not in this table is **not implemented**. Do not invent other
 subcommands or flags. Run `taskfactory <command> --help` for flags.
 
 ## Not yet implemented
 
-- **Lifecycle commands** (TF-033): there is no CLI command to promote inbox to
-  ready, or to move a task to failed or archive by hand. A planner moves the
-  file manually and then runs `taskfactory validate`.
+- **Lifecycle fail and requeue** (TF-033): no CLI command moves a task to
+  `tasks/failed/` or back to `tasks/ready/`.
 - **Worker launch**: adapters for OMP, Pi and Claude Code exist as Go packages,
   but no CLI command starts them. Start workers manually.
 - **Release** (TF-032): there is no release script yet. `bin/build` exists.
@@ -107,9 +107,12 @@ Rules:
 ## Planner
 
 - Refine inbox items into ready contracts using the template above.
-- Run `taskfactory validate tasks/ready/<ID>-<slug>.md` before promoting, then
-  `taskfactory validate` for the whole tree. Move the file to `tasks/ready/`
-  by hand, then validate again.
+- Run `taskfactory promote <ID>` to move the single inbox file for that ID to
+  `tasks/ready/`. It validates the file against the ready contract, validates
+  the whole task tree, and commits only the two task paths. A refusal or
+  failure restores the file to `tasks/inbox/` and changes nothing else.
+- Promotion refuses when the index already has staged paths; unstage them
+  first.
 
 ## Orchestrator
 
