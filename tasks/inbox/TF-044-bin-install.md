@@ -34,9 +34,9 @@ at most print a hint when the destination is not on `PATH`.
 
 Check: bin/install.test.sh
 
-### C2: The installed binary reports the embedded version
+### C2: The installed binary reports the embedded version (asserted in the test)
 
-Check: PREFIX="$(mktemp -d)" bin/install && "$PREFIX/taskfactory" --version
+Check: bin/install.test.sh
 
 ### C3: Arguments are rejected with exit 2
 
