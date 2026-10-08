@@ -15,6 +15,7 @@ import (
 	"taskfactory/internal/claim"
 	"taskfactory/internal/config"
 	"taskfactory/internal/integrate"
+	"taskfactory/internal/promote"
 	"taskfactory/internal/taskvalidate"
 	"taskfactory/internal/ui"
 	"taskfactory/internal/verify"
@@ -41,6 +42,7 @@ var commandSummaries = []commandSummary{
 	{"verify", "verify <ID>", "run a task's checks"},
 	{"integrate", "integrate <ID>", "fast-forward a verified task"},
 	{"check-main", "check-main", "recheck a stopped main"},
+	{"promote", "promote <ID>", "move an inbox task to ready"},
 }
 
 // commandHelps maps each command in commandSummaries to its per-command help.
@@ -52,6 +54,7 @@ var commandHelps = map[string]string{
 	"verify":     verifyHelp,
 	"integrate":  integrateHelp,
 	"check-main": checkMainHelp,
+	"promote":    promoteHelp,
 }
 
 // styleArguments colors the words after a subcommand name: flags starting with
@@ -220,6 +223,36 @@ Exit codes:
   2  invalid usage
 `
 
+// promoteHelp is printed by "promote --help" and "promote -h".
+const promoteHelp = `Usage: taskfactory promote <ID>
+
+Promote the inbox task <ID> to tasks/ready when its complete executable contract
+validates. The task file moves unchanged from tasks/inbox to tasks/ready, the
+whole task tree is validated, and only the two task paths are committed. Any
+refusal or failure restores the file to tasks/inbox.
+
+Flags:
+  --help, -h  print this help and exit successfully
+
+Exit codes:
+  0  the task was promoted and committed
+  1  promotion was refused or failed; the file was restored
+  2  invalid usage
+`
+
+func promoteTask(args []string) error {
+	root, err := projectRoot()
+	if err != nil {
+		return err
+	}
+	ready, err := promote.Promote(root, args[0])
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stdout, "promoted %s to %s\n", args[0], ready)
+	return nil
+}
+
 func main() {
 	fs := flag.NewFlagSet("taskfactory", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -319,6 +352,21 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Fprintf(os.Stdout, "integrated %s\n", args[1])
+		return
+	}
+	if len(args) > 0 && args[0] == "promote" {
+		if len(args) != 2 {
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory promote", "usage: taskfactory promote <ID>"))
+			os.Exit(exitUsage)
+		}
+		if err := promoteTask(args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory promote", err.Error()))
+			var usage promote.UsageError
+			if errors.As(err, &usage) {
+				os.Exit(exitUsage)
+			}
+			os.Exit(1)
+		}
 		return
 	}
 	if len(args) > 0 && args[0] == "check-main" {
