@@ -65,6 +65,7 @@ failure_status=0
 failure_output=$(cd / && "${fixture_root}/shell-failure/bin/test" 2>&1) || failure_status=$?
 assert_status "${failure_status}" 1 'propagates shell test failure'
 assert_contains "${failure_output}" 'FAIL: shell test: bin/fail.test.sh' 'identifies failing shell test'
+assert_contains "${failure_output}" 'rerun with: ./bin/fail.test.sh' 'provides a valid direct rerun command'
 
 new_fixture go-success
 : > "${fixture_root}/go-success/go.mod"
