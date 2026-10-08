@@ -63,25 +63,145 @@ continue.
 
 ## Integration and main health
 
-Only one candidate enters the integration critical section at a time:
+Integration is a local operation on the repository's `refs/heads/main`; it does
+not fetch, push, contact a remote, or update a remote-tracking ref. It requires
+that local `main` exists and is checked out in the repository worktree. The
+repository worktree may contain ready-to-active lifecycle changes from
+concurrent claims: each must be exactly a ready task file moved to active with
+the Claim block appended. Reject other tracked or untracked changes. Claim does
+not commit lifecycle state. The integration candidate is the task's claimed
+worktree. Only TaskFactory integrations coordinate through
+`.taskfactory/integration.lock`; an external Git process does not honor this
+lock.
 
-1. Acquire the integration lock and update main.
-2. Rebase the candidate onto current main.
-3. Run integration verification on the rebased candidate.
-4. Advance main using `git merge --ff-only`.
-5. Run any configured main verification, record evidence, and archive the task.
-6. Release the lock.
+An active task is eligible only when all of these facts hold at the start of an
+attempt:
 
-If main changes before the fast-forward, rebase again and rerun verification. On
-integration failure, record the task and candidate commits, main commit, failing
-command, exit code, relevant output, and prior worker results. The integrator
-returns the candidate for remediation rather than editing feature code.
+- Exactly one active task file matches the requested ID, its Claim metadata is
+  complete, its claimed branch is checked out in the claimed registered Git
+  worktree for this repository.
+- The complete, schema-valid JSONL file at `.taskfactory/evidence/<ID>.jsonl`
+  has consecutive attempt numbers, and its last record has `outcome` `PASS`. Its
+  task ID and branch match the active claim. A later `FAILED` or `BLOCKED`
+  record supersedes an earlier PASS; malformed or incomplete evidence is not
+  skipped.
+- The record's `base_commit` matches the Claim `Base commit`; its non-empty
+  `result_commit` is a full commit ID; and the candidate worktree HEAD equals
+  that result commit. The result is a descendant of its recorded base.
+- The candidate worktree has no staged, unstaged, or untracked changes. Thus the
+  verified commit is exactly the commit proposed for integration.
 
-If main is known broken, stop ordinary integration immediately. Existing workers
-may continue in their worktrees. Prioritize a repair task; resume ordinary
-integration only after main passes its required checks. A failure of post-merge
-main verification must leave the pipeline stopped and retain evidence; it must
-never be silently archived as success.
+The integrator acquires the integration lock before reading the stopped state,
+active task, evidence, or main ref, and holds it through evidence append and any
+archive transition. Claims use only `.taskfactory/claim.lock`; they never
+acquire the integration lock, and integration never acquires the claim lock.
+Therefore the locks have no nested acquisition order. A concurrent claim may
+capture the old main commit while integration is running; its worker must later
+rebase and verify against current main before integration. The claim lock still
+serializes claim state changes with other claims.
+
+While holding the integration lock, the integrator performs this sequence:
+
+1. Reject ordinary integration if the persistent stop record from TF-013 exists.
+   Check eligibility and record the current full `refs/heads/main` commit as
+   `main_before`.
+2. Rebase the claimed branch onto that commit. A conflict or failed rebase ends
+   the attempt; do not run integration checks or move main. Record the failure
+   and return the task for worker remediation.
+3. Run every `verification.integration` command, in configured order, at the
+   candidate worktree root. A command start error or non-zero exit stops the
+   sequence, records the failure, and leaves main and task state unchanged. The
+   exact candidate HEAD after rebase is the verified commit.
+4. Immediately before merging, read `refs/heads/main` again. If it differs from
+   the rebase base, rebase onto the new main commit and rerun all integration
+   checks. Repeat until the ref is unchanged at the pre-merge check. Then run
+   `git merge --ff-only <verified-commit>` in the main worktree. Any merge error
+   is a failure; never create a merge commit or reset main to simulate rollback.
+5. If `verification.main` is configured, run every command at the repository
+   root after the fast-forward. If one fails, append the attempt evidence and
+   leave this task active. When `integration.stop_on_main_failure` is true,
+   apply TF-013 stop-the-line behavior: persist the failed main commit and
+   command, then reject subsequent ordinary integrations. When it is false,
+   retain the failure evidence and active task but do not create a persistent
+   stop record. Main has already advanced; do not claim rollback.
+6. After all required checks pass, atomically move only this task file from
+   active to archive. Commit the lifecycle transition separately on local main,
+   staging only this task's ready deletion and archive addition; never use
+   `git add -A` or stage unrelated task or user files. Append the PASS record
+   only after that commit succeeds. If the task move or its commit fails, append
+   an archive-stage failure record with main left at the verified commit; do not
+   report the task archived. If appending the final PASS record fails after the
+   archive commit, report that evidence failure and preserve both the main
+   commit and archive state; never rewrite older evidence.
+7. Release the integration lock on every exit.
+
+The main-ref recheck detects movement caused by another process before the
+fast-forward decision. The lock prevents another TaskFactory integration from
+moving main in this interval; unrelated Git commands can still race it and are
+outside the v1 coordination guarantee. A failed rebase, integration check, or
+fast-forward leaves the task active and does not change main. A failed
+post-merge main check is the exception: main remains advanced and the task
+remains active; when `integration.stop_on_main_failure` is true, TF-013's
+persistent stop record governs recovery. Integration attempts are recorded
+separately from worker verification in the append-only
+`.taskfactory/integration-evidence/<ID>.jsonl` file. Each attempt appends
+exactly one record, including failures; it never edits or replaces worker
+evidence.
+
+Each integration JSONL record has exactly these keys and types:
+
+- `task_id`: string task ID.
+- `attempt`: positive integer, starting at 1 and increasing for every appended
+  integration attempt for this task.
+- `recorded_at`: RFC 3339 UTC timestamp string.
+- `outcome`: `PASS`, `FAILED`, or `BLOCKED`.
+- `stage`: one of `eligibility`, `rebase`, `integration_check`, `merge`,
+  `main_check`, or `archive`.
+- `branch`: claimed branch string, or empty when eligibility did not establish a
+  claim.
+- `worker_result_commit`: full commit ID from latest worker PASS evidence, or
+  empty when eligibility did not establish one. Non-empty commit IDs are full
+  lowercase hexadecimal IDs of 40 or 64 characters.
+- `main_before`: full main commit ID observed before integration, or empty when
+  unavailable; use the same format for non-empty IDs.
+- `verified_commit`: full candidate commit ID whose integration checks passed,
+  or empty if none; use the same format for non-empty IDs.
+- `main_after`: full main commit ID observed after the attempt's last main
+  operation, or empty if unavailable; use the same format for non-empty IDs.
+- `command`: exact configured command that failed, or empty when the stage has
+  no command (including Git operations).
+- `exit_code`: integer process exit code, or null if a command could not start
+  or failure was not a command exit.
+- `output`: combined stdout and stderr for the failing command or Git operation;
+  empty if none.
+- `error`: process-start or operation error text; empty when none.
+- `note`: required string, possibly empty, for concise additional context.
+
+`PASS` is recorded only after all configured integration and main checks pass,
+the fast-forward is observed, and the lifecycle archive commit succeeds. A
+rebase conflict, nonzero check, rejected fast-forward, or task archive failure
+is `FAILED`; inability to start a check is `BLOCKED`. If a post-merge main check
+fails, `stage` is `main_check`, `main_after` is the advanced commit, and the
+active task is not archived. If eligibility fails before the candidate or main
+can be identified, empty commit fields are used and the error is recorded. If
+the evidence file cannot be appended, the operation fails without pretending
+evidence exists; it does not rewrite older lines. Representative independent
+records:
+
+```json
+{"task_id":"TF-123","attempt":1,"recorded_at":"2026-10-08T12:00:00Z","outcome":"PASS","stage":"archive","branch":"task/TF-123","worker_result_commit":"1123456789abcdef0123456789abcdef01234567","main_before":"0123456789abcdef0123456789abcdef01234567","verified_commit":"2123456789abcdef0123456789abcdef01234567","main_after":"3123456789abcdef0123456789abcdef01234567","command":"","exit_code":null,"output":"","error":"","note":"Integration checks passed; lifecycle archive commit followed the feature commit."}
+{"task_id":"TF-123","attempt":1,"recorded_at":"2026-10-08T12:05:00Z","outcome":"FAILED","stage":"main_check","branch":"task/TF-123","worker_result_commit":"1123456789abcdef0123456789abcdef01234567","main_before":"0123456789abcdef0123456789abcdef01234567","verified_commit":"2123456789abcdef0123456789abcdef01234567","main_after":"2123456789abcdef0123456789abcdef01234567","command":"go test ./...","exit_code":1,"output":"FAIL example.test/package","error":"","note":"Fast-forward already occurred; TF-013 stop state required; task remains active."}
+```
+
+The records above are independent examples, each representing attempt 1 in its
+own task evidence file. In a real file attempt numbers are consecutive. A task
+that was already archived cannot be integrated again.
+
+When the configured stop policy marks main broken, stop ordinary integration
+immediately. Existing workers may continue in their worktrees. Prioritize a
+repair task; resume ordinary integration only after TF-013's `check-main` passes
+on the current main commit and clears the stop record. A post-merge main failure
+retains its failure record and stop state; moving main alone does not clear it.
 
 ## Version 1 boundaries
 

@@ -82,6 +82,55 @@ evidence, serialized integration, rebasing against current main,
 `git merge --ff-only`, and stop-the-line when main is broken. Never archive
 solely on worker success.
 
+### Integration contract
+
+`integrate <ID>` operates only on local `refs/heads/main`; it does not fetch or
+push. Require local main to exist and be checked out in the repository worktree.
+The main worktree may contain only ready-to-active claim transitions (each ready
+task file moved to active with its Claim block); reject unrelated tracked or
+untracked changes, and never stage concurrent claim transitions. The task
+worktree itself must be clean. The claimed branch must be checked out in its
+registered worktree, and the complete, schema-valid, consecutively numbered
+worker evidence file must end with a PASS for the claimed task and branch. Its
+`base_commit` must match Claim metadata, its `result_commit` must equal
+candidate HEAD, and that commit must descend from the recorded base. A later
+FAILED or BLOCKED worker record invalidates an earlier PASS; malformed or
+incomplete evidence is not skipped.
+
+Serialize integrations with `.taskfactory/integration.lock`. Claims serialize
+only with `.taskfactory/claim.lock`; neither operation acquires both locks, so
+there is no nested lock order. A claim may read main before an integration
+advances it; the candidate is rebased and verified against current main when
+integrated. Under the integration lock, reject a persistent TF-013 stop record,
+rebase onto main, run `verification.integration` in order at the candidate root,
+reread main immediately before the merge, and repeat rebase plus all integration
+checks if main moved. Fast-forward the checked-out local main with
+`git merge --ff-only <verified-commit>`. Never create a merge commit or reset
+main to undo a post-merge failure. The lock coordinates TaskFactory processes;
+external Git processes do not honor it.
+
+Run optional `verification.main` at the repository root after the fast-forward.
+A failure records the advanced main commit and leaves the task active. When
+`integration.stop_on_main_failure` is true, invoke TF-013's persistent stop
+behavior; when false, retain the failure evidence without creating a stop
+record. After all checks pass, move only this task from active to archive and
+commit the lifecycle transition separately, staging only the task's ready
+deletion and archive addition. Never stage unrelated task or user files. Append
+a PASS integration record after the archive commit; if that commit fails, append
+an archive failure and leave main advanced. If the final evidence append fails,
+preserve the already committed archive and report the missing evidence; do not
+rewrite existing JSONL.
+
+Append one integration-attempt object per attempt to
+`.taskfactory/integration-evidence/<ID>.jsonl`, independently from worker
+evidence. Each object has exactly the schema and examples in
+[`protocol-v1.md`](protocol-v1.md): task and attempt identity, timestamp,
+outcome/stage, branch, worker/base/main/verified commit IDs, failed command and
+exit status, captured output/error, and note. Earlier lines are immutable.
+Failures before merge leave main and task lifecycle state unchanged; failed
+post-merge main checks are the explicit exception and must never be described as
+rolled back.
+
 ## Tests and acceptance
 
 Use Go `testing`, table-driven cases where helpful, `t.TempDir()`, and temporary
