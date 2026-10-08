@@ -61,6 +61,16 @@ files, verification commands and exit codes, attempt count, and relevant retry
 history. A failed task retains enough information for another worker to
 continue.
 
+### Evidence files
+
+Evidence files are untracked. Worker attempts append to
+`.taskfactory/evidence/<ID>.jsonl` and integration attempts append to
+`.taskfactory/integration-evidence/<ID>.jsonl`. Neither is a Git commit. Verify
+does not stage them, and integration stages only the task paths it archives, so
+they appear in `git status` as untracked. `.taskfactory/config.toml` is written
+by init and is not committed by init; it must be tracked in HEAD before
+integration, and claim does not verify that it is tracked.
+
 ## Integration and main health
 
 Integration is a local operation on the repository's `refs/heads/main`; it does

@@ -49,10 +49,15 @@ subcommands or flags. Run `taskfactory <command> --help` for flags.
    defaults (`go test ./...`); replace them with the project's own commands
    for `worker` and `integration`.
 4. Commit `.taskfactory/config.toml`, the `tasks/` directories and each ready
-   task before claiming. Worktrees are created from `HEAD`, so an uncommitted
-   contract is missing from the worker's checkout.
+   task before claiming. `init leaves .taskfactory/config.toml untracked`, and
+   it prints nothing about that. Claim creates task branches from
+   `refs/heads/main`, so an uncommitted contract is missing from the worker's
+   checkout. Claim does not verify that the config is tracked (not verified).
+   Integration does require it tracked in HEAD and unchanged.
 5. After claims, `.taskfactory/` operational files and `tasks/active/` show as
-   untracked or changed. This is expected; do not commit them by hand.
+   untracked or changed. This is expected; do not commit them by hand. Worker
+   evidence in `.taskfactory/evidence/` and integration evidence in
+   `.taskfactory/integration-evidence/` are untracked files, not Git commits.
 
 ## Ready task contract
 
