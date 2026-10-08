@@ -23,7 +23,7 @@ func TestCLIHelpVersionAndInvalidFlag(t *testing.T) {
 		wantOutput []string
 		wantAbsent []string
 	}{
-		{name: "help", args: []string{"--help"}, exitCode: 0, wantOutput: []string{"taskfactory", "--help", "--version"}},
+		{name: "help", args: []string{"--help"}, exitCode: 0, wantOutput: []string{"taskfactory", "--help", "--version", "integrate <ID>"}},
 		{name: "version", args: []string{"--version"}, exitCode: 0, wantOutput: []string{"taskfactory version dev"}},
 		{name: "invalid flag", args: []string{"--not-a-global-flag"}, exitCode: 2, wantOutput: []string{"flag provided but not defined", "not-a-global-flag"}, wantAbsent: []string{"Usage:"}},
 	}

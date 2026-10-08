@@ -188,14 +188,16 @@ While holding the integration lock, the integrator performs this sequence:
    active to archive. Before staging, recheck config cleanliness; if it changed
    after main advanced, move the task back to active, record an archive-stage
    failure, and leave main advanced. Otherwise commit the lifecycle transition
-   separately on local main, staging only this task's active deletion and
-   archive addition; never use `git add -A` or stage unrelated task or user
-   files. Append the PASS record only after that commit succeeds. If the task
-   move or its commit fails, append an archive-stage failure record with main
-   left at the verified commit; do not report the task archived. If appending
-   the final PASS record fails after the archive commit, report that evidence
-   failure and preserve both the main commit and archive state; never rewrite
-   older evidence.
+   separately on local main. Claims are uncommitted ready-to-active working-tree
+   transitions. When the active file is untracked, stage only its tracked ready
+   deletion and archive addition; when the active file is tracked, stage only
+   its active deletion and archive addition. Scope every Git add to those exact
+   paths; never stage unrelated task or user files. Append the PASS record only
+   after that commit succeeds. If the task move or its commit fails, append an
+   archive-stage failure record with main left at the verified commit; do not
+   report the task archived. If appending the final PASS record fails after the
+   archive commit, report that evidence failure and preserve both the main
+   commit and archive state; never rewrite older evidence.
 7. Release the integration lock on every exit.
 
 The main-ref recheck detects movement caused by another process before the

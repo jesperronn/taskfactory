@@ -124,13 +124,15 @@ exists. TF-013 adds `check-main` and clears that record only after all
 configured checks pass on current main. When the setting is false, retain
 failure evidence without creating a stop record. After all checks pass, move
 only this task from active to archive and commit the lifecycle transition
-separately, staging only the task's active deletion and archive addition. If the
-config changed after main advanced, restore the task to active and record an
-archive failure. Never stage unrelated task or user files. Append a PASS
-integration record after the archive commit; if that commit fails, append an
-archive failure and leave main advanced. If the final evidence append fails,
-preserve the already committed archive and report the missing evidence; do not
-rewrite existing JSONL.
+separately. Claims are uncommitted ready-to-active working-tree transitions: if
+active is untracked, stage only the tracked ready deletion and archive addition;
+if active is tracked, stage only its active deletion and archive addition. Scope
+Git staging to those exact paths. If the config changed after main advanced,
+restore the task to active and record an archive failure. Never stage unrelated
+task or user files. Append a PASS integration record after the archive commit;
+if that commit fails, append an archive failure and leave main advanced. If the
+final evidence append fails, preserve the already committed archive and report
+the missing evidence; do not rewrite existing JSONL.
 
 Append one integration-attempt object per attempt to
 `.taskfactory/integration-evidence/<ID>.jsonl`, independently from worker

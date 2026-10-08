@@ -13,6 +13,7 @@ import (
 
 	"taskfactory/internal/claim"
 	"taskfactory/internal/config"
+	"taskfactory/internal/integrate"
 	"taskfactory/internal/taskvalidate"
 	"taskfactory/internal/verify"
 )
@@ -34,6 +35,7 @@ Usage:
   taskfactory validate [task-file]
   taskfactory claim <ID> --owner <name>
   taskfactory verify <ID>
+  taskfactory integrate <ID>
 
 Global flags:
   -help, --help      print this usage and exit successfully.
@@ -133,6 +135,22 @@ func main() {
 			fmt.Fprintf(os.Stderr, "taskfactory verify: %v\n", err)
 			os.Exit(1)
 		}
+		return
+	}
+	if len(args) > 0 && args[0] == "integrate" {
+		if len(args) != 2 {
+			fmt.Fprintln(os.Stderr, "taskfactory integrate: usage: taskfactory integrate <ID>")
+			os.Exit(exitUsage)
+		}
+		root, err := projectRoot()
+		if err == nil {
+			err = integrate.Run(root, args[1])
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "taskfactory integrate: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stdout, "integrated %s\n", args[1])
 		return
 	}
 

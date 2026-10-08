@@ -20,14 +20,15 @@ only local `refs/heads/main`; do not fetch or push. Hold
 `.taskfactory/integration.lock` through checks, merge, lifecycle commit,
 evidence append, and stop-state handling. Require a latest worker PASS whose
 result commit exactly matches clean candidate HEAD. Rebase and rerun all
-integration checks if main moves before merge. Stage only this task's active
-deletion and archive addition for a separate lifecycle commit. A post-merge
-main-check failure leaves main advanced and the task active. When
-`integration.stop_on_main_failure` is true, create the exact stop record in the
-protocol; otherwise retain failure evidence without a stop record. Reject future
-integrations while a valid or malformed stop file or its `.tmp` sibling exists.
-TF-013 adds `check-main` recovery. Append exact, append-only integration
-evidence for every attempt.
+integration checks if main moves before merge. For a separate lifecycle commit,
+stage only the tracked ready deletion plus archive addition when the active
+claim is untracked, or the active deletion plus archive addition when active is
+tracked. A post-merge main-check failure leaves main advanced and the task
+active. When `integration.stop_on_main_failure` is true, create the exact stop
+record in the protocol; otherwise retain failure evidence without a stop record.
+Reject future integrations while a valid or malformed stop file or its `.tmp`
+sibling exists. TF-013 adds `check-main` recovery. Append exact, append-only
+integration evidence for every attempt.
 
 ## Constraints
 
