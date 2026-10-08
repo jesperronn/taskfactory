@@ -653,3 +653,63 @@ func processExitCode(err error) int {
 	}
 	return -1
 }
+
+func TestValidatePathsSelectsFilesAndExitCodes(t *testing.T) {
+	binary := buildCLI(t)
+	root := initGitProject(t)
+	if output, err := runCLI(t, binary, root, "init"); err != nil {
+		t.Fatalf("init: %v\n%s", err, output)
+	}
+	valid := "# TF-101: Example\n\n## Goal\n\nDo it.\n\n## Dependencies\n\nNone\n\n## Scope\n\nImplement.\n\n## Constraints\n\nKeep it small.\n\n## Success criteria\n\n### C1: It works\n\nCheck: go test ./...\n\n## Verification\n\nRun check.\n"
+	readyPath := filepath.Join(root, "tasks", "ready", "TF-101-example.md")
+	archivePath := filepath.Join(root, "tasks", "archive", "TF-102-old.md")
+	inboxPath := filepath.Join(root, "tasks", "inbox", "TF-103-idea.md")
+	if err := os.WriteFile(readyPath, []byte(valid), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(archivePath, []byte("# TF-102: Broken\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Only the archive is broken: the default inbox and ready selection passes.
+	if output, err := runCLI(t, binary, root, "validate"); err != nil {
+		t.Fatalf("no arguments with broken archive: %v\n%s", err, output)
+	}
+	output, err := runCLI(t, binary, root, "validate", filepath.Join("tasks", "archive"))
+	if processExitCode(err) != 1 || !strings.Contains(string(output), "tasks/archive/TF-102-old.md") {
+		t.Fatalf("archive folder exit=%d output=%s", processExitCode(err), output)
+	}
+	if output, err := runCLI(t, binary, root, "validate", "tasks/ready/TF-101-example.md"); err != nil {
+		t.Fatalf("valid file with unrelated broken archive: %v\n%s", err, output)
+	}
+
+	if err := os.WriteFile(inboxPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(readyPath, []byte(strings.Replace(valid, "## Goal\n\nDo it.\n\n", "", 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output, err = runCLI(t, binary, root, "validate")
+	if processExitCode(err) != 1 || !strings.Contains(string(output), "tasks/ready/TF-101-example.md") || !strings.Contains(string(output), "tasks/inbox/TF-103-idea.md") || strings.Contains(string(output), "tasks/archive/TF-102-old.md") {
+		t.Fatalf("no arguments should report inbox and ready only: exit=%d output=%s", processExitCode(err), output)
+	}
+	output, err = runCLI(t, binary, root, "validate", "tasks/ready/TF-101-example.md", "tasks/archive/TF-102-old.md")
+	if processExitCode(err) != 1 || !strings.Contains(string(output), "TF-101-example.md") || !strings.Contains(string(output), "TF-102-old.md") {
+		t.Fatalf("two selected files should both be reported: exit=%d output=%s", processExitCode(err), output)
+	}
+	output, err = runCLI(t, binary, root, "validate", "tasks")
+	if processExitCode(err) != 1 || !strings.Contains(string(output), "TF-103-idea.md") {
+		t.Fatalf("whole tree exit=%d output=%s", processExitCode(err), output)
+	}
+
+	for _, args := range [][]string{
+		{"validate", "../outside.md"},
+		{"validate", root},
+		{"validate", filepath.Join("tasks", "ready", "notes.txt")},
+		{"validate", filepath.Join("tasks", "missing")},
+	} {
+		if output, err := runCLI(t, binary, root, args...); processExitCode(err) != 2 {
+			t.Errorf("%v exit=%d, want 2: %s", args, processExitCode(err), output)
+		}
+	}
+}

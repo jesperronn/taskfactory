@@ -46,6 +46,28 @@ func Validate(root, selected string) []Diagnostic {
 			selectedAbs, _ = filepath.Abs(filepath.Join(root, selected))
 		}
 	}
+	var keep func(path string) bool
+	if selectedAbs != "" {
+		keep = func(path string) bool { return path == selectedAbs }
+	}
+	return validateTree(root, keep)
+}
+
+// ValidateFiles checks the whole tree below root but reports only diagnostics
+// for the files listed in files. Each entry is a slash-separated path relative
+// to root, such as "tasks/ready/TF-001-example.md".
+func ValidateFiles(root string, files []string) []Diagnostic {
+	root, _ = filepath.Abs(root)
+	selected := make(map[string]bool, len(files))
+	for _, file := range files {
+		selected[filepath.Join(root, filepath.FromSlash(file))] = true
+	}
+	return validateTree(root, func(path string) bool { return selected[path] })
+}
+
+// validateTree runs every check over the tree below root. When keep is not nil,
+// only diagnostics whose absolute file path satisfies keep are returned.
+func validateTree(root string, keep func(path string) bool) []Diagnostic {
 	var diagnostics []Diagnostic
 	var tasksFound []task
 	validStates := map[string]bool{}
@@ -175,11 +197,10 @@ func Validate(root, selected string) []Diagnostic {
 			diagnostics = append(diagnostics, Diagnostic{matches[0].rel, "dependency", "dependency cycle detected"})
 		}
 	}
-	if selectedAbs != "" {
+	if keep != nil {
 		filtered := diagnostics[:0]
 		for _, d := range diagnostics {
-			abs := filepath.Join(root, d.Path)
-			if abs == selectedAbs {
+			if keep(filepath.Join(root, filepath.FromSlash(d.Path))) {
 				filtered = append(filtered, d)
 			}
 		}

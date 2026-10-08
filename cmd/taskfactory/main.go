@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -35,7 +36,7 @@ type commandSummary struct {
 var commandSummaries = []commandSummary{
 	{"init", "init", "initialize project config"},
 	{"status", "status", "show tasks by state"},
-	{"validate", "validate [task-file]", "check task files"},
+	{"validate", "validate [path...]", "check task files"},
 	{"claim", "claim <ID> --owner <name>", "claim a ready task"},
 	{"verify", "verify <ID>", "run a task's checks"},
 	{"integrate", "integrate <ID>", "fast-forward a verified task"},
@@ -261,12 +262,12 @@ func main() {
 		return
 	}
 	if len(args) >= 1 && args[0] == "validate" {
-		if len(args) > 2 {
-			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory validate", "usage: taskfactory validate [task-file]"))
-			os.Exit(exitUsage)
-		}
 		if err := validateProject(args[1:]); err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory validate", err.Error()))
+			var usage usageError
+			if errors.As(err, &usage) {
+				os.Exit(exitUsage)
+			}
 			os.Exit(1)
 		}
 		return
@@ -382,21 +383,28 @@ func claimTask(args []string) error {
 }
 
 // validateHelp is printed by "validate --help" and "validate -h".
-const validateHelp = `Usage: taskfactory validate [task-file]
+const validateHelp = `Usage: taskfactory validate [path...]
 
-Validate the whole task tree, or only the task file given. A task file must be
-inside the project's tasks directory; relative paths are resolved from the
-project root. Checking one file still checks task ID uniqueness and dependency
-references across the tree, but reports only diagnostics for the selected file.
+Validate task files. With no arguments, validate every task file in tasks/inbox
+and tasks/ready. Each path is a task file or a folder inside the project's tasks
+directory; a folder selects the task files directly inside it, and "tasks"
+selects all five state directories. Relative paths are resolved from the
+project root. Task ID uniqueness and dependency references are always checked
+across the whole tree, but only diagnostics for the selected files are reported.
 
 Flags:
   --help, -h  print this help and exit successfully
 
 Exit codes:
-  0  the task tree or task file is valid
-  1  validation failed or the project configuration is invalid
-  2  invalid usage
+  0  every selected task file is valid
+  1  a selected task file is invalid or the project configuration is invalid
+  2  invalid usage, such as a path outside the tasks directory
 `
+
+// usageError marks invalid validate arguments, which exit with exitUsage.
+type usageError struct{ msg string }
+
+func (e usageError) Error() string { return e.msg }
 
 func validateProject(args []string) error {
 	root, err := projectRoot()
@@ -406,33 +414,11 @@ func validateProject(args []string) error {
 	if _, err := config.Load(root); err != nil {
 		return err
 	}
-	selected := ""
-	if len(args) == 1 {
-		selected = args[0]
-		if !filepath.IsAbs(selected) {
-			selected = filepath.Join(root, selected)
-		}
-		selected, err = filepath.Abs(selected)
-		if err != nil {
-			return fmt.Errorf("resolve task path: %w", err)
-		}
-		selected, err = filepath.EvalSymlinks(selected)
-		if err != nil {
-			return fmt.Errorf("resolve task path: %w", err)
-		}
-		rel, relErr := filepath.Rel(root, selected)
-		if relErr != nil || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return fmt.Errorf("task path must resolve inside the project tasks directory")
-		}
-		if !strings.HasPrefix(filepath.ToSlash(rel), "tasks/") {
-			return fmt.Errorf("task path must resolve inside the project tasks directory")
-		}
-		if info, statErr := os.Stat(selected); statErr != nil || !info.Mode().IsRegular() {
-			return fmt.Errorf("task file %s cannot be read", selected)
-		}
-		selected = rel
+	files, err := selectValidateFiles(root, args)
+	if err != nil {
+		return err
 	}
-	diagnostics := taskvalidate.Validate(root, selected)
+	diagnostics := taskvalidate.ValidateFiles(root, files)
 	for _, diagnostic := range diagnostics {
 		fmt.Fprintln(os.Stderr, diagnostic.Error())
 	}
@@ -440,12 +426,125 @@ func validateProject(args []string) error {
 		return fmt.Errorf("%d validation error(s)", len(diagnostics))
 	}
 	style := ui.For(os.Stdout)
-	if selected == "" {
-		fmt.Fprintln(os.Stdout, style.Green("task tree is valid"))
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stdout, style.Green("inbox and ready tasks are valid"))
 	} else {
-		fmt.Fprintln(os.Stdout, style.Green(filepath.ToSlash(selected)+" is valid"))
+		fmt.Fprintln(os.Stdout, style.Green(fmt.Sprintf("%d task file(s) valid", len(files))))
 	}
 	return nil
+}
+
+// selectValidateFiles resolves validate arguments to slash-separated task file
+// paths relative to root. No arguments selects inbox and ready.
+func selectValidateFiles(root string, args []string) ([]string, error) {
+	if len(args) == 0 {
+		var files []string
+		for _, state := range []string{"inbox", "ready"} {
+			listed, err := listDirectoryFiles(root, filepath.Join("tasks", state))
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, listed...)
+		}
+		return files, nil
+	}
+	seen := map[string]bool{}
+	var files []string
+	for _, arg := range args {
+		listed, err := resolveValidateArg(root, arg)
+		if err != nil {
+			return nil, err
+		}
+		for _, file := range listed {
+			if !seen[file] {
+				seen[file] = true
+				files = append(files, file)
+			}
+		}
+	}
+	return files, nil
+}
+
+// resolveValidateArg maps one validate argument to the task files it selects.
+func resolveValidateArg(root, arg string) ([]string, error) {
+	outside := usageError{"task path must resolve inside the project tasks directory"}
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return nil, err
+	}
+	path := arg
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(resolvedRoot, path)
+	}
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return nil, usageError{fmt.Sprintf("resolve task path: %v", err)}
+	}
+	path, err = filepath.EvalSymlinks(path)
+	if err != nil {
+		return nil, usageError{fmt.Sprintf("task path %s cannot be read", arg)}
+	}
+	rel, err := filepath.Rel(resolvedRoot, path)
+	if err != nil {
+		return nil, outside
+	}
+	rel = filepath.ToSlash(rel)
+	if rel != "tasks" && !strings.HasPrefix(rel, "tasks/") {
+		return nil, outside
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, usageError{fmt.Sprintf("task path %s cannot be read", arg)}
+	}
+	if info.IsDir() {
+		if rel == "tasks" {
+			return listTreeFiles(resolvedRoot, rel)
+		}
+		return listDirectoryFiles(resolvedRoot, rel)
+	}
+	if !info.Mode().IsRegular() || !strings.HasSuffix(rel, ".md") {
+		return nil, usageError{fmt.Sprintf("%s is not a task file", rel)}
+	}
+	return []string{rel}, nil
+}
+
+// listDirectoryFiles returns the regular files directly inside the directory
+// rel, a slash-separated path relative to root. A missing directory has none.
+func listDirectoryFiles(root, rel string) ([]string, error) {
+	entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(rel)))
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		files = append(files, rel+"/"+entry.Name())
+	}
+	return files, nil
+}
+
+// listTreeFiles returns every regular file below the directory rel.
+func listTreeFiles(root, rel string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(filepath.Join(root, filepath.FromSlash(rel)), func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.Type().IsRegular() {
+			child, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			files = append(files, filepath.ToSlash(child))
+		}
+		return nil
+	})
+	return files, err
 }
 
 // statusHelp is printed by "status --help" and "status -h".

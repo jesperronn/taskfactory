@@ -193,3 +193,22 @@ func writeTask(t *testing.T, root, state, name, content string) string {
 	}
 	return path
 }
+
+func TestValidateFilesReportsOnlySelectedFiles(t *testing.T) {
+	root := project(t)
+	writeTask(t, root, "ready", "TF-101-example.md", validTask)
+	writeTask(t, root, "archive", "TF-102-old.md", "# TF-102: Broken\n")
+	writeTask(t, root, "inbox", "TF-103-idea.md", "# TF-103: Broken\n")
+	if got := ValidateFiles(root, []string{"tasks/ready/TF-101-example.md"}); len(got) != 0 {
+		t.Fatalf("valid selection diagnostics = %#v", got)
+	}
+	got := ValidateFiles(root, []string{"tasks/archive/TF-102-old.md", "tasks/inbox/TF-103-idea.md"})
+	if len(got) == 0 {
+		t.Fatal("selected broken files produced no diagnostics")
+	}
+	for _, d := range got {
+		if d.Path != "tasks/archive/TF-102-old.md" && d.Path != "tasks/inbox/TF-103-idea.md" {
+			t.Fatalf("diagnostic outside selection: %#v", d)
+		}
+	}
+}
