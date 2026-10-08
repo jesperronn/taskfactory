@@ -8,6 +8,7 @@ trap 'rm -rf "$fixture"' EXIT
 
 mkdir -p "$fixture/project/bin" "$fixture/project/docs"
 cp "$repo_dir/bin/lint" "$fixture/project/bin/lint"
+ln -s "$repo_dir/node_modules" "$fixture/project/node_modules"
 
 prettier_bin="$repo_dir/node_modules/.bin/prettier"
 if [[ ! -x "$prettier_bin" ]]; then
@@ -15,7 +16,6 @@ if [[ ! -x "$prettier_bin" ]]; then
   exit 1
 fi
 prettier_version=$("$prettier_bin" --version)
-export PATH="$repo_dir/node_modules/.bin:$PATH"
 
 printf '# Title\n\n\nBad  spacing.  \n' > "$fixture/project/docs/bad.md"
 bad_status=0
