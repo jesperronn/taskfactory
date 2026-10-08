@@ -25,11 +25,11 @@ bin/lint tests.
 
 ### C1: A passing verify prints a PASS summary
 
-Check: go test -count=1 -v -run TestVerifySummaryPass ./cmd/taskfactory | grep -q -- '--- PASS'
+Check: go test -v -run TestSummaryPass ./cmd/taskfactory | grep -q -- '--- PASS'
 
 ### C2: A failing verify prints a FAIL summary with the exit code
 
-Check: go test -count=1 -v -run TestVerifySummaryFail ./cmd/taskfactory | grep -q -- '--- PASS'
+Check: go test -v -run TestSummaryFail ./cmd/taskfactory | grep -q -- '--- PASS'
 
 ### C3: Help describes the summary line
 

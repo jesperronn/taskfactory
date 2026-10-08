@@ -180,7 +180,10 @@ var taskStates = []string{"inbox", "ready", "active", "failed", "archive"}
 const verifyHelp = `Usage: taskfactory verify <ID>
 
 Run the success-criteria checks of the claimed task <ID> and record each outcome
-in .taskfactory/evidence/<ID>.jsonl. The command exits 1 when any check fails.
+in .taskfactory/evidence/<ID>.jsonl. After the attempt is recorded it prints one
+summary line on stdout, such as "verify TF-001: PASS (3 checks)" or
+"verify TF-001: FAIL (1 of 3 checks failed)". The command exits 1 when any
+check fails.
 
 Flags:
   --help, -h  print this help and exit successfully
@@ -329,8 +332,12 @@ func main() {
 			os.Exit(exitUsage)
 		}
 		root, err := projectRoot()
+		var result verify.Result
 		if err == nil {
-			err = verify.Run(root, args[1])
+			result, err = verify.Verify(root, args[1])
+		}
+		if result.Outcome != "" {
+			fmt.Fprintln(os.Stdout, result.Summary(stdoutStyle))
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory verify", err.Error()))

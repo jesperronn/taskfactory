@@ -722,3 +722,69 @@ func TestVerifyPathArgumentSuggestsValidate(t *testing.T) {
 		t.Fatalf("verify path exit=%d output=%s", processExitCode(err), output)
 	}
 }
+
+// verifySummaryProject creates a claimed task whose only criterion is check and
+// returns the project root and the CLI binary path.
+func verifySummaryProject(t *testing.T, id, check string) (string, string) {
+	t.Helper()
+	binary := buildCLI(t)
+	root := initGitProject(t)
+	if output, err := runCLI(t, binary, root, "init"); err != nil {
+		t.Fatalf("init: %v\n%s", err, output)
+	}
+	// Replace the default Go worker command with a trivial one that always passes.
+	configPath := filepath.Join(root, ".taskfactory", "config.toml")
+	cfg, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg = []byte(strings.Replace(string(cfg), `worker = ["go test ./..."]`, `worker = ["true"]`, 1))
+	if err := os.WriteFile(configPath, cfg, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	task := strings.Replace(validTask(id), "Check: go test ./...", "Check: "+check, 1)
+	if err := os.WriteFile(filepath.Join(root, "tasks", "ready", id+"-summary.md"), []byte(task), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "."}, {"-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "fixture"}} {
+		if output, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, output)
+		}
+	}
+	if output, err := runCLI(t, binary, root, "claim", id, "--owner", "worker"); err != nil {
+		t.Fatalf("claim: %v\n%s", err, output)
+	}
+	return root, binary
+}
+
+// runVerifySummary runs verify and returns stdout only, plus the exit code.
+func runVerifySummary(t *testing.T, binary, root, id string) (string, int) {
+	t.Helper()
+	cmd := exec.Command(binary, "verify", id)
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "NO_COLOR=1")
+	stdout, err := cmd.Output()
+	return string(stdout), processExitCode(err)
+}
+
+func TestSummaryPass(t *testing.T) {
+	root, binary := verifySummaryProject(t, "TF-111", "true")
+	stdout, code := runVerifySummary(t, binary, root, "TF-111")
+	if code != 0 {
+		t.Fatalf("verify exit = %d, want 0; stdout: %s", code, stdout)
+	}
+	if want := "verify TF-111: PASS (2 checks)\n"; stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestSummaryFail(t *testing.T) {
+	root, binary := verifySummaryProject(t, "TF-112", "false")
+	stdout, code := runVerifySummary(t, binary, root, "TF-112")
+	if code != 1 {
+		t.Fatalf("verify exit = %d, want 1; stdout: %s", code, stdout)
+	}
+	if want := "verify TF-112: FAIL (1 of 2 checks failed)\n"; stdout != want {
+		t.Fatalf("stdout = %q, want %q", stdout, want)
+	}
+}
