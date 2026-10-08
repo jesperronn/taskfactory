@@ -7,7 +7,8 @@ local workers.
 
 ## Dependencies
 
-TF-001 and TF-017 are archived.
+- TF-001
+- TF-017
 
 ## Scope
 

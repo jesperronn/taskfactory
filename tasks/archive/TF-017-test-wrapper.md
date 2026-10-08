@@ -8,13 +8,13 @@ added.
 
 ## Dependencies
 
-None. The wrapper must work both before and after `go.mod` is introduced by
-TF-001.
+None
 
 ## Scope
 
 Create executable `bin/test` and a focused `bin/test.test.sh`. Run from any
-working directory by resolving the repository root from the script path. Run
+working directory by resolving the repository root from the script path. The
+wrapper must work both before and after `go.mod` is introduced by TF-001. Run
 every executable `bin/*.test.sh` in stable filename order; do not run `bin/test`
 recursively. If `go.mod` exists, also run `go test ./...` from the root; if
 absent, skip the Go check with a clear message. A future stack is added by

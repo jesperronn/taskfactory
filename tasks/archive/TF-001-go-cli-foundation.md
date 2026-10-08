@@ -7,7 +7,7 @@ for later TaskFactory subcommands.
 
 ## Dependencies
 
-None.
+None
 
 ## Scope
 

@@ -1,6 +1,6 @@
 # Task file format v1
 
-This document defines the on-disk contract for executable tasks. V1 uses
+This document defines state-specific on-disk contracts for task files. V1 uses
 restricted Markdown so people can review and edit task contracts without a
 separate authoring tool. The validator recognizes only the syntax below; it does
 not interpret general Markdown, HTML, front matter, or formatting extensions.
@@ -11,22 +11,80 @@ remains the format for project policy in `.taskfactory/config.toml`.
 
 A task file name is `<ID>-<slug>.md`. An ID matches `TF-[0-9]{3}` and is unique
 across all five task directories. A slug is one or more lowercase ASCII letters,
-digits, or single hyphens; it cannot begin or end with a hyphen. The `ID` in the
-first heading must exactly equal the filename ID. The title after the colon is
-non-empty, single-line text. The slug is not derived from or compared with the
-title.
+digits, or single hyphens; it cannot begin or end with a hyphen. The first line
+must be `# <ID>: <title>`; its ID must exactly equal the filename ID and its
+title must be non-empty single-line text. The slug is not derived from or
+compared with the title. These identity checks apply in every state, including
+inbox. Duplicate IDs or malformed filenames are errors even when the file is in
+inbox.
 
-V1 task files use UTF-8, LF line endings, and no tabs. The first line is the
-task heading. Headings and their order are exact; blank lines may separate
-blocks. Lists use `- ` and each list item occupies one line. Text fields may
-wrap across lines until the next heading or list item. Inline HTML, nested
-lists, tables, links, and fenced code blocks are not part of the task contract.
-Verification commands are single-line values and are not parsed as shell syntax
-by the task validator.
+The only valid state directories are `inbox`, `ready`, `active`, `failed`, and
+`archive`; a task file under any other state directory is invalid. Empty
+placeholder files such as `.gitkeep` are not task files. Task files use UTF-8,
+LF line endings, and no tabs. Inbox bodies are unrestricted proposal text after
+the required first heading. Complete executable contracts use the restricted
+syntax below: headings and their order are exact; blank lines may separate
+blocks; lists use `- ` with one item per line; text fields may wrap until the
+next heading or list item. Inline HTML, nested lists, tables, links, and fenced
+code blocks are not part of an executable contract. Verification commands are
+single-line values and are not parsed as shell syntax by the task validator.
 
-## Ready task fields
+## State-specific contracts
 
-A ready task contains these headings exactly once and in this order:
+The path under `tasks/` determines which contract applies. Validation never
+changes a task's state.
+
+### Inbox
+
+Inbox contains proposals that may be incomplete. Validate only the common file,
+identity, encoding, and uniqueness rules above. The body after the first heading
+may use ordinary Markdown and may omit or add sections, dependencies, criteria,
+and checks. In particular, a proposal need not yet have a Goal or Verification
+section. Do not resolve dependencies or interpret its body as an executable
+contract. Promotion to ready is the point at which the complete contract below
+becomes mandatory; validation itself does not promote it.
+
+### Ready
+
+A ready task must satisfy the complete executable contract below and must not
+contain a `## Claim` block.
+
+### Active
+
+An active task must satisfy the complete executable contract and include one
+complete `## Claim` block as specified under Lifecycle metadata and evidence.
+
+### Failed
+
+A failed task must satisfy the complete executable contract. Its `## Claim`
+block is optional: when present, it must be complete and valid and is retained
+unchanged from the active task; absence is allowed for work that failed or was
+blocked before a claim. Failure details belong in attempt evidence, not in
+fabricated claim metadata.
+
+### Archive
+
+An archived task must satisfy the complete executable contract. Its Claim block
+may be absent for legacy records made before claim metadata was introduced. If
+present, it must be complete and valid and is retained unchanged. Do not infer
+or fabricate missing claim or verification history.
+
+Legacy archived records may also retain the historical success-criteria form:
+one or more `- <text>` list items under `## Success criteria`, with no `Check:`
+lines. An item may continue across following non-list lines until the next item
+or section heading. This exception applies only in `tasks/archive/`; it
+preserves the original record without inventing commands or implying that a
+check was run. New archive entries must use the complete executable contract,
+including criterion/check pairs. Archived records may retain at most one
+optional `## Outcome` section with non-empty prose after `## Verification` or
+after a retained `## Claim`; it records the historical result and is not
+verification evidence. The legacy exceptions do not relax identity, required
+contract headings, dependencies, or other field rules.
+
+## Complete executable contract
+
+A complete executable contract contains these headings exactly once and in this
+order:
 
 1. `# <ID>: <title>`
 2. `## Goal`
@@ -86,11 +144,11 @@ configured root may be outside the repository; the task format does not require
 a worktree to be inside the repository. A task in `tasks/ready/` must not have a
 Claim block. A task in `tasks/active/` must have one. When a claimed task moves
 to `tasks/failed/` or `tasks/archive/`, its Claim block is retained unchanged;
-it is not rewritten to represent later events. A new active-to-archive
-transition requires that retained Claim block. Static validation of an existing
-task in `tasks/archive/` permits the Claim block to be absent, preserving legacy
-archived records created before this format; missing metadata is not inferred or
-fabricated. If an archive Claim block is present, it must be complete and valid.
+it is not rewritten to represent later events. An active-to-archive transition
+requires the retained Claim block even though static validation permits legacy
+archive files without one. Failed tasks may omit the block only when they were
+never claimed. Missing metadata is not inferred or fabricated. If an optional
+Claim block is present, it must be complete and valid.
 
 Each attempt is recorded by appending one JSON object and LF to
 `.taskfactory/evidence/<ID>.jsonl`. This file is append-only: existing bytes

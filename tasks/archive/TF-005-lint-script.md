@@ -7,7 +7,7 @@ explicit fix mode.
 
 ## Dependencies
 
-None.
+None
 
 ## Scope
 
