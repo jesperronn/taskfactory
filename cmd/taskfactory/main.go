@@ -14,6 +14,7 @@ import (
 	"taskfactory/internal/claim"
 	"taskfactory/internal/config"
 	"taskfactory/internal/taskvalidate"
+	"taskfactory/internal/verify"
 )
 
 // version is the stable development version string printed by --version. It is a
@@ -32,6 +33,7 @@ Usage:
   taskfactory status
   taskfactory validate [task-file]
   taskfactory claim <ID> --owner <name>
+  taskfactory verify <ID>
 
 Global flags:
   -help, --help      print this usage and exit successfully.
@@ -114,6 +116,21 @@ func main() {
 	if len(args) > 0 && args[0] == "claim" {
 		if err := claimTask(args[1:]); err != nil {
 			fmt.Fprintf(os.Stderr, "taskfactory claim: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if len(args) > 0 && args[0] == "verify" {
+		if len(args) != 2 {
+			fmt.Fprintln(os.Stderr, "taskfactory verify: usage: taskfactory verify <ID>")
+			os.Exit(exitUsage)
+		}
+		root, err := projectRoot()
+		if err == nil {
+			err = verify.Run(root, args[1])
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "taskfactory verify: %v\n", err)
 			os.Exit(1)
 		}
 		return
