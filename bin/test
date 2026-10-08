@@ -27,7 +27,7 @@ for test_file in "${test_files[@]}"; do
     printf '==> %s\n' "${test_file}"
   fi
   if ! "./${test_file}"; then
-    printf 'FAIL: shell test: %s (rerun with: bin/test %s)\n' "${test_file}" "${test_file}" >&2
+    printf 'FAIL: shell test: %s (rerun with: ./%s)\n' "${test_file}" "${test_file}" >&2
     failed=1
   fi
 done
