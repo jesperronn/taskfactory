@@ -1,0 +1,16 @@
+protocol_version = 1
+
+[workers]
+max_parallel = 4
+
+[git]
+use_worktrees = true
+worktree_root = ".taskfactory/worktrees"
+integration_strategy = "ff-only"
+
+[integration]
+stop_on_main_failure = true
+
+[verification]
+worker = ["go test ./..."]
+integration = ["go test ./...", "go vet ./..."]

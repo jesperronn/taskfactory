@@ -205,6 +205,41 @@ func TestInitDoesNotFollowProjectDirectorySymlinkOutsideGitRoot(t *testing.T) {
 	}
 }
 
+func TestValidateSupportsWholeTreeAndSingleFile(t *testing.T) {
+	binary := buildCLI(t)
+	root := initGitProject(t)
+	if output, err := runCLI(t, binary, root, "init"); err != nil {
+		t.Fatalf("init: %v\n%s", err, output)
+	}
+	taskPath := filepath.Join(root, "tasks", "ready", "TF-101-example.md")
+	valid := "# TF-101: Example\n\n## Goal\n\nDo it.\n\n## Dependencies\n\nNone\n\n## Scope\n\nImplement.\n\n## Constraints\n\nKeep it small.\n\n## Success criteria\n\n### C1: It works\n\nCheck: go test ./...\n\n## Verification\n\nRun check.\n"
+	if err := os.WriteFile(taskPath, []byte(valid), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := runCLI(t, binary, root, "validate"); err != nil {
+		t.Fatalf("whole tree: %v\n%s", err, output)
+	}
+	nested := filepath.Join(root, "nested")
+	if err := os.Mkdir(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := runCLI(t, binary, nested, "validate", filepath.Join("tasks", "ready", "TF-101-example.md")); err != nil {
+		t.Fatalf("relative path from nested directory: %v\n%s", err, output)
+	}
+	if err := os.WriteFile(filepath.Join(root, "tasks", "ready", "TF-102-unrelated.md"), []byte("# TF-102: Broken\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := runCLI(t, binary, root, "validate", taskPath); err != nil {
+		t.Fatalf("single file reported unrelated invalid file: %v\n%s", err, output)
+	}
+	if err := os.WriteFile(taskPath, []byte("# TF-101: Broken\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := runCLI(t, binary, root, "validate", taskPath); processExitCode(err) == 0 || !strings.Contains(string(output), "Goal") {
+		t.Fatalf("invalid selected file should fail with field: %v\n%s", err, output)
+	}
+}
+
 func buildCLI(t *testing.T) string {
 	t.Helper()
 	binary := filepath.Join(t.TempDir(), "taskfactory")
