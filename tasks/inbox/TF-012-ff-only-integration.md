@@ -7,7 +7,7 @@ ff-only merge.
 
 ## Dependencies
 
-TF-010 and TF-011 must be archived before promotion to ready.
+TF-010, TF-011, and TF-022 must be archived before promotion to ready.
 
 ## Scope
 
