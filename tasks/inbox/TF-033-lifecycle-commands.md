@@ -24,3 +24,15 @@ into one task per command if large.
 - Each transition is a documented command with refusal tests for invalid states.
 - `go run ./cmd/taskfactory validate` passes after every transition.
 - No command touches unrelated files.
+
+## Split status
+
+Split into tasks (see the files for scope):
+
+- TF-047 `promote` (inbox to ready), ready.
+- TF-048 `fail` (active to failed with Claim and evidence retained), inbox
+  until its open questions on evidence outcome matching are answered.
+- TF-049 `requeue` (failed to ready or inbox), inbox; open questions on who may
+  requeue and on claimed work remain.
+
+TF-033 stays in inbox because the requeue questions are unresolved.
