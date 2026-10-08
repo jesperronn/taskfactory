@@ -1,10 +1,14 @@
 # TaskFactory
 
-**TaskFactory turns software work into explicit, verifiable tasks that coding agents can execute safely in parallel.**
+**TaskFactory turns software work into explicit, verifiable tasks that coding
+agents can execute safely in parallel.**
 
-A capable planner defines **what must be done and how success will be proven**. Workers independently implement those tasks, test their own work, diagnose failures, and keep fixing until the predefined success criteria pass.
+A capable planner defines **what must be done and how success will be proven**.
+Workers independently implement those tasks, test their own work, diagnose
+failures, and keep fixing until the predefined success criteria pass.
 
-TaskFactory coordinates the process using a small CLI, Git worktrees, task files, and deterministic verification.
+TaskFactory coordinates the process using a small CLI, Git worktrees, task
+files, and deterministic verification.
 
 ```text id="ykw00l"
                   ┌─────────────┐
@@ -50,7 +54,8 @@ TaskFactory coordinates the process using a small CLI, Git worktrees, task files
 
 ## The idea
 
-Coding agents are much more useful when they are given small tasks with an objective definition of "done."
+Coding agents are much more useful when they are given small tasks with an
+objective definition of "done."
 
 Instead of telling an agent:
 
@@ -106,7 +111,8 @@ There is no TaskFactory database or server.
 
 ## 📥 `inbox/` — needs planning
 
-`inbox` contains work we know about but that an autonomous worker should **not start yet**.
+`inbox` contains work we know about but that an autonomous worker should **not
+start yet**.
 
 Examples:
 
@@ -133,7 +139,8 @@ It may turn one inbox item into several independent tasks.
 
 ## ✅ `ready/` — safe to execute
 
-A task enters `ready` only when it is sufficiently specified for an autonomous worker.
+A task enters `ready` only when it is sufficiently specified for an autonomous
+worker.
 
 This distinction is fundamental:
 
@@ -154,7 +161,8 @@ A ready task should contain:
 - predefined success criteria;
 - verification for those criteria.
 
-A worker should **not need to perform project-level planning** before starting a ready task.
+A worker should **not need to perform project-level planning** before starting a
+ready task.
 
 This guarantee is what makes parallel execution possible.
 
@@ -188,13 +196,15 @@ task/TF-104 ───── worktree-4
 
 TaskFactory initially allows at most **four implementation workers** at once.
 
-Each worker has an isolated filesystem, so workers do not edit the same checkout.
+Each worker has an isolated filesystem, so workers do not edit the same
+checkout.
 
 ---
 
 # Workers verify their own work
 
-TaskFactory does not use the factory as a remote test runner that repeatedly tells an agent what went wrong.
+TaskFactory does not use the factory as a remote test runner that repeatedly
+tells an agent what went wrong.
 
 The worker owns the complete implementation loop:
 
@@ -221,7 +231,8 @@ The worker owns the complete implementation loop:
 return evidence
 ```
 
-If a test fails, the worker should inspect the failure, fix the implementation, and run verification again.
+If a test fails, the worker should inspect the failure, fix the implementation,
+and run verification again.
 
 It keeps working until either:
 
@@ -250,7 +261,8 @@ A worker must not make its task pass by:
 - silently changing the requirement;
 - declaring that something is "good enough."
 
-If the specification itself appears impossible or contradictory, that is a legitimate result.
+If the specification itself appears impossible or contradictory, that is a
+legitimate result.
 
 The worker reports the problem instead of rewriting its own contract.
 
@@ -311,9 +323,11 @@ Integration does not.
 
 This is intentional.
 
-A task may have been correct when the worker started but another worker may have changed `main` in the meantime.
+A task may have been correct when the worker started but another worker may have
+changed `main` in the meantime.
 
-Before integration, the candidate therefore has to prove itself against the **current** repository.
+Before integration, the candidate therefore has to prove itself against the
+**current** repository.
 
 ---
 
@@ -349,7 +363,8 @@ TaskFactory uses:
 git merge --ff-only
 ```
 
-If `main` changed while a candidate was waiting, the fast-forward merge cannot silently hide that fact.
+If `main` changed while a candidate was waiting, the fast-forward merge cannot
+silently hide that fact.
 
 The candidate must rebase and prove itself again.
 
@@ -423,7 +438,8 @@ Goal:
   preserving both original task contracts.
 ```
 
-A stronger worker can then solve the interaction without throwing away valid work.
+A stronger worker can then solve the interaction without throwing away valid
+work.
 
 ---
 
@@ -557,7 +573,8 @@ It:
 - controls integration;
 - invokes planning when necessary.
 
-Much of this should eventually be deterministic CLI behavior rather than LLM reasoning.
+Much of this should eventually be deterministic CLI behavior rather than LLM
+reasoning.
 
 ---
 
@@ -744,7 +761,8 @@ Go gives us:
 - no runtime installation requirement;
 - easy future public distribution.
 
-The project follows a **standard-library-first** policy and aims for zero or near-zero runtime dependencies.
+The project follows a **standard-library-first** policy and aims for zero or
+near-zero runtime dependencies.
 
 TOML parsing may deliberately be the primary exception.
 
@@ -763,7 +781,8 @@ tasks/
 └── archive/
 ```
 
-We want to discover weaknesses in the task protocol by actually building TaskFactory with TaskFactory's own concepts.
+We want to discover weaknesses in the task protocol by actually building
+TaskFactory with TaskFactory's own concepts.
 
 This means the implementation should not arrive as one giant change.
 
@@ -797,7 +816,8 @@ TaskFactory examples should eventually live in a separate repository:
 
 Examples should be intentionally tiny.
 
-Their purpose is to teach and test TaskFactory, not demonstrate application architecture.
+Their purpose is to teach and test TaskFactory, not demonstrate application
+architecture.
 
 For example:
 
@@ -916,4 +936,5 @@ Add complexity only when actual use demonstrates the need.
                resume integration
 ```
 
-**Plan intelligently. Specify precisely. Work in parallel. Verify locally. Integrate carefully.**
+**Plan intelligently. Specify precisely. Work in parallel. Verify locally.
+Integrate carefully.**
