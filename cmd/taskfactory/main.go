@@ -15,6 +15,7 @@ import (
 	"taskfactory/internal/config"
 	"taskfactory/internal/integrate"
 	"taskfactory/internal/taskvalidate"
+	"taskfactory/internal/ui"
 	"taskfactory/internal/verify"
 )
 
@@ -22,24 +23,32 @@ import (
 // go run; bin/build overrides it at link time with -ldflags "-X main.version=...".
 var version = "dev"
 
-// usageText is the help text printed by --help and -h. It names the command and
+// usage returns the help text printed by --help and -h. It names the command and
 // both global flags so that "taskfactory --help" documents the supported
-// top-level flags.
-const usageText = `taskfactory coordinates software work into explicit, verifiable tasks.
+// top-level flags. Styling is applied only when p is enabled, so plain output is
+// unchanged when color is off.
+func usage(p ui.Painter) string {
+	cmd := "  " + p.Cyan("taskfactory") + " "
+	return "taskfactory coordinates software work into explicit, verifiable tasks.\n\n" +
+		p.Bold("Usage:") + "\n" +
+		cmd + p.Dim("[global flags]") + "\n" +
+		cmd + p.Dim("<command>") + " " + p.Dim("[flags]") + "\n" +
+		cmd + p.Cyan("status") + "\n" +
+		cmd + p.Cyan("validate") + " " + p.Dim("[task-file]") + "\n" +
+		cmd + p.Cyan("claim") + " " + p.Dim("<ID>") + " " + p.Cyan("--owner") + " " + p.Dim("<name>") + "\n" +
+		cmd + p.Cyan("verify") + " " + p.Dim("<ID>") + "\n" +
+		cmd + p.Cyan("integrate") + " " + p.Dim("<ID>") + "\n" +
+		cmd + p.Cyan("check-main") + "\n\n" +
+		p.Bold("Global flags:") + "\n" +
+		"  " + p.Cyan("-help, --help") + "      print this usage and exit successfully.\n" +
+		"  " + p.Cyan("-version, --version") + " print the CLI version string and exit successfully."
+}
 
-Usage:
-  taskfactory [global flags]
-  taskfactory <command> [flags]
-  taskfactory status
-  taskfactory validate [task-file]
-  taskfactory claim <ID> --owner <name>
-  taskfactory verify <ID>
-  taskfactory integrate <ID>
-  taskfactory check-main
-
-Global flags:
-  -help, --help      print this usage and exit successfully.
-  -version, --version print the CLI version string and exit successfully.`
+// errorLine formats a stderr error as "<prefix>: <msg>" with a red prefix when
+// color is enabled for that stream.
+func errorLine(p ui.Painter, prefix, msg string) string {
+	return p.Red(prefix) + ": " + msg
+}
 
 // exitUsage is the exit code returned when global flags are used incorrectly or
 // an unknown flag is supplied.
@@ -70,17 +79,20 @@ func main() {
 	fs.SetOutput(io.Discard)
 	// Keep flag.Parse from printing the full usage text on invalid input.
 	fs.Usage = func() {}
+	// Color is decided per stream: stdout for help, stderr for errors.
+	stdoutStyle := ui.For(os.Stdout)
+	stderrStyle := ui.For(os.Stderr)
 
 	help := fs.Bool("help", false, "print this usage and exit successfully")
 	showVersion := fs.Bool("version", false, "print the CLI version string and exit successfully")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
-		fmt.Fprintf(os.Stderr, "taskfactory: %v\n", err)
+		fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory", err.Error()))
 		os.Exit(exitUsage)
 	}
 
 	if *help {
-		fmt.Fprint(os.Stdout, usageText)
+		fmt.Fprint(os.Stdout, usage(stdoutStyle))
 		return
 	}
 
@@ -92,39 +104,39 @@ func main() {
 	args := fs.Args()
 	if len(args) == 1 && args[0] == "init" {
 		if err := initializeProject(); err != nil {
-			fmt.Fprintf(os.Stderr, "taskfactory init: %v\n", err)
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory init", err.Error()))
 			os.Exit(1)
 		}
 		return
 	}
 	if len(args) >= 1 && args[0] == "validate" {
 		if len(args) > 2 {
-			fmt.Fprintln(os.Stderr, "taskfactory validate: usage: taskfactory validate [task-file]")
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory validate", "usage: taskfactory validate [task-file]"))
 			os.Exit(exitUsage)
 		}
 		if err := validateProject(args[1:]); err != nil {
-			fmt.Fprintf(os.Stderr, "taskfactory validate: %v\n", err)
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory validate", err.Error()))
 			os.Exit(1)
 		}
 		return
 	}
 	if len(args) == 1 && args[0] == "status" {
 		if err := statusProject(); err != nil {
-			fmt.Fprintf(os.Stderr, "taskfactory status: %v\n", err)
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory status", err.Error()))
 			os.Exit(1)
 		}
 		return
 	}
 	if len(args) > 0 && args[0] == "claim" {
 		if err := claimTask(args[1:]); err != nil {
-			fmt.Fprintf(os.Stderr, "taskfactory claim: %v\n", err)
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory claim", err.Error()))
 			os.Exit(1)
 		}
 		return
 	}
 	if len(args) > 0 && args[0] == "verify" {
 		if len(args) != 2 {
-			fmt.Fprintln(os.Stderr, "taskfactory verify: usage: taskfactory verify <ID>")
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory verify", "usage: taskfactory verify <ID>"))
 			os.Exit(exitUsage)
 		}
 		root, err := projectRoot()
@@ -132,14 +144,14 @@ func main() {
 			err = verify.Run(root, args[1])
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "taskfactory verify: %v\n", err)
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory verify", err.Error()))
 			os.Exit(1)
 		}
 		return
 	}
 	if len(args) > 0 && args[0] == "integrate" {
 		if len(args) != 2 {
-			fmt.Fprintln(os.Stderr, "taskfactory integrate: usage: taskfactory integrate <ID>")
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory integrate", "usage: taskfactory integrate <ID>"))
 			os.Exit(exitUsage)
 		}
 		root, err := projectRoot()
@@ -147,7 +159,7 @@ func main() {
 			err = integrate.Run(root, args[1])
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "taskfactory integrate: %v\n", err)
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory integrate", err.Error()))
 			os.Exit(1)
 		}
 		fmt.Fprintf(os.Stdout, "integrated %s\n", args[1])
@@ -155,7 +167,7 @@ func main() {
 	}
 	if len(args) > 0 && args[0] == "check-main" {
 		if len(args) != 1 {
-			fmt.Fprintln(os.Stderr, "taskfactory check-main: usage: taskfactory check-main")
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory check-main", "usage: taskfactory check-main"))
 			os.Exit(exitUsage)
 		}
 		root, err := projectRoot()
@@ -163,14 +175,14 @@ func main() {
 			err = integrate.CheckMain(root)
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "taskfactory check-main: %v\n", err)
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory check-main", err.Error()))
 			os.Exit(1)
 		}
 		fmt.Fprintln(os.Stdout, "check-main: ok")
 		return
 	}
 
-	fmt.Fprintln(os.Stderr, usageText)
+	fmt.Fprintln(os.Stderr, usage(stderrStyle))
 	os.Exit(exitUsage)
 }
 
@@ -243,10 +255,11 @@ func validateProject(args []string) error {
 	if len(diagnostics) > 0 {
 		return fmt.Errorf("%d validation error(s)", len(diagnostics))
 	}
+	style := ui.For(os.Stdout)
 	if selected == "" {
-		fmt.Fprintln(os.Stdout, "task tree is valid")
+		fmt.Fprintln(os.Stdout, style.Green("task tree is valid"))
 	} else {
-		fmt.Fprintf(os.Stdout, "%s is valid\n", filepath.ToSlash(selected))
+		fmt.Fprintln(os.Stdout, style.Green(filepath.ToSlash(selected)+" is valid"))
 	}
 	return nil
 }
