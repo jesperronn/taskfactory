@@ -6,7 +6,7 @@ Implement `taskfactory init` in a Git project.
 
 ## Dependencies
 
-TF-001 and TF-007 must be archived before promotion to ready.
+TF-001, TF-002, and TF-007 must be archived before promotion to ready.
 
 ## Scope
 
