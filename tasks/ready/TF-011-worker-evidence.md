@@ -7,7 +7,10 @@ reviewable PASS, FAILED, or BLOCKED result for every recorded attempt.
 
 ## Dependencies
 
-TF-002, TF-003, TF-010, and TF-021 must be archived before promotion to ready.
+- TF-002
+- TF-003
+- TF-010
+- TF-021
 
 ## Scope
 
@@ -19,6 +22,13 @@ using the exact schema and locking rules in `docs/task-format-v1.md`. Record
 command source, criterion, exact command, exit code, combined output, start
 error, and changed files. Do not mark a task complete on a failed or blocked
 check. Keep retries under orchestrator control; do not build an agent loop.
+
+## Constraints
+
+Use the existing config, task, and Claim contracts without changing task
+lifecycle state. Use a per-task OS lock to serialize evidence appends across
+processes. Preserve previous evidence bytes exactly and add no new runtime
+dependency.
 
 ## Success criteria
 
@@ -42,9 +52,13 @@ Check: go test ./...
 
 Check: go test ./...
 
-### C6: The repository tests and vet pass
+### C6: Shell start errors record BLOCKED and command failures record FAILED
 
-Check: go test ./... && go vet ./...
+Check: go test ./...
+
+### C7: The repository checks pass
+
+Check: bin/test
 
 ## Verification
 
@@ -55,4 +69,7 @@ Run two verifies against the same task concurrently; confirm distinct
 consecutive attempt numbers and byte-for-byte preservation of earlier JSONL
 lines. Confirm malformed JSON and valid JSON with a wrong task ID, unknown or
 missing key, wrong field type, duplicate attempt, or attempt gap are rejected
-without modifying any evidence bytes.
+without modifying any evidence bytes. Verify a shell start failure produces a
+BLOCKED record with null exit code, and a non-zero command produces FAILED. Run
+`bin/test`, `bin/lint`, `go vet ./...`, and the whole-tree validator; report
+exact exits.
