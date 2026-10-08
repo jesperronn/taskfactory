@@ -32,10 +32,13 @@ integration evidence for successful and failed attempts.
 ## Success criteria
 
 - `integrate` rejects a missing/mismatched latest worker PASS, a dirty
-  candidate, unrelated main-worktree changes, absent local main, or a persistent
+  candidate, unrelated main-worktree changes, absent local main, a missing,
+  untracked or dirty `.taskfactory/config.toml`, or a persistent
   `.taskfactory/integration-stop.json` or its `.tmp` sibling without advancing
-  main; recognized TaskFactory runtime paths do not make an otherwise clean
-  checkout dirty. Check: go test ./internal/integrate ./internal/claim
+  main. Recognized TaskFactory runtime paths do not make an otherwise clean
+  checkout dirty; concurrent config edits are detected before merge and archive
+  staging, and are never staged. Check: go test ./internal/integrate
+  ./internal/claim
 - Two simultaneous integrations serialize on the integration lock. A main ref
   change before merge causes rebase and a fresh full integration-check sequence;
   only the exact checked commit is fast-forwarded. Check: go test
@@ -44,8 +47,9 @@ integration evidence for successful and failed attempts.
   unchanged, with one schema-valid failure record per attempt. Check: go test
   ./internal/integrate
 - Passing integration and configured main checks produce a fast-forward, then a
-  separately committed archive transition with only this task's paths staged and
-  one schema-valid PASS record. Check: go test ./internal/integrate
+  separately committed archive transition with only this task's active deletion
+  and archive addition staged and one schema-valid PASS record. Check: go test
+  ./internal/integrate
 - With `integration.stop_on_main_failure = true`, a post-merge main-check
   failure leaves main at the merged commit, task active, and the stop record
   persistent. Later integrate rejects while it exists without changing main or
