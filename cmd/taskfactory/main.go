@@ -291,6 +291,10 @@ func main() {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory verify", "usage: taskfactory verify <ID>"))
 			os.Exit(exitUsage)
 		}
+		if looksLikePath(args[1]) {
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory verify", "usage: taskfactory verify <ID>; did you mean `taskfactory validate <path>`?"))
+			os.Exit(exitUsage)
+		}
 		root, err := projectRoot()
 		if err == nil {
 			err = verify.Run(root, args[1])
@@ -545,6 +549,12 @@ func listTreeFiles(root, rel string) ([]string, error) {
 		return nil
 	})
 	return files, err
+}
+
+// looksLikePath reports whether a verify argument is a file path rather than a
+// task ID, so the user can be pointed at validate.
+func looksLikePath(arg string) bool {
+	return strings.Contains(arg, "/") || strings.HasSuffix(arg, ".md")
 }
 
 // statusHelp is printed by "status --help" and "status -h".

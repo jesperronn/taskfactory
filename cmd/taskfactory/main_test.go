@@ -713,3 +713,12 @@ func TestValidatePathsSelectsFilesAndExitCodes(t *testing.T) {
 		}
 	}
 }
+
+func TestVerifyPathArgumentSuggestsValidate(t *testing.T) {
+	binary := buildCLI(t)
+	root := initGitProject(t)
+	output, err := runCLI(t, binary, root, "verify", "tasks/inbox/x.md")
+	if processExitCode(err) != 2 || !strings.Contains(string(output), "did you mean `taskfactory validate <path>`?") {
+		t.Fatalf("verify path exit=%d output=%s", processExitCode(err), output)
+	}
+}
