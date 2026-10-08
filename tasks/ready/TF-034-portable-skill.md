@@ -2,7 +2,9 @@
 
 ## Goal
 
-Let any project adopt TaskFactory through an installable agent skill.
+Let any project adopt TaskFactory through an installable agent skill whose
+instructions are sufficient to create, validate and claim a task in a fresh
+repository.
 
 ## Dependencies
 
@@ -11,24 +13,38 @@ Let any project adopt TaskFactory through an installable agent skill.
 
 ## Scope
 
-No SKILL.md exists today. Write a skill (planner, orchestrator and worker
-guidance drawn from protocol-v1 and worker-instructions) plus an install path:
-`taskfactory init` scaffolds the task dirs and config, and the skill is copyable
-into `.claude/skills/` and equivalent locations for other harnesses. Verify by
-adopting it in a scratch repository.
+The skill lives at `skills/taskfactory/SKILL.md`, is referenced from the README
+with copy instructions for `.claude/skills/`, and is self-contained. The
+adoption run in a scratch repository is recorded in
+`docs/experiments/TF-034-skill-adoption.md`, with each command and exit code.
+Frontmatter is checked by `bin/skill.test.sh`, which `bin/test` runs.
+
+## Constraints
+
+Document only implemented CLI commands. Mark lifecycle commands (TF-033) and
+worker launch as not implemented. Do not change the CLI or task format. Keep
+the skill concise.
 
 ## Success criteria
 
-- A SKILL.md with valid frontmatter exists and is referenced from the README.
-- In a fresh scratch repo, `taskfactory init` plus the skill is enough to
-  create, validate and claim a task.
+### C1: Skill frontmatter has name and description
 
-## Delivery note
+Check: bin/skill.test.sh
 
-Delivered in `skills/taskfactory/SKILL.md`, with a README section explaining how
-to copy it into `.claude/skills/`. The skill documents only the implemented
-commands (`init`, `status`, `validate`, `claim`, `verify`, `integrate`) and
-marks lifecycle commands (TF-033) and worker adapters (TF-024 to TF-026) as not
-implemented. Remaining for the criteria: the scratch-repo adoption check, and
-whether the skill needs a `taskfactory init` path that copies it. This task
-stays in inbox.
+### C2: README links the skill
+
+Check: grep -q 'skills/taskfactory/SKILL.md' README.md
+
+### C3: Adoption run is recorded with exit codes
+
+Check: grep -q 'taskfactory claim TF-001 --owner worker' docs/experiments/TF-034-skill-adoption.md
+
+### C4: Whole task tree validates
+
+Check: go run ./cmd/taskfactory validate tasks
+
+## Verification
+
+Run each check from the repository root and report its exit code. Run
+`bin/test` and `bin/lint` and report their exit codes. Integration is still
+required before this task is archived.
