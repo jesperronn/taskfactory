@@ -34,3 +34,6 @@ bin/out/
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Claude Code subagent worktrees
+.claude/worktrees/
