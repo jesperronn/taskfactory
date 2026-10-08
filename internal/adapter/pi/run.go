@@ -7,7 +7,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 )
+
+// killGrace bounds how long Run waits for output pipes to close after the
+// bound expires, so a child process that outlives the harness cannot hang it.
+const killGrace = 2 * time.Second
 
 // Run performs the preflight and, only if every check passes, launches one
 // Pi run in req.Worktree. A refused preflight returns StateBlocked with no
@@ -33,6 +38,7 @@ func Run(ctx context.Context, req Request, opts Options) Result {
 	}
 	cmd := exec.CommandContext(runCtx, binPath, argv...)
 	cmd.Dir = req.Worktree
+	cmd.WaitDelay = killGrace
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
