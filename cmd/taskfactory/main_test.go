@@ -16,10 +16,11 @@ func TestCLIHelpVersionAndInvalidFlag(t *testing.T) {
 		args       []string
 		exitCode   int
 		wantOutput []string
+		wantAbsent []string
 	}{
 		{name: "help", args: []string{"--help"}, exitCode: 0, wantOutput: []string{"taskfactory", "--help", "--version"}},
 		{name: "version", args: []string{"--version"}, exitCode: 0, wantOutput: []string{"taskfactory version dev"}},
-		{name: "invalid flag", args: []string{"--not-a-global-flag"}, exitCode: 2, wantOutput: []string{"flag provided but not defined", "not-a-global-flag"}},
+		{name: "invalid flag", args: []string{"--not-a-global-flag"}, exitCode: 2, wantOutput: []string{"flag provided but not defined", "not-a-global-flag"}, wantAbsent: []string{"Usage:"}},
 	}
 
 	for _, tt := range tests {
@@ -33,6 +34,11 @@ func TestCLIHelpVersionAndInvalidFlag(t *testing.T) {
 			for _, want := range tt.wantOutput {
 				if !strings.Contains(string(output), want) {
 					t.Errorf("output %q does not contain %q", output, want)
+				}
+			}
+			for _, absent := range tt.wantAbsent {
+				if strings.Contains(string(output), absent) {
+					t.Errorf("output %q unexpectedly contains %q", output, absent)
 				}
 			}
 		})
