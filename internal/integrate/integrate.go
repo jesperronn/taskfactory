@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
 
 	"taskfactory/internal/config"
@@ -74,19 +73,11 @@ func Run(root, id string) (retErr error) {
 	if retErr != nil {
 		return retErr
 	}
-	lockPath := filepath.Join(root, ".taskfactory/integration.lock")
-	if err := os.MkdirAll(filepath.Dir(lockPath), 0755); err != nil {
-		return err
-	}
-	lf, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
+	unlock, err := acquireIntegrationLock(root)
 	if err != nil {
 		return err
 	}
-	defer lf.Close()
-	if err = syscall.Flock(int(lf.Fd()), syscall.LOCK_EX); err != nil {
-		return err
-	}
-	defer syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
+	defer unlock()
 	entry := attempt{TaskID: id, Attempt: nextAttempt(root, id), RecordedAt: time.Now().UTC().Format(time.RFC3339), Outcome: "FAILED", Stage: "eligibility", ExitCode: nil}
 	var fail *failure
 	appended := false
@@ -753,24 +744,42 @@ func appendRecord(root, id string, r attempt) error {
 	}
 	return f.Sync()
 }
+
+// stopRecord is the exact schema of .taskfactory/integration-stop.json, defined
+// in docs/protocol-v1.md. Field order determines the serialized byte layout.
+type stopRecord struct {
+	Main    string `json:"main_commit"`
+	Command string `json:"command"`
+	Exit    *int   `json:"exit_code"`
+	Output  string `json:"output"`
+	Error   string `json:"error"`
+}
+
+// parseStop validates stop record bytes against the protocol schema. Any
+// deviation, including unknown or missing keys, is reported as an error.
+func parseStop(b []byte) (stopRecord, error) {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(b, &fields) != nil || !exactKeys(fields, []string{"main_commit", "command", "exit_code", "output", "error"}) {
+		return stopRecord{}, errors.New("malformed stop record")
+	}
+	var rec stopRecord
+	if json.Unmarshal(b, &rec) != nil || !oidPattern.MatchString(rec.Main) || rec.Command == "" {
+		return stopRecord{}, errors.New("malformed stop record")
+	}
+	if (rec.Exit == nil) != (rec.Error != "") {
+		return stopRecord{}, errors.New("malformed stop record")
+	}
+	return rec, nil
+}
+
 func describeStop(root string) error {
 	path := filepath.Join(root, ".taskfactory/integration-stop.json")
 	b, e := os.ReadFile(path)
 	if e != nil {
 		return fmt.Errorf("integration stopped: inspect %s and repair main: %w", path, e)
 	}
-	var fields map[string]json.RawMessage
-	if json.Unmarshal(b, &fields) != nil || !exactKeys(fields, []string{"main_commit", "command", "exit_code", "output", "error"}) {
-		return fmt.Errorf("integration stopped: malformed %s; inspect it manually", path)
-	}
-	var rec struct {
-		Main    string `json:"main_commit"`
-		Command string `json:"command"`
-		Exit    *int   `json:"exit_code"`
-		Output  string `json:"output"`
-		Error   string `json:"error"`
-	}
-	if json.Unmarshal(b, &rec) != nil || !oidPattern.MatchString(rec.Main) || rec.Command == "" {
+	rec, perr := parseStop(b)
+	if perr != nil {
 		return fmt.Errorf("integration stopped: malformed %s; inspect it manually", path)
 	}
 	return fmt.Errorf("integration stopped: main %s failed command %q; repair main and inspect %s", rec.Main, rec.Command, path)
@@ -780,13 +789,7 @@ func writeStop(root, main, command string, code *int, out string, startErr error
 	if _, e := os.Lstat(p); e == nil {
 		return fmt.Errorf("stop record already exists")
 	}
-	record := struct {
-		Main    string `json:"main_commit"`
-		Command string `json:"command"`
-		Exit    *int   `json:"exit_code"`
-		Output  string `json:"output"`
-		Error   string `json:"error"`
-	}{main, command, code, out, ""}
+	record := stopRecord{Main: main, Command: command, Exit: code, Output: out}
 	if startErr != nil {
 		record.Error = startErr.Error()
 	}
