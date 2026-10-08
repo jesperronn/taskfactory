@@ -36,3 +36,5 @@ rules:
   blank-line-around-fenced-code: true
 ignore:
   - testdata/markdown/**
+  - node_modules/**
+  - .claude/worktrees/**
