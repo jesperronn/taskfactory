@@ -1,0 +1,38 @@
+# mdsmith configuration (pinned: github.com/jeduden/mdsmith/cmd/mdsmith@v0.57.0).
+# Layering: built-in defaults, convention github, these rules, then overrides.
+convention: github
+rules:
+  # Opinion rules: judge content or readability, not formatting. Off.
+  paragraph-readability: false # MDS023
+  max-file-length: false # MDS022
+  no-emphasis-as-heading: false # MDS018
+  paragraph-structure: false
+  conciseness-scoring: false
+  token-budget: false
+  max-section-length: false
+  first-line-heading: false
+  over-repetition: false
+  duplicated-content: false
+  occurrence: false
+  table-readability: false
+  # Formatting rules.
+  line-length:
+    max: 80
+    heading-max: 120 # headings are not reflowed; see the experiment record
+    reflow: true
+    stern: true # flag only lines with a breakable space past the limit
+  table-format:
+    style: consistent
+    separator-style: spaced
+  # Nested bullets under a numbered item need 3 spaces (the marker width);
+  # 2 spaces moves them out of the item. See the experiment record.
+  list-indent:
+    spaces: 3
+  # Disabled: no-trailing-spaces strips the two-space hard line breaks
+  # (MDS006 fix changes rendered HTML). See the experiment record.
+  no-trailing-spaces: false
+  blank-line-around-headings: true
+  blank-line-around-lists: true
+  blank-line-around-fenced-code: true
+ignore:
+  - testdata/markdown/**
