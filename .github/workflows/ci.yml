@@ -14,7 +14,8 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          # Pinned mdsmith (bin/lint) requires Go >= 1.25.11; go.mod keeps its lower minimum.
+          go-version: '1.25.11'
 
       - name: Run tests
         run: bin/test
