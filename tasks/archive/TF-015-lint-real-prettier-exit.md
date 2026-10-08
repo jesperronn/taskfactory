@@ -47,10 +47,10 @@ shell prompt or from warning text alone.
 
 ## Outcome
 
-Completed in `6214844`. The reported exit-0 behavior did not reproduce with
-real Prettier 3.9.9: `bin/lint` exited 1 and named the misformatted file, then
-exited 0 with no warnings for a formatted file. Its final `exec npx prettier`
-already forwards the formatter's exit status, so no production script change
-was needed. `bin/lint.real-prettier.test.sh` and `bin/lint.test.sh` both pass.
-The three harness experiments and their separate commits are recorded in
+Completed in `6214844`. The reported exit-0 behavior did not reproduce with real
+Prettier 3.9.9: `bin/lint` exited 1 and named the misformatted file, then exited
+0 with no warnings for a formatted file. Its final `exec npx prettier` already
+forwards the formatter's exit status, so no production script change was needed.
+`bin/lint.real-prettier.test.sh` and `bin/lint.test.sh` both pass. The three
+harness experiments and their separate commits are recorded in
 `docs/experiments/TF-015-worker-comparison.md`.
