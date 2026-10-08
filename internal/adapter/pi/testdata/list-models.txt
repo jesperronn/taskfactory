@@ -1,0 +1,3 @@
+provider  model  context  max-out  thinking  images
+olla  Ornith-1.5-35B-A3B-MLX-4bit  128K  16.4K  no  no
+omlx  Ornith-1.5-35B-A3B-MLX-4bit  128K  16.4K  no  no
