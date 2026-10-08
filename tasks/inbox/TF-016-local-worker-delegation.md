@@ -27,6 +27,9 @@ worker must not silently complete or archive a task.
 - Split this story into executable tasks with dependencies, success criteria,
   and verification before promoting any part to `ready`.
 
+TF-023 defines the shared launch and result contract before adapter
+implementation tasks are promoted.
+
 ## Context
 
 The first sequential comparison is recorded in
