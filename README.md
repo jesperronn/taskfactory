@@ -735,6 +735,20 @@ taskfactory integrate
 
 The exact interface will evolve while TaskFactory dogfoods itself.
 
+## Agent skill
+
+`skills/taskfactory/SKILL.md` is a portable agent skill covering planner,
+orchestrator and worker guidance for the commands that exist today. To use it in
+another project, copy the directory into the project's skills location:
+
+```sh
+mkdir -p .claude/skills
+cp -R /path/to/taskfactory/skills/taskfactory .claude/skills/
+```
+
+Other harnesses may use an equivalent skills directory. Lifecycle commands and
+worker adapters are not implemented yet; the skill marks them as such.
+
 ---
 
 # Why Go?
