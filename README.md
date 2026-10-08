@@ -760,8 +760,10 @@ mkdir -p .claude/skills
 cp -R /path/to/taskfactory/skills/taskfactory .claude/skills/
 ```
 
-Other harnesses may use an equivalent skills directory. Lifecycle commands and
-worker adapters are not implemented yet; the skill marks them as such.
+Other harnesses may use an equivalent skills directory. Lifecycle commands are
+not implemented yet, and no CLI command launches worker adapters; the skill
+marks both as such. `bin/skill.test.sh` checks the frontmatter that harnesses
+read.
 
 ---
 
