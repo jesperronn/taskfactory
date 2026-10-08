@@ -76,6 +76,11 @@ loading, task validation, atomic claiming, and worktree creation. Later slices
 add worker verification and serialized `integrate`. Do not build release
 infrastructure yet.
 
+`taskfactory validate` with no arguments checks the inbox and ready task files.
+Paths given as arguments are task files or folders under `tasks/`;
+`taskfactory validate tasks` checks the whole tree. Tree-wide ID and dependency
+checks always run, but only diagnostics for the selected files are reported.
+
 Implement the protocol's invariants: one owner per claim, resolved dependencies,
 max four workers by default, separate worktrees, worker verification/repair
 evidence, serialized integration, rebasing against current main,

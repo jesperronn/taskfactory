@@ -735,6 +735,11 @@ taskfactory check-main
 taskfactory <command> --help
 ```
 
+`taskfactory validate` with no arguments checks the task files in `inbox` and
+`ready`. Pass task files or folders to check only those, for example
+`taskfactory validate tasks/archive`. Use `taskfactory validate tasks` to check
+the whole task tree.
+
 The exact interface will evolve while TaskFactory dogfoods itself.
 
 ## Install

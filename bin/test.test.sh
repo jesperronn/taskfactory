@@ -87,7 +87,7 @@ if ! grep -Fqx "${expected_go_call}" "${go_log}"; then
   printf '[FAIL] Go command root and arguments: expected=%q actual=%q\n' "${expected_go_call}" "${go_call}" >&2
   exit 1
 fi
-if ! grep -Fqx "${fixture_root}/go-success|run ./cmd/taskfactory validate" "${go_log}"; then
+if ! grep -Fqx "${fixture_root}/go-success|run ./cmd/taskfactory validate tasks" "${go_log}"; then
   printf '[FAIL] whole-tree validation command was not run: %s\n' "${go_call}" >&2
   exit 1
 fi
@@ -124,4 +124,4 @@ real_output=$(cd / && "${real_fixture}/bin/test" 2>&1) || real_status=$?
 assert_status "${real_status}" 1 'real Go project wrapper rejects an invalid task after Go tests pass'
 assert_contains "${real_output}" 'ok  ' 'real fixture Go tests pass before task validation'
 assert_contains "${real_output}" 'tasks/ready/TF-998-broken.md: Goal:' 'real fixture reports the invalid task and field'
-assert_contains "${real_output}" 'FAIL: task validation: go run ./cmd/taskfactory validate' 'real fixture attributes wrapper failure to validation'
+assert_contains "${real_output}" 'FAIL: task validation: go run ./cmd/taskfactory validate tasks' 'real fixture attributes wrapper failure to validation'

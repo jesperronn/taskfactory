@@ -44,9 +44,9 @@ fi
 
 if [[ -f go.mod ]]; then
   if [[ -f .taskfactory/config.toml ]]; then
-    printf '==> go run ./cmd/taskfactory validate\n'
-    if ! go run ./cmd/taskfactory validate; then
-      printf 'FAIL: task validation: go run ./cmd/taskfactory validate\n' >&2
+    printf '==> go run ./cmd/taskfactory validate tasks\n'
+    if ! go run ./cmd/taskfactory validate tasks; then
+      printf 'FAIL: task validation: go run ./cmd/taskfactory validate tasks\n' >&2
       failed=1
     fi
   else

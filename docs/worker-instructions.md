@@ -15,7 +15,7 @@ failing command and enough context to continue.
 Before claiming work, validate the ready task with
 `go run ./cmd/taskfactory validate tasks/ready/<ID>-<slug>.md`. After editing a
 task contract or changing its lifecycle state, run
-`go run ./cmd/taskfactory validate` to check all five task directories. The
+`go run ./cmd/taskfactory validate tasks` to check all five task directories. The
 single-file form still checks tree-wide ID uniqueness and dependency references,
 while reporting only diagnostics for the selected task. `bin/test` runs the
 whole-tree form automatically.
