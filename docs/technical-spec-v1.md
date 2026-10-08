@@ -86,9 +86,12 @@ solely on worker success.
 
 `integrate <ID>` operates only on local `refs/heads/main`; it does not fetch or
 push. Require local main to exist and be checked out in the repository worktree.
-The main worktree may contain only ready-to-active claim transitions (each ready
-task file moved to active with its Claim block); reject unrelated tracked or
-untracked changes, and never stage concurrent claim transitions. The task
+The main worktree may contain ready-to-active claim transitions (each ready task
+file moved to active with its Claim block), TaskFactory's exact runtime paths
+from `protocol-v1.md`, and registered worker worktrees under the configured
+root. Reject unrelated tracked or untracked changes, and never stage concurrent
+claim transitions. Inventory runtime directories even when Git ignore rules hide
+them, so ignored user files are not mistaken for TaskFactory state. The task
 worktree itself must be clean. The claimed branch must be checked out in its
 registered worktree, and the complete, schema-valid, consecutively numbered
 worker evidence file must end with a PASS for the claimed task and branch. Its
@@ -101,25 +104,28 @@ Serialize integrations with `.taskfactory/integration.lock`. Claims serialize
 only with `.taskfactory/claim.lock`; neither operation acquires both locks, so
 there is no nested lock order. A claim may read main before an integration
 advances it; the candidate is rebased and verified against current main when
-integrated. Under the integration lock, reject a persistent TF-013 stop record,
-rebase onto main, run `verification.integration` in order at the candidate root,
-reread main immediately before the merge, and repeat rebase plus all integration
-checks if main moved. Fast-forward the checked-out local main with
+integrated. Under the integration lock, reject a valid or malformed
+`.taskfactory/integration-stop.json` fail-closed, rebase onto main, run
+`verification.integration` in order at the candidate root, reread main
+immediately before the merge, and repeat rebase plus all integration checks if
+main moved. Fast-forward the checked-out local main with
 `git merge --ff-only <verified-commit>`. Never create a merge commit or reset
 main to undo a post-merge failure. The lock coordinates TaskFactory processes;
 external Git processes do not honor it.
 
 Run optional `verification.main` at the repository root after the fast-forward.
 A failure records the advanced main commit and leaves the task active. When
-`integration.stop_on_main_failure` is true, invoke TF-013's persistent stop
-behavior; when false, retain the failure evidence without creating a stop
-record. After all checks pass, move only this task from active to archive and
-commit the lifecycle transition separately, staging only the task's ready
-deletion and archive addition. Never stage unrelated task or user files. Append
-a PASS integration record after the archive commit; if that commit fails, append
-an archive failure and leave main advanced. If the final evidence append fails,
-preserve the already committed archive and report the missing evidence; do not
-rewrite existing JSONL.
+`integration.stop_on_main_failure` is true, TF-012 atomically writes the exact
+stop record defined in `protocol-v1.md`; later integrations reject while it
+exists. TF-013 adds `check-main` and clears that record only after all
+configured checks pass on current main. When the setting is false, retain
+failure evidence without creating a stop record. After all checks pass, move
+only this task from active to archive and commit the lifecycle transition
+separately, staging only the task's ready deletion and archive addition. Never
+stage unrelated task or user files. Append a PASS integration record after the
+archive commit; if that commit fails, append an archive failure and leave main
+advanced. If the final evidence append fails, preserve the already committed
+archive and report the missing evidence; do not rewrite existing JSONL.
 
 Append one integration-attempt object per attempt to
 `.taskfactory/integration-evidence/<ID>.jsonl`, independently from worker

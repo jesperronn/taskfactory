@@ -68,11 +68,28 @@ not fetch, push, contact a remote, or update a remote-tracking ref. It requires
 that local `main` exists and is checked out in the repository worktree. The
 repository worktree may contain ready-to-active lifecycle changes from
 concurrent claims: each must be exactly a ready task file moved to active with
-the Claim block appended. Reject other tracked or untracked changes. Claim does
-not commit lifecycle state. The integration candidate is the task's claimed
-worktree. Only TaskFactory integrations coordinate through
-`.taskfactory/integration.lock`; an external Git process does not honor this
-lock.
+the Claim block appended. It may also contain these TaskFactory operational
+paths: `.taskfactory/config.toml`, `.taskfactory/claim.lock`,
+`.taskfactory/integration.lock`, `.taskfactory/evidence/<ID>.jsonl`,
+`.taskfactory/evidence/<ID>.lock`,
+`.taskfactory/integration-evidence/<ID>.jsonl`,
+`.taskfactory/integration-stop.json`, its atomic-write sibling
+`.taskfactory/integration-stop.json.tmp`, and registered worker worktrees
+exactly at the configured worktree root plus one task-ID component. `<ID>` must
+match `TF-[0-9]{3}`. Claim's `tasks/active/.claim-*.tmp` files and
+`.taskfactory/.claim-backup-*.tmp` transaction files are permitted only while
+they are transient claim paths. A worktree path is permitted only when Git lists
+it as a registered worktree and its task ID matches a retained Claim in
+`tasks/active/`, `tasks/failed/`, or `tasks/archive/`. No other tracked or
+untracked changes are permitted; in particular, a general `.taskfactory/` or
+worktree-root allowance must not hide unrelated files. Claim does not commit
+lifecycle state. A parent directory may appear in Git status instead of its
+operational children; allow it only when every descendant is an allowed
+operational path. Inventory these directory contents even when Git ignore rules
+hide them; ignore rules do not grant a blanket runtime allowance. The
+integration candidate is the task's claimed worktree. Only TaskFactory
+integrations coordinate through `.taskfactory/integration.lock`; an external Git
+process does not honor this lock.
 
 An active task is eligible only when all of these facts hold at the start of an
 attempt:
@@ -102,9 +119,42 @@ serializes claim state changes with other claims.
 
 While holding the integration lock, the integrator performs this sequence:
 
-1. Reject ordinary integration if the persistent stop record from TF-013 exists.
-   Check eligibility and record the current full `refs/heads/main` commit as
-   `main_before`.
+1. Reject ordinary integration if `.taskfactory/integration-stop.json` exists.
+   TF-012 owns creation and rejection of this stop record; TF-013 later adds
+   `check-main` and clears it only after successful verification of current
+   main. The record is one UTF-8 JSON object with exactly these keys:
+   - `main_commit`: full lowercase hexadecimal Git commit ID, 40 or 64
+     characters.
+   - `command`: exact configured `verification.main` command that failed.
+   - `exit_code`: integer process exit code, or null when the command could not
+     start.
+   - `output`: combined stdout and stderr, or empty when none.
+   - `error`: process-start error text, or empty otherwise.
+
+   Example:
+
+   ```json
+   {
+     "main_commit": "0123456789abcdef0123456789abcdef01234567",
+     "command": "go test ./...",
+     "exit_code": 1,
+     "output": "FAIL example.test/package",
+     "error": ""
+   }
+   ```
+
+   TF-012 writes this file atomically through the sibling temporary path after a
+   post-merge main-check failure when `integration.stop_on_main_failure` is
+   true. It never clears or overwrites an existing stop record. If the stop file
+   or its temporary sibling exists, integration fails closed before changing
+   main or task state. For a valid record, the CLI reports its main commit and
+   failed command; for a malformed record or leftover temp file, it identifies
+   the path for manual inspection. In any case it appends a `BLOCKED`
+   integration attempt with stage `eligibility` and directs the operator to
+   repair main. TF-012 does not offer a recovery command or delete either file.
+   Then check candidate eligibility and record the current full
+   `refs/heads/main` commit as `main_before`.
+
 2. Rebase the claimed branch onto that commit. A conflict or failed rebase ends
    the attempt; do not run integration checks or move main. Record the failure
    and return the task for worker remediation.
@@ -118,12 +168,17 @@ While holding the integration lock, the integrator performs this sequence:
    `git merge --ff-only <verified-commit>` in the main worktree. Any merge error
    is a failure; never create a merge commit or reset main to simulate rollback.
 5. If `verification.main` is configured, run every command at the repository
-   root after the fast-forward. If one fails, append the attempt evidence and
-   leave this task active. When `integration.stop_on_main_failure` is true,
-   apply TF-013 stop-the-line behavior: persist the failed main commit and
-   command, then reject subsequent ordinary integrations. When it is false,
-   retain the failure evidence and active task but do not create a persistent
-   stop record. Main has already advanced; do not claim rollback.
+   root after the fast-forward. If one fails, leave this task active. When
+   `integration.stop_on_main_failure` is true, write
+   `.taskfactory/integration-stop.json.tmp`, then rename it to
+   `.taskfactory/integration-stop.json` before appending attempt evidence, so
+   later integrations remain stopped even if evidence append fails. If the stop
+   record cannot be written, report that main advanced and that stop state could
+   not be persisted; still append integration failure evidence when possible,
+   and do not claim the pipeline is stopped. TF-013 later implements
+   `check-main` recovery. When the setting is false, retain the failure evidence
+   and active task but do not create a persistent stop record. Main has already
+   advanced; do not claim rollback.
 6. After all required checks pass, atomically move only this task file from
    active to archive. Commit the lifecycle transition separately on local main,
    staging only this task's ready deletion and archive addition; never use
@@ -200,8 +255,9 @@ that was already archived cannot be integrated again.
 When the configured stop policy marks main broken, stop ordinary integration
 immediately. Existing workers may continue in their worktrees. Prioritize a
 repair task; resume ordinary integration only after TF-013's `check-main` passes
-on the current main commit and clears the stop record. A post-merge main failure
-retains its failure record and stop state; moving main alone does not clear it.
+on the current main commit and clears `.taskfactory/integration-stop.json`. A
+post-merge main failure retains its failure record and stop state; moving main
+alone does not clear it.
 
 ## Version 1 boundaries
 
