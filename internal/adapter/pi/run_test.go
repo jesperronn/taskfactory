@@ -44,7 +44,7 @@ func TestStubRunCreatesFileInTempWorktree(t *testing.T) {
 
 func TestRunStallsAtAdapterTimeout(t *testing.T) {
 	binDir := t.TempDir()
-	script := "#!/bin/sh\nif [ \"$1\" = \"--list-models\" ]; then printf 'omlx %s\\n' '" + testModel + "'; exit 0; fi\nsleep 5\n"
+	script := "#!/bin/sh\nif [ \"$1\" = \"--list-models\" ]; then printf 'omlx %s\\n' '" + testModel + "'; exit 0; fi\n/bin/sleep 5\n"
 	if err := os.WriteFile(filepath.Join(binDir, Binary), []byte(script), 0o755); err != nil {
 		t.Fatalf("write stub: %v", err)
 	}
