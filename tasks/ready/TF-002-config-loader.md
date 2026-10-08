@@ -6,7 +6,7 @@ Implement the v1 Go configuration loader using the approved TOML contract.
 
 ## Dependencies
 
-TF-001 and TF-007 must be archived before promotion to ready.
+TF-001 and TF-007 are archived.
 
 ## Scope
 
