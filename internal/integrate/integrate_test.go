@@ -206,6 +206,54 @@ func TestIntegrationEvidenceAppendFailureDoesNotMoveMain(t *testing.T) {
 	}
 }
 
+func TestFinalPassEvidenceAppendFailurePreservesArchiveCommit(t *testing.T) {
+	f := newFixture(t)
+	configureMainCommand(t, f.root, "mkdir -p .taskfactory/integration-evidence/TF-901.jsonl")
+	mainBefore, err := git(f.root, "rev-parse", "refs/heads/main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = Run(f.root, "TF-901")
+	if err == nil || !strings.Contains(err.Error(), "archive committed but append PASS integration evidence failed") {
+		t.Fatalf("Run error = %v; want final evidence append failure", err)
+	}
+	if _, err := os.Stat(filepath.Join(f.root, "tasks/active/TF-901-example.md")); !os.IsNotExist(err) {
+		t.Fatalf("active task should remain archived after evidence failure: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(f.root, "tasks/archive/TF-901-example.md")); err != nil {
+		t.Fatalf("archive task missing after evidence failure: %v", err)
+	}
+	parent, err := git(f.root, "rev-parse", "HEAD^")
+	if err != nil {
+		t.Fatalf("read archive commit parent: %v", err)
+	}
+	if _, err = git(f.root, "merge-base", "--is-ancestor", mainBefore, parent); err != nil {
+		t.Fatalf("rebased candidate %s is not based on current main %s", parent, mainBefore)
+	}
+	feature, err := git(f.root, "show", parent+":feature.txt")
+	if err != nil || feature != "candidate" {
+		t.Fatalf("archive parent candidate feature = %q, err = %v", feature, err)
+	}
+	if _, err := os.Stat(filepath.Join(f.root, ".taskfactory/integration-evidence/TF-901.jsonl")); err != nil {
+		t.Fatalf("failure setup directory missing: %v", err)
+	}
+}
+
+func configureMainCommand(t *testing.T, root, command string) {
+	t.Helper()
+	p := filepath.Join(root, ".taskfactory/config.toml")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := strings.TrimSuffix(string(b), "\n") + "\nmain=[\"" + command + "\"]\n"
+	if err = os.WriteFile(p, []byte(updated), 0644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, root, "git", "add", "--", ".taskfactory/config.toml")
+	run(t, root, "git", "commit", "-m", "configure main check")
+}
+
 func TestMismatchedWorkerResultAndUnrelatedMainFileAreRejected(t *testing.T) {
 	for _, mode := range []string{"mismatched worker result", "unrelated main file"} {
 		t.Run(mode, func(t *testing.T) {
