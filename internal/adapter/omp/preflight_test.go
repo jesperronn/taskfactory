@@ -65,29 +65,29 @@ func TestPreflightRefusesBeforeLaunch(t *testing.T) {
 	t.Run("adapter binary missing", func(t *testing.T) {
 		t.Setenv("PATH", t.TempDir())
 		req := testRequest(t)
-		assertBlocked(t, req, Options{Dial: okDial}, filepath.Join(req.Worktree, "created.txt"))
+		assertBlocked(t, req, testOpts(t, okDial), filepath.Join(req.Worktree, "created.txt"))
 	})
 
 	t.Run("model not listed", func(t *testing.T) {
 		marker := installStub(t, "omlx/Some-Other-Model")
 		req := testRequest(t)
-		pf := Preflight(context.Background(), req, Options{Dial: okDial})
+		pf := Preflight(context.Background(), req, testOpts(t, okDial))
 		if pf.Err() == nil || !strings.Contains(pf.Err().Error(), testModel) {
 			t.Errorf("model refusal does not name the model: %v", pf.Err())
 		}
-		assertBlocked(t, req, Options{Dial: okDial}, marker)
+		assertBlocked(t, req, testOpts(t, okDial), marker)
 	})
 
 	t.Run("endpoint unreachable", func(t *testing.T) {
 		marker := installStub(t, testModel)
 		req := testRequest(t)
 		down := func(context.Context, string) error { return errors.New("connection refused") }
-		assertBlocked(t, req, Options{Dial: down}, marker)
+		assertBlocked(t, req, testOpts(t, down), marker)
 	})
 
 	t.Run("all available", func(t *testing.T) {
 		installStub(t, testModel)
-		pf := Preflight(context.Background(), testRequest(t), Options{Dial: okDial})
+		pf := Preflight(context.Background(), testRequest(t), testOpts(t, okDial))
 		if err := pf.Err(); err != nil {
 			t.Fatalf("preflight refused a fully available setup: %v", err)
 		}
@@ -95,4 +95,11 @@ func TestPreflightRefusesBeforeLaunch(t *testing.T) {
 			t.Errorf("checks = %d, want 3", len(pf.Checks))
 		}
 	})
+}
+
+// testOpts returns Options whose Home is a fresh temp directory, so tests never
+// read the real ~/.omp/agent/config.yml.
+func testOpts(t *testing.T, dial func(context.Context, string) error) Options {
+	t.Helper()
+	return Options{Dial: dial, Home: t.TempDir()}
 }

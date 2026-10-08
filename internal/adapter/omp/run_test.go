@@ -11,7 +11,7 @@ import (
 func TestStubRunCreatesFileInTempWorktree(t *testing.T) {
 	installStub(t, testModel)
 	req := testRequest(t)
-	res := Run(context.Background(), req, Options{Dial: okDial})
+	res := Run(context.Background(), req, testOpts(t, okDial))
 	if res.State != StateExit {
 		t.Fatalf("state = %s, want exit; note=%s output=%s", res.State, res.Note, res.Output)
 	}

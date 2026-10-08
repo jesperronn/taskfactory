@@ -11,8 +11,26 @@ import (
 
 // Run performs the preflight and, only if every check passes, launches one
 // OMP run in req.Worktree. A refused preflight returns StateBlocked with no
-// launch. A run that exceeds req.Timeout returns StateStalled.
+// launch. A run that exceeds req.Timeout returns StateStalled. Every result
+// note states the side-call model mapping from the OMP config.
 func Run(ctx context.Context, req Request, opts Options) Result {
+	res := run(ctx, req, opts)
+	home := opts.Home
+	if home == "" {
+		if h, err := os.UserHomeDir(); err == nil {
+			home = h
+		}
+	}
+	side := sideCallNote(home)
+	if res.Note == "" {
+		res.Note = side
+	} else {
+		res.Note += "; " + side
+	}
+	return res
+}
+
+func run(ctx context.Context, req Request, opts Options) Result {
 	argv, err := NewArgvBuilder().Argv(req)
 	if err != nil {
 		return Result{State: StateBlocked, Note: err.Error()}

@@ -22,6 +22,9 @@ type Options struct {
 	// Dial reports whether addr accepts a TCP connection. Nil means a real
 	// net.Dialer. Tests inject it so no socket is opened.
 	Dial func(ctx context.Context, addr string) error
+	// Home is the directory holding .omp/agent/config.yml. Empty means the
+	// user's home directory. Tests set it to a temporary directory.
+	Home string
 }
 
 const preflightTimeout = 30 * time.Second
