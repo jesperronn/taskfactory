@@ -1,5 +1,11 @@
 # TF-027: Record the result commit and call verify independently
 
+Promotion blocked: `taskfactory verify` is already implemented in
+`internal/verify/verify.go` and covered by its tests (criterion checks, then
+worker commands, `result_commit`, `changed_files`, repair attempts, and blocked
+shell starts). Archived TF-011 delivered this. The remaining gap is not stated,
+so the owner must re-scope this proposal before it can be promoted.
+
 ## Goal
 
 Retain each run's result commit and evidence, and have TaskFactory call `verify`

@@ -1,5 +1,11 @@
 # TF-028: Worker state machine preserving Git state and evidence
 
+Promotion blocked: `docs/local-workers-v1.md` requires a stall to be recorded as
+`stalled`, but the evidence `outcome` enum in `docs/task-format-v1.md` allows
+only `PASS`, `FAILED`, and `BLOCKED`. The owner must decide how a stall is
+recorded before this can be promoted. The CLI also has no stop or resume command
+yet; inbox TF-033 may overlap with this scope.
+
 ## Goal
 
 Handle completion, failure, stall, stop, and resume so that each preserves the
