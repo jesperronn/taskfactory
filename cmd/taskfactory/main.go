@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"taskfactory/internal/claim"
 	"taskfactory/internal/config"
 	"taskfactory/internal/taskvalidate"
 )
@@ -30,6 +31,7 @@ Usage:
   taskfactory <command> [flags]
   taskfactory status
   taskfactory validate [task-file]
+  taskfactory claim <ID> --owner <name>
 
 Global flags:
   -help, --help      print this usage and exit successfully.
@@ -109,9 +111,44 @@ func main() {
 		}
 		return
 	}
+	if len(args) > 0 && args[0] == "claim" {
+		if err := claimTask(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "taskfactory claim: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	fmt.Fprintln(os.Stderr, usageText)
 	os.Exit(exitUsage)
+}
+
+func claimTask(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: taskfactory claim <ID> --owner <name>")
+	}
+	id := args[0]
+	fs := flag.NewFlagSet("claim", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	owner := fs.String("owner", "", "worker identifier")
+	if err := fs.Parse(args[1:]); err != nil {
+		return fmt.Errorf("usage: taskfactory claim <ID> --owner <name>: %w", err)
+	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("usage: taskfactory claim <ID> --owner <name>")
+	}
+	if strings.TrimSpace(*owner) == "" {
+		return fmt.Errorf("--owner must be non-empty")
+	}
+	root, err := projectRoot()
+	if err != nil {
+		return err
+	}
+	if err := claim.Claim(root, id, *owner); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stdout, "claimed %s for %s\n", id, *owner)
+	return nil
 }
 
 func validateProject(args []string) error {

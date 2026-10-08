@@ -241,6 +241,35 @@ func TestValidateSupportsWholeTreeAndSingleFile(t *testing.T) {
 	}
 }
 
+func TestClaimCLIRequiresOwnerAndActivatesTask(t *testing.T) {
+	binary := buildCLI(t)
+	root := initGitProject(t)
+	if output, err := runCLI(t, binary, root, "init"); err != nil {
+		t.Fatalf("init: %v\n%s", err, output)
+	}
+	taskPath := filepath.Join(root, "tasks", "ready", "TF-108-claim.md")
+	if err := os.WriteFile(taskPath, []byte(validTask("TF-108")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "-C", root, "add", ".")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v\n%s", err, output)
+	}
+	cmd = exec.Command("git", "-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "fixture")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v\n%s", err, output)
+	}
+	if output, err := runCLI(t, binary, root, "claim", "TF-108"); processExitCode(err) == 0 || !strings.Contains(string(output), "--owner") {
+		t.Fatalf("missing owner should fail: %v\n%s", err, output)
+	}
+	if output, err := runCLI(t, binary, root, "claim", "TF-108", "--owner", "worker"); err != nil || !strings.Contains(string(output), "claimed TF-108") {
+		t.Fatalf("claim: %v\n%s", err, output)
+	}
+	if _, err := os.Stat(filepath.Join(root, "tasks", "active", "TF-108-claim.md")); err != nil {
+		t.Fatalf("active task missing: %v", err)
+	}
+}
+
 func TestStatusReportsStableReadOnlyTaskCounts(t *testing.T) {
 	binary := buildCLI(t)
 	root := initGitProject(t)
