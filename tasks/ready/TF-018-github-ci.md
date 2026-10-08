@@ -7,7 +7,7 @@ local workers.
 
 ## Dependencies
 
-TF-001 and TF-017 must be archived before promotion to ready.
+TF-001 and TF-017 are archived.
 
 ## Scope
 
@@ -43,5 +43,5 @@ runtime policy.
 ## Verification
 
 Run the local CI commands and inspect their exit codes. Validate workflow YAML
-with an available parser. Inspect a real GitHub Actions run when available and
-record its URL and conclusion.
+with an available parser. Report the exact workflow path and commit; leave the
+remote-run check to TF-020.
