@@ -27,18 +27,20 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"taskfactory/internal/adapter/common"
 )
 
 // State is the v1 result state of one adapter run.
-type State string
+type State = common.State
 
 const (
 	// StateExit means the harness ran and its --print mode exited with a code.
-	StateExit State = "exit"
+	StateExit = common.StateExit
 	// StateBlocked means the preflight refused, so nothing was launched.
-	StateBlocked State = "blocked"
+	StateBlocked = common.StateBlocked
 	// StateStalled means the run exceeded its timeout.
-	StateStalled State = "stalled"
+	StateStalled = common.StateStalled
 )
 
 // Binary is the harness executable name resolved on PATH.
@@ -85,12 +87,13 @@ type Request struct {
 
 // Result is the outcome of one run. Commit and changed-file capture belong to
 // the TF-027 recorder and are not produced here.
-type Result struct {
-	State    State
-	ExitCode *int   // shell exit code, or nil if the process never started
-	Output   string // captured -p output, the only progress channel for this adapter
-	Note     string // human context, including refusal reasons and model mapping
-}
+type Result = common.Result
+
+// PreflightResult lists every preflight check in the order it ran.
+type PreflightResult = common.PreflightResult
+
+// PreflightCheck is one named check and its error, nil when it passed.
+type PreflightCheck = common.PreflightCheck
 
 // ArgvBuilder builds the argv for one launch. Implementations must reject a
 // request with no explicit model and must never add a fallback model.
@@ -98,29 +101,6 @@ type ArgvBuilder interface {
 	// Argv returns the arguments for the harness binary, excluding argv[0].
 	// The prompt is not part of the argv; it is written to stdin.
 	Argv(req Request) ([]string, error)
-}
-
-// PreflightResult lists every preflight check in the order it ran.
-type PreflightResult struct {
-	Checks []PreflightCheck
-}
-
-// PreflightCheck is one named check and its error, nil when it passed.
-type PreflightCheck struct {
-	Name string
-	Err  error
-}
-
-// Err returns all failed checks joined into one error, or nil when every check
-// passed. A non-nil result means the run must be refused.
-func (p PreflightResult) Err() error {
-	var errs []error
-	for _, c := range p.Checks {
-		if c.Err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", c.Name, c.Err))
-		}
-	}
-	return errors.Join(errs...)
 }
 
 // argvBuilder is the Claude Code implementation of ArgvBuilder.

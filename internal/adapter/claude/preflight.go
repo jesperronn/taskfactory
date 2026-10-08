@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"slices"
-	"time"
+
+	"taskfactory/internal/adapter/common"
 )
 
 // Options configures the preflight and run. The zero value uses the real
@@ -31,13 +30,8 @@ type Options struct {
 	ListModels func(ctx context.Context, baseURL, token string) ([]string, error)
 }
 
-const preflightTimeout = 30 * time.Second
-
 func (o Options) endpoint() string {
-	if o.Endpoint == "" {
-		return DefaultEndpoint
-	}
-	return o.Endpoint
+	return common.Endpoint(o.Endpoint, DefaultEndpoint)
 }
 
 func (o Options) token() string {
@@ -54,35 +48,29 @@ func (o Options) token() string {
 // listed too. Nothing is dialed or queried for a non-loopback endpoint.
 func Preflight(ctx context.Context, req Request, opts Options) PreflightResult {
 	var result PreflightResult
-	_, binErr := exec.LookPath(Binary)
-	result.Checks = append(result.Checks, PreflightCheck{Name: "adapter binary " + Binary, Err: binErr})
+	_, binCheck := common.BinaryCheck(Binary)
+	result.Checks = append(result.Checks, binCheck)
 
 	endpoint := opts.endpoint()
 	baseURL, baseErr := BaseURL(endpoint)
-	result.Checks = append(result.Checks, PreflightCheck{Name: "loopback endpoint " + endpoint, Err: baseErr})
+	result.Checks = append(result.Checks, common.PreflightCheck{Name: "loopback endpoint " + endpoint, Err: baseErr})
 
 	var tokenErr error
 	if opts.token() == "" {
 		tokenErr = errors.New("ANTHROPIC_AUTH_TOKEN is not set; the local placeholder must come from the operator environment")
 	}
-	result.Checks = append(result.Checks, PreflightCheck{Name: "auth token", Err: tokenErr})
+	result.Checks = append(result.Checks, common.PreflightCheck{Name: "auth token", Err: tokenErr})
 
 	skipped := func(reason string) error { return errors.New("skipped because " + reason) }
 	if baseErr != nil {
 		for _, name := range []string{"endpoint " + endpoint, "model " + req.Model, "haiku model " + req.HaikuModel} {
-			result.Checks = append(result.Checks, PreflightCheck{Name: name, Err: skipped("the endpoint is not loopback")})
+			result.Checks = append(result.Checks, common.PreflightCheck{Name: name, Err: skipped("the endpoint is not loopback")})
 		}
 		return result
 	}
 
-	dial := opts.Dial
-	if dial == nil {
-		dial = dialTCP
-	}
-	dialCtx, cancel := context.WithTimeout(ctx, preflightTimeout)
-	defer cancel()
-	dialErr := dial(dialCtx, endpoint)
-	result.Checks = append(result.Checks, PreflightCheck{Name: "endpoint " + endpoint, Err: dialErr})
+	endpointCheck := common.EndpointCheck(ctx, endpoint, opts.Dial)
+	result.Checks = append(result.Checks, endpointCheck)
 
 	listModels := opts.ListModels
 	if listModels == nil {
@@ -90,16 +78,16 @@ func Preflight(ctx context.Context, req Request, opts Options) PreflightResult {
 	}
 	var listed []string
 	var listErr error
-	if dialErr == nil {
-		listCtx, listCancel := context.WithTimeout(ctx, preflightTimeout)
+	if endpointCheck.Err == nil {
+		listCtx, listCancel := context.WithTimeout(ctx, common.PreflightTimeout)
 		defer listCancel()
 		listed, listErr = listModels(listCtx, baseURL, opts.token())
 	} else {
 		listErr = skipped("the endpoint is unreachable")
 	}
 	result.Checks = append(result.Checks,
-		PreflightCheck{Name: "model " + req.Model, Err: checkListed(req.Model, "model", baseURL, listed, listErr)},
-		PreflightCheck{Name: "haiku model " + req.HaikuModel, Err: checkListed(req.HaikuModel, "haiku model", baseURL, listed, listErr)},
+		common.PreflightCheck{Name: "model " + req.Model, Err: checkListed(req.Model, "model", baseURL, listed, listErr)},
+		common.PreflightCheck{Name: "haiku model " + req.HaikuModel, Err: checkListed(req.HaikuModel, "haiku model", baseURL, listed, listErr)},
 	)
 	return result
 }
@@ -126,7 +114,7 @@ func listModelsHTTP(ctx context.Context, baseURL, token string) ([]string, error
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
-	client := &http.Client{Timeout: preflightTimeout}
+	client := &http.Client{Timeout: common.PreflightTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("query %s/v1/models: %w", baseURL, err)
@@ -148,14 +136,4 @@ func listModelsHTTP(ctx context.Context, baseURL, token string) ([]string, error
 		ids = append(ids, m.ID)
 	}
 	return ids, nil
-}
-
-// dialTCP succeeds when a TCP connection to addr opens and closes cleanly.
-func dialTCP(ctx context.Context, addr string) error {
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "tcp", addr)
-	if err != nil {
-		return fmt.Errorf("endpoint %s is unreachable: %w", addr, err)
-	}
-	return conn.Close()
 }

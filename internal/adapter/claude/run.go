@@ -1,13 +1,12 @@
 package claude
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
+
+	"taskfactory/internal/adapter/common"
 )
 
 const (
@@ -42,8 +41,8 @@ func run(ctx context.Context, req Request, opts Options) Result {
 	if err != nil {
 		return Result{State: StateBlocked, Note: err.Error()}
 	}
-	if info, err := os.Stat(req.Worktree); err != nil || !info.IsDir() {
-		return Result{State: StateBlocked, Note: fmt.Sprintf("worktree %s is not a directory", req.Worktree)}
+	if err := common.CheckDir(req.Worktree); err != nil {
+		return Result{State: StateBlocked, Note: err.Error()}
 	}
 	if pf := Preflight(ctx, req, opts); pf.Err() != nil {
 		return Result{State: StateBlocked, Note: "preflight refused launch: " + pf.Err().Error()}
@@ -52,33 +51,13 @@ func run(ctx context.Context, req Request, opts Options) Result {
 	if err != nil {
 		return Result{State: StateBlocked, Note: err.Error()}
 	}
-	binPath, err := exec.LookPath(Binary)
-	if err != nil {
-		return Result{State: StateBlocked, Note: err.Error()}
-	}
-
-	runCtx, cancel := context.WithTimeout(ctx, req.Timeout)
-	defer cancel()
-	cmd := exec.CommandContext(runCtx, binPath, argv...)
-	cmd.Dir = req.Worktree
-	cmd.Env = Environ(os.Environ(), baseURL, opts.token(), req)
-	cmd.Stdin = strings.NewReader(req.Prompt)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-
-	runErr := cmd.Run()
-	if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
-		return Result{State: StateStalled, Output: out.String(), Note: "timeout exceeded; " + progressNote}
-	}
-	if runErr != nil {
-		var exitErr *exec.ExitError
-		if errors.As(runErr, &exitErr) {
-			code := exitErr.ExitCode()
-			return Result{State: StateExit, ExitCode: &code, Output: out.String(), Note: progressNote}
-		}
-		return Result{State: StateBlocked, Output: out.String(), Note: "process did not start: " + runErr.Error()}
-	}
-	code := 0
-	return Result{State: StateExit, ExitCode: &code, Output: out.String(), Note: progressNote}
+	return common.Launch(ctx, common.LaunchSpec{
+		Binary:  Binary,
+		Argv:    argv,
+		Dir:     req.Worktree,
+		Env:     Environ(os.Environ(), baseURL, opts.token(), req),
+		Stdin:   strings.NewReader(req.Prompt),
+		Timeout: req.Timeout,
+		Notes:   progressNote,
+	})
 }
