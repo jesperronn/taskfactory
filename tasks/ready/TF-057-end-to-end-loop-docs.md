@@ -24,9 +24,8 @@ worker-dispatch part of TF-035; TF-020 (CI run) stays separate.
 
 ## Constraints
 
-in the record how signing was configured in the scratch repository. Keep
-Markdown lines under 81 columns.
-lines under 81 columns.
+Record in the experiment record how signing was configured in the scratch
+repository. Keep Markdown lines under 81 columns.
 
 ## Success criteria
 
@@ -48,9 +47,7 @@ Run each C-check, `bin/test` and `bin/lint`, and report each exit code. Report
 the scratch repository steps with exit codes, or the blocker if no local model
 was available.
 
-## Notes
-
-Open questions: is the quick start followed verbatim in a scratch repo without
+**Notes.** Open questions: is the quick start followed verbatim in a scratch repo without
 manual fixes (the TF-035 criterion) a hard gate? Which local model and task
 size are used? The 2026-10 trials show only slices of about 20 seconds finish
 reliably on a local model.
