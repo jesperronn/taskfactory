@@ -29,10 +29,12 @@ into one task per command if large.
 
 Split into tasks (see the files for scope):
 
-- TF-047 `promote` (inbox to ready), ready.
-- TF-048 `fail` (active to failed with Claim and evidence retained), inbox
-  until its open questions on evidence outcome matching are answered.
-- TF-049 `requeue` (failed to ready or inbox), inbox; open questions on who may
-  requeue and on claimed work remain.
+- TF-047 `promote` (inbox to ready): done, archived.
+- TF-048 `fail` (active to failed with Claim and evidence retained): owner
+  decisions recorded in the contract. BLOCKED is an evidence outcome, stalls
+  and stops map to `fail --outcome BLOCKED`, and a failure with no evidence
+  needs `--reason`.
+- TF-049 `requeue` (failed to ready or inbox): fully written, inbox, depends
+  on TF-048. Claimed failed work is refused and flagged for a human decision.
 
-TF-033 stays in inbox because the requeue questions are unresolved.
+TF-033 stays in inbox because TF-048 and TF-049 are not archived yet.

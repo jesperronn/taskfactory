@@ -6,6 +6,13 @@ only `PASS`, `FAILED`, and `BLOCKED`. The owner must decide how a stall is
 recorded before this can be promoted. The CLI also has no stop or resume command
 yet; inbox TF-033 may overlap with this scope.
 
+Planner note: the owner has deferred the stall mapping decision. The expected
+mapping is that a stalled or stopped run is recorded with
+`taskfactory fail <ID> --outcome BLOCKED` (inbox TF-048). That keeps the Claim
+block and evidence in place and uses BLOCKED, which is already an evidence
+outcome, so no `stalled` outcome is needed. This task stays in inbox until the
+owner confirms the mapping.
+
 ## Goal
 
 Handle completion, failure, stall, stop, and resume so that each preserves the
