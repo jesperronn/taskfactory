@@ -1,0 +1,41 @@
+# Advisory config for bin/lint --tells (TF-040). Not read by the default lint.
+# Only the two tell rules are enabled; matching is case-sensitive.
+# Rationale for every entry: docs/experiments/TF-040-tells.md.
+convention: github
+rules:
+  forbidden-text:
+    contains:
+      - "delve"
+      - "Delve"
+      - "it is important to note"
+      - "It is important to note"
+      - "it's important to note"
+      - "It's important to note"
+      - "it is worth noting"
+      - "It is worth noting"
+      - "it's worth noting"
+      - "It's worth noting"
+      - "in today's fast-paced"
+      - "In today's fast-paced"
+      - "seamless"
+      - "Seamless"
+      - "robust solution"
+      - "leverage"
+      - "Leverage"
+      - "navigate the complexities"
+      - "rich tapestry"
+      - "game-changer"
+  forbidden-paragraph-starts:
+    starts:
+      - "In conclusion,"
+      - "In summary,"
+      - "Certainly!"
+      - "Great question"
+      - "Overall,"
+      - "Moreover,"
+      - "Furthermore,"
+      - "Additionally,"
+ignore:
+  - testdata/markdown/**
+  - node_modules/**
+  - .claude/worktrees/**

@@ -3,6 +3,7 @@ set -euo pipefail
 
 usage() {
   echo "Usage: bin/lint [--autofix] [PATH...]" >&2
+  echo "       bin/lint --tells" >&2
 }
 
 start_dir=$PWD
@@ -13,9 +14,11 @@ repo_root=$PWD
 mdsmith_pkg=github.com/jeduden/mdsmith/cmd/mdsmith@v0.57.0
 
 mode=check
+tells=0
 paths=()
 for arg in "$@"; do
   case "$arg" in
+    --tells) tells=1 ;;
     --autofix) mode=fix ;;
     -*) usage; exit 2 ;;
     *)
@@ -32,6 +35,29 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+# Advisory tells mode: run only MDS055 and MDS056 from .mdsmith-tells.yml over
+# the prose scope, print the findings and a stats line, and always exit 0. It
+# never changes the default lint, and it takes no other options or paths.
+if (( tells )); then
+  if [[ $mode != check ]] || (( ${#paths[@]} )); then
+    echo "bin/lint: --tells takes no other options or paths" >&2
+    usage
+    exit 2
+  fi
+  scope=()
+  for p in docs README.md tasks/inbox tasks/ready tasks/active tasks/failed; do
+    if [[ -e $p ]]; then scope+=("$p"); fi
+  done
+  report=$(go run "$mdsmith_pkg" check --no-color -c .mdsmith-tells.yml \
+    "${scope[@]}" 2>&1 || true)
+  findings=$(printf '%s\n' "$report" | grep -E '^[^ ]+:[0-9]+:[0-9]+ MDS05[56] ' || true)
+  [[ -z $findings ]] || printf '%s\n' "$findings"
+  n55=$(printf '%s\n' "$findings" | grep -c ' MDS055 ' || true)
+  n56=$(printf '%s\n' "$findings" | grep -c ' MDS056 ' || true)
+  echo "stats: tells MDS055=$n55 MDS056=$n56"
+  exit 0
+fi
 
 # is_shell FILE: a *.sh file, or a file whose first line is a bash/sh shebang.
 is_shell() {
