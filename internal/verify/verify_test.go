@@ -349,6 +349,7 @@ func fixture(t *testing.T, criteria, workers []string) (string, string, string) 
 	_ = run(root, "init", "-b", "main")
 	_ = run(root, "config", "user.email", "test@example.com")
 	_ = run(root, "config", "user.name", "Test")
+	_ = run(root, "config", "commit.gpgsign", "false")
 	if err := os.MkdirAll(filepath.Join(root, ".taskfactory"), 0o755); err != nil {
 		t.Fatal(err)
 	}

@@ -63,7 +63,7 @@ func runGit(t *testing.T, root string, args ...string) string {
 func commitAll(t *testing.T, root, message string) {
 	t.Helper()
 	runGit(t, root, "add", "--all")
-	runGit(t, root, "commit", "-q", "--allow-empty", "--no-gpg-sign", "-m", message)
+	runGit(t, root, "commit", "-q", "--allow-empty", "-m", message)
 }
 
 func writeFile(t *testing.T, path, content string) {

@@ -634,6 +634,9 @@ func initGitProject(t *testing.T) string {
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git init temporary project: %v\n%s", err, output)
 	}
+	if output, err := exec.Command("git", "-C", root, "config", "commit.gpgsign", "false").CombinedOutput(); err != nil {
+		t.Fatalf("disable commit signing in temporary project: %v\n%s", err, output)
+	}
 	return root
 }
 

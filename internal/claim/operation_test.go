@@ -232,6 +232,7 @@ func newGitProject(t *testing.T, capacity int, ids ...string) string {
 	gitRun(t, root, "init", "--quiet", "--initial-branch=main")
 	gitRun(t, root, "config", "user.name", "TaskFactory Test")
 	gitRun(t, root, "config", "user.email", "taskfactory@example.invalid")
+	gitRun(t, root, "config", "commit.gpgsign", "false")
 	for _, state := range []string{"inbox", "ready", "active", "failed", "archive"} {
 		if err := os.MkdirAll(filepath.Join(root, "tasks", state), 0o755); err != nil {
 			t.Fatal(err)

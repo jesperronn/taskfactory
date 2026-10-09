@@ -346,6 +346,7 @@ func newFixture(t *testing.T) fixture {
 	run(t, root, "git", "init", "-b", "main")
 	run(t, root, "git", "config", "user.name", "Test")
 	run(t, root, "git", "config", "user.email", "test@example.invalid")
+	run(t, root, "git", "config", "commit.gpgsign", "false")
 	for _, d := range []string{"tasks/inbox", "tasks/ready", "tasks/active", "tasks/failed", "tasks/archive", ".taskfactory"} {
 		if err := os.MkdirAll(filepath.Join(root, d), 0755); err != nil {
 			t.Fatal(err)
