@@ -3,14 +3,17 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"taskfactory/internal/claim"
 	"taskfactory/internal/config"
@@ -20,6 +23,7 @@ import (
 	"taskfactory/internal/taskvalidate"
 	"taskfactory/internal/ui"
 	"taskfactory/internal/verify"
+	"taskfactory/internal/work"
 )
 
 // version is printed by --version. It defaults to "dev" for plain go build or
@@ -45,6 +49,7 @@ var commandSummaries = []commandSummary{
 	{"check-main", "check-main", "recheck a stopped main"},
 	{"promote", "promote <ID>", "move an inbox task to ready"},
 	{"fail", "fail <ID> --outcome <FAILED|BLOCKED>", "move a claimed task to failed"},
+	{"work", "work <ID> --adapter <omp|pi|claude> --model <id>", "launch a local worker on a claimed task"},
 }
 
 // commandHelps maps each command in commandSummaries to its per-command help.
@@ -58,6 +63,7 @@ var commandHelps = map[string]string{
 	"check-main": checkMainHelp,
 	"promote":    promoteHelp,
 	"fail":       failHelp,
+	"work":       workHelp,
 }
 
 // styleArguments colors the words after a subcommand name: flags starting with
@@ -273,6 +279,56 @@ Exit codes:
   2  invalid usage
 `
 
+// workHelp is printed by "work --help" and "work -h".
+const workHelp = `Usage: taskfactory work <ID> --adapter <omp|pi|claude> --model <id>
+
+Launch the chosen local worker adapter in the worktree of the claimed active
+task <ID>. The adapter, the model and, for claude, the haiku model are always
+named explicitly: there is no default and no fallback. The adapter preflight
+runs first; a refusal prints each failed check and changes nothing. The prompt
+is built from the task file and the worker instructions. The adapter output is
+copied to .taskfactory/logs/<ID>/<adapter>-<time>.log when the run ends, and the
+log path is printed first. Only one adapter may be given.
+
+work never commits, stages, verifies, integrates or fails a task. A worker exit
+of 0 is a claim only: run "taskfactory verify <ID>" next. A blocked or stalled
+run prints a "taskfactory fail <ID> --outcome BLOCKED --reason ..." suggestion
+that you may run yourself; work does not run it.
+
+Flags:
+  --adapter <omp|pi|claude>  worker harness (required, exactly once)
+  --model <id>               explicit model id, no whitespace (required)
+  --haiku-model <id>         haiku-tier model id (required for claude only)
+  --timeout <duration>       wall-clock bound, at least 1s (default 10m)
+  --endpoint <host:port>     oMLX server address (default 127.0.0.1:8000)
+  --help, -h                 print this help and exit successfully
+
+Exit codes:
+  0  the worker exited 0 (verify next)
+  1  refused, preflight failed, blocked, stalled or the worker exited non-zero
+  2  invalid usage
+`
+
+func workTask(args []string, stderrStyle ui.Painter) int {
+	id, opts, err := work.ParseArgs(args)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory work", err.Error()))
+		return exitUsage
+	}
+	root, err := projectRoot()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory work", err.Error()))
+		return 1
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	code, err := work.Execute(ctx, root, id, opts, work.Deps{})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory work", err.Error()))
+	}
+	return code
+}
+
 func failTask(args []string) error {
 	id, opts, err := fail.ParseArgs(args)
 	if err != nil {
@@ -433,6 +489,10 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+	if len(args) > 0 && args[0] == "work" {
+		code := workTask(args[1:], stderrStyle)
+		os.Exit(code)
 	}
 	if len(args) > 0 && args[0] == "check-main" {
 		if len(args) != 1 {
