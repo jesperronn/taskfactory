@@ -184,7 +184,8 @@ depends on the TF-015 experiment.
 - **TF-025** (inbox): Pi adapter launch under the same contract via Pi flags.
 - **TF-026** (inbox): Claude Code adapter through the oMLX local endpoint,
   resolving the TF-015 "model not in catalog" warning.
-- **TF-027** (inbox): TaskFactory result/evidence recorder and independent
-  `verify` call.
+- **TF-027** (removed): result/evidence recording and the independent `verify`
+  call were already delivered by archived TF-011 and TF-022, so the proposal
+  was removed as already delivered.
 - **TF-028** (inbox): Worker state machine for completion, failure, stall, stop,
   and resume preserving Git state and evidence.

@@ -47,8 +47,9 @@ help).
 - **TF-026** (inbox) — Claude Code adapter through the oMLX local endpoint,
   resolving the TF-015 "model not in catalog" warning; no `--fallback-model`.
   Depends on TF-010, TF-011, TF-015.
-- **TF-027** (inbox) — TaskFactory records the result commit and evidence, and
-  calls `verify` independently of the worker. Depends on TF-011.
+- **TF-027** (removed) — result commit and evidence recording and the
+  independent `verify` call were already delivered by archived TF-011 and
+  TF-022, so the proposal was removed as already delivered.
 - **TF-028** (inbox) — Worker state machine: completion, failure, stall, stop,
   and resume preserving Git state and evidence. Depends on TF-010, TF-011.
 
