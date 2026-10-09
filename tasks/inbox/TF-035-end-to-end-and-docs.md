@@ -22,3 +22,6 @@ prerequisite signal.
 
 - The quick start is followed verbatim in a scratch repo without manual fixes.
 - Experiment record includes commands, exit codes and the integration commit.
+
+Planner note: the worker dispatch step is planned in TF-055, TF-056 and TF-057
+(see docs/dispatch-design.md).

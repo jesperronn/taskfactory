@@ -58,3 +58,6 @@ help).
 The first sequential comparison is recorded in
 `docs/experiments/TF-015-worker-comparison.md`. It exposed the need to record
 incomplete runs as well as commits and to verify worker claims independently.
+
+Planner note: the CLI step that launches these adapters is planned in TF-055 and
+TF-056 (see docs/dispatch-design.md).
