@@ -198,6 +198,31 @@ func Verify(root, id string) (result Result, runErr error) {
 	return result, nil
 }
 
+// LastOutcome returns the outcome of the newest attempt recorded for id, or the
+// empty string when the evidence file is missing or empty. The file is checked
+// with the same rules Verify applies before it appends a record.
+func LastOutcome(root, id string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(root, ".taskfactory", "evidence", id+".jsonl"))
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read evidence: %w", err)
+	}
+	if len(data) == 0 {
+		return "", nil
+	}
+	if _, err := validateEvidence(data, id); err != nil {
+		return "", err
+	}
+	lines := bytes.Split(data[:len(data)-1], []byte{'\n'})
+	var last record
+	if err := json.Unmarshal(lines[len(lines)-1], &last); err != nil {
+		return "", fmt.Errorf("evidence for %s has an unreadable last record: %w", id, err)
+	}
+	return last.Outcome, nil
+}
+
 func activeTask(root, id string) (string, error) {
 	dir := filepath.Join(root, "tasks", "active")
 	entries, err := os.ReadDir(dir)
