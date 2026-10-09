@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -180,10 +181,14 @@ func LogPath(projectRoot, id, adapter string, at time.Time) string {
 	return filepath.Join(projectRoot, ".taskfactory", "logs", id, name)
 }
 
-// OpenLog creates the log at path with mode 0644 and writes the header block.
-// It creates the parent directories with mode 0755. It refuses a path that is
-// not the LogPath layout for h.TaskID and h.Adapter, an unknown adapter, and
-// any path that already exists. The caller closes the returned file.
+// OpenLog creates the log for path with mode 0644, writes the header block and
+// returns the file. path must be a LogPath result for h.TaskID and h.Adapter;
+// an unknown adapter, an invalid header and a path in another layout are
+// refused. It creates the parent directories with mode 0755. If the base name
+// exists, it tries <base>_2.log, <base>_3.log and so on, up to maxLogAttempts
+// names in all, each created with O_EXCL, so concurrent opens never overwrite
+// each other. The returned file's Name() is the path actually used. The caller
+// closes the returned file.
 func OpenLog(path string, h Header) (*os.File, error) {
 	if !taskIDPattern.MatchString(h.TaskID) {
 		return nil, fmt.Errorf("log task %q is not a valid task ID (expected TF-NNN)", h.TaskID)
@@ -201,21 +206,44 @@ func OpenLog(path string, h Header) (*os.File, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("create log directory %s: %w", filepath.Dir(path), err)
 	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-	if err != nil {
-		if os.IsExist(err) {
-			return nil, fmt.Errorf("refusing to overwrite existing log %s", path)
+	var file *os.File
+	for n := 1; n <= maxLogAttempts && file == nil; n++ {
+		candidate := path
+		if n > 1 {
+			candidate = suffixedLogPath(path, n)
 		}
-		return nil, fmt.Errorf("create log %s: %w", path, err)
+		f, err := os.OpenFile(candidate, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		switch {
+		case err == nil:
+			file = f
+		case os.IsExist(err):
+			continue
+		default:
+			return nil, fmt.Errorf("create log %s: %w", candidate, err)
+		}
+	}
+	if file == nil {
+		return nil, fmt.Errorf("refusing to open a log for %s: all %d names from %s are taken", h.TaskID, maxLogAttempts, path)
 	}
 	text := fmt.Sprintf("TaskFactory worker log\nTask: %s\nAdapter: %s\nModel: %s\nTimeout: %s\nStarted at: %s\n\n",
 		h.TaskID, h.Adapter, h.Model, h.Timeout, h.Start.UTC().Format(time.RFC3339))
 	if _, err := file.WriteString(text); err != nil {
 		_ = file.Close()
-		return nil, fmt.Errorf("write log header %s: %w", path, err)
+		return nil, fmt.Errorf("write log header %s: %w", file.Name(), err)
 	}
 	return file, nil
 }
+
+// suffixedLogPath returns the nth candidate name for a base log path, n >= 2:
+// <base>_<n>.log. The "_" separator sorts after "." in byte order, so suffixed
+// names sort after the base name of the same second.
+func suffixedLogPath(base string, n int) string {
+	return strings.TrimSuffix(base, ".log") + "_" + strconv.Itoa(n) + ".log"
+}
+
+// maxLogAttempts bounds the names OpenLog tries for one base path: the base
+// name, then the suffixes _2 to _1000.
+const maxLogAttempts = 1000
 
 func knownAdapter(name string) bool {
 	for _, a := range Adapters {

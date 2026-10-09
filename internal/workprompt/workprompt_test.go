@@ -279,8 +279,18 @@ func TestLogPathLayoutAndOpenLogNeverOverwrites(t *testing.T) {
 	if string(data) != wantHeader {
 		t.Fatalf("log header =\n%q\nwant\n%q", data, wantHeader)
 	}
-	if _, err := OpenLog(path, h); err == nil || !strings.Contains(err.Error(), "refusing to overwrite") {
-		t.Fatalf("second OpenLog error = %v, want refusal to overwrite", err)
+	second, err := OpenLog(path, h)
+	if err != nil {
+		t.Fatalf("second OpenLog in the same second: %v", err)
+	}
+	if want := strings.TrimSuffix(path, ".log") + "_2.log"; second.Name() != want {
+		t.Fatalf("second OpenLog path = %s, want %s", second.Name(), want)
+	}
+	if err := second.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != wantHeader {
+		t.Fatalf("first log was changed by the second open")
 	}
 	bad := []Header{
 		{TaskID: testID, Adapter: "bash", Model: "m", Timeout: time.Minute, Start: at},

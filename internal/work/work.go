@@ -107,6 +107,9 @@ func Execute(ctx context.Context, root, id string, opts Options, deps Deps) (int
 		return 1, err
 	}
 	defer logFile.Close()
+	// OpenLog may pick a suffixed name when the base name is taken, so print
+	// and use the path it actually opened.
+	logPath = logFile.Name()
 	fmt.Fprintf(out, "log: %s\n", logPath)
 
 	res := run(ctx, req)

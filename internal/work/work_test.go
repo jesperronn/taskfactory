@@ -218,14 +218,22 @@ func TestLogIsWrittenUnderTaskfactoryLogsAndNothingIsStaged(t *testing.T) {
 	}
 }
 
-func TestLogRefusesToOverwriteExistingLog(t *testing.T) {
+func TestLogSuffixesWhenBaseNameExists(t *testing.T) {
 	f := newFixture(t, true)
-	write(t, filepath.Join(f.root, ".taskfactory", "logs", testID, "omp-20261009T120000Z.log"), "old")
+	old := filepath.Join(f.root, ".taskfactory", "logs", testID, "omp-20261009T120000Z.log")
+	write(t, old, "old")
 	var out strings.Builder
-	rec := &recorder{}
+	rec := &recorder{result: common.Result{State: common.StateExit, ExitCode: intp(0)}}
 	code, err := Execute(context.Background(), f.root, testID, baseOpts(), rec.deps(&out))
-	if code != 1 || err == nil || rec.runs != 0 {
+	if code != 0 || err != nil || rec.runs != 1 {
 		t.Fatalf("code=%d err=%v runs=%d", code, err, rec.runs)
+	}
+	if got, _ := os.ReadFile(old); string(got) != "old" {
+		t.Fatalf("existing log was overwritten: %q", got)
+	}
+	suffixed := filepath.Join(f.root, ".taskfactory", "logs", testID, "omp-20261009T120000Z_2.log")
+	if !strings.HasPrefix(out.String(), "log: "+suffixed+"\n") {
+		t.Fatalf("printed log path is not the suffixed file:\n%s", out.String())
 	}
 }
 
