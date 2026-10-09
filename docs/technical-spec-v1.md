@@ -97,7 +97,8 @@ solely on worker success.
 push. Require local main to exist and be checked out in the repository worktree.
 The main worktree may contain ready-to-active claim transitions (each ready task
 file moved to active with its Claim block), TaskFactory's exact runtime paths
-from `protocol-v1.md`, and registered worker worktrees under the configured
+from `protocol-v1.md` (including the untracked `.taskfactory/logs/` work log
+directory, which is never staged), and registered worker worktrees under the configured
 root. Reject unrelated tracked or untracked changes, and never stage concurrent
 claim transitions. Inventory runtime directories even when Git ignore rules hide
 them, so ignored user files are not mistaken for TaskFactory state. The task

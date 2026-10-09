@@ -58,6 +58,8 @@ subcommands or flags. Run `taskfactory <command> --help` for flags.
    untracked or changed. This is expected; do not commit them by hand. Worker
    evidence in `.taskfactory/evidence/` and integration evidence in
    `.taskfactory/integration-evidence/` are untracked files, not Git commits.
+   `work` logs in `.taskfactory/logs/` are untracked too; `integrate` allows
+   them and never stages them.
 
 ## Ready task contract
 

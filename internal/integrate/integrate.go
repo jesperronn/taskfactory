@@ -492,7 +492,7 @@ func cleanMainRuntime(root, id, worktreeRoot string) error {
 	}
 	worktreeRel, _ := filepath.Rel(root, worktreeRoot)
 	for path := range statuses {
-		if path == ".taskfactory/integration.lock" || path == ".taskfactory/claim.lock" || isEvidenceRuntimePath(path) || strings.HasPrefix(path, ".taskfactory/.claim-backup-") && strings.HasSuffix(path, ".tmp") {
+		if path == ".taskfactory/integration.lock" || path == ".taskfactory/claim.lock" || isEvidenceRuntimePath(path) || isWorkLogPath(path) || strings.HasPrefix(path, ".taskfactory/.claim-backup-") && strings.HasSuffix(path, ".tmp") {
 			continue
 		}
 		if strings.HasPrefix(path, filepath.ToSlash(worktreeRel)+"/") {
@@ -615,6 +615,11 @@ func checkRuntimeInventory(root, configuredWorktreeRoot string) error {
 					return fmt.Errorf("unexpected runtime path .taskfactory/%s/%s", name, child.Name())
 				}
 			}
+		case "logs":
+			// Written by `taskfactory work`; never tracked, any content allowed.
+			if !entry.IsDir() {
+				return fmt.Errorf("unexpected runtime path .taskfactory/logs")
+			}
 		case "worktrees":
 			if !entry.IsDir() {
 				return fmt.Errorf("unexpected runtime path .taskfactory/worktrees")
@@ -653,6 +658,12 @@ func checkRuntimeInventory(root, configuredWorktreeRoot string) error {
 		}
 	}
 	return nil
+}
+
+// isWorkLogPath reports whether path is the work log directory or inside it.
+// A sibling that merely shares the prefix, such as .taskfactory/logsx, is not.
+func isWorkLogPath(path string) bool {
+	return path == ".taskfactory/logs" || strings.HasPrefix(path, ".taskfactory/logs/")
 }
 func isEvidenceRuntimePath(path string) bool {
 	for _, name := range []string{".taskfactory/evidence/", ".taskfactory/integration-evidence/"} {

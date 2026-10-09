@@ -31,16 +31,17 @@ selected task. `bin/test` runs the whole-tree form automatically.
 
 ## Evidence and operational files
 
-Worker verification evidence is appended to
-`.taskfactory/evidence/<ID>.jsonl`. Integration attempts are appended to
+Worker verification evidence is appended to `.taskfactory/evidence/<ID>.jsonl`.
+Integration attempts are appended to
 `.taskfactory/integration-evidence/<ID>.jsonl`. Both are untracked files under
 `.taskfactory/`, not Git commits. `verify` does not stage or commit them, and
-`integrate` stages only the task paths it archives. `.gitignore` does not hide
-`.taskfactory/`, so `git status` lists these files as untracked. Do not commit
-them by hand. After integration, the dry run in
-`docs/experiments/e2e-dry-run.md` observed `.taskfactory/evidence/` and
-`.taskfactory/integration-evidence/` as untracked; that run was not repeated
-for this change.
+`integrate` stages only the task paths it archives. `taskfactory work` writes
+its logs under `.taskfactory/logs/`; `integrate` allows that directory, never
+stages it and needs no manual move. `.gitignore` does not hide `.taskfactory/`,
+so `git status` lists these files as untracked. Do not commit them by hand.
+After integration, the dry run in `docs/experiments/e2e-dry-run.md` observed
+`.taskfactory/evidence/` and `.taskfactory/integration-evidence/` as untracked;
+that run was not repeated for this change.
 
 TaskFactory commits follow the user's Git signing configuration. TaskFactory
 runs a plain `git commit` and never overrides signing. Automated workers run in

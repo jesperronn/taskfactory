@@ -397,3 +397,78 @@ func run(t *testing.T, dir string, args ...string) {
 		t.Fatalf("%v: %v\n%s", args, e, b)
 	}
 }
+
+func writeWorkLogs(t *testing.T, root string) {
+	t.Helper()
+	write(t, root, ".taskfactory/logs/TF-901/pi-20261008T120000Z.log", "worker output\n")
+	write(t, root, ".taskfactory/logs/TF-902/omp-20261008T120000Z.log", "more\n")
+}
+
+func TestLogsDirAllowedWithFiles(t *testing.T) {
+	f := newFixture(t)
+	writeWorkLogs(t, f.root)
+	if err := Run(f.root, "TF-901"); err != nil {
+		t.Fatalf("Run with logs dir: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(f.root, ".taskfactory/logs/TF-901/pi-20261008T120000Z.log")); err != nil {
+		t.Fatalf("log removed: %v", err)
+	}
+}
+
+func TestLogsStayUntrackedAndUnstaged(t *testing.T) {
+	f := newFixture(t)
+	writeWorkLogs(t, f.root)
+	if err := Run(f.root, "TF-901"); err != nil {
+		t.Fatal(err)
+	}
+	stat, _ := git(f.root, "show", "--no-renames", "--pretty=format:", "--name-only", "HEAD")
+	if strings.Contains(stat, ".taskfactory") || strings.TrimSpace(stat) != "tasks/archive/TF-901-example.md\ntasks/ready/TF-901-example.md" {
+		t.Fatalf("integration commit paths: %q", stat)
+	}
+	tracked, _ := git(f.root, "ls-files", ".taskfactory/logs")
+	if strings.TrimSpace(tracked) != "" {
+		t.Fatalf("logs tracked: %q", tracked)
+	}
+	staged, _ := git(f.root, "diff", "--cached", "--name-only")
+	if strings.TrimSpace(staged) != "" {
+		t.Fatalf("staged: %q", staged)
+	}
+	status, _ := git(f.root, "status", "--short", "--untracked-files=all", "--", ".taskfactory/logs")
+	if !strings.Contains(status, "?? .taskfactory/logs/TF-901/pi-20261008T120000Z.log") {
+		t.Fatalf("logs not untracked: %q", status)
+	}
+}
+
+func TestLogsLookalikeBlocks(t *testing.T) {
+	for _, rel := range []string{".taskfactory/logs-old/a.log", ".taskfactory/logsx", "user-file.txt"} {
+		t.Run(rel, func(t *testing.T) {
+			f := newFixture(t)
+			writeWorkLogs(t, f.root)
+			write(t, f.root, rel, "x\n")
+			before, _ := git(f.root, "rev-parse", "refs/heads/main")
+			if err := Run(f.root, "TF-901"); err == nil {
+				t.Fatal("Run unexpectedly succeeded")
+			}
+			after, _ := git(f.root, "rev-parse", "refs/heads/main")
+			if after != before {
+				t.Fatalf("main moved: %s -> %s", before, after)
+			}
+		})
+	}
+}
+
+func TestLogsNoFailedEvidence(t *testing.T) {
+	f := newFixture(t)
+	writeWorkLogs(t, f.root)
+	if err := Run(f.root, "TF-901"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(f.root, ".taskfactory/integration-evidence/TF-901.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 1 || !strings.Contains(lines[0], `"outcome":"PASS"`) || strings.Contains(string(data), "logs") {
+		t.Fatalf("evidence=%s", data)
+	}
+}

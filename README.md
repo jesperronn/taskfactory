@@ -119,9 +119,8 @@ that exists today; `requeue` is not one of them.
    launches a local worker in that worktree. Adapter and model are always
    explicit. It prints the log path (under `.taskfactory/logs/TF-001/`) first.
    Exit 0 only means the worker claims it is done. If the worker did not
-   commit, commit in the worktree yourself. Move
-   `.taskfactory/logs/` out of the project before `integrate`, which refuses
-   to run while it exists (TF-061).
+   commit, commit in the worktree yourself. The log directory stays
+   untracked; `integrate` allows it and never stages it.
 7. Verify. `taskfactory verify TF-001` reruns the task checks in the worktree
    and appends evidence to `.taskfactory/evidence/TF-001.jsonl`. Only this
    evidence counts, not the worker's report.

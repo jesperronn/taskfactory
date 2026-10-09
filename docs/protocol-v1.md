@@ -82,8 +82,10 @@ the Claim block appended. It may also contain these TaskFactory operational
 paths: `.taskfactory/config.toml` (only when tracked and clean),
 `.taskfactory/claim.lock`, `.taskfactory/integration.lock`,
 `.taskfactory/evidence/<ID>.jsonl`, `.taskfactory/evidence/<ID>.lock`,
-`.taskfactory/integration-evidence/<ID>.jsonl`,
-`.taskfactory/integration-stop.json`, its atomic-write sibling
+`.taskfactory/integration-evidence/<ID>.jsonl`, the work log directory
+`.taskfactory/logs/` with any content (written by `taskfactory work`, never
+tracked or staged; `.taskfactory/logsx` and `.taskfactory/logs-old` are not
+allowed), `.taskfactory/integration-stop.json`, its atomic-write sibling
 `.taskfactory/integration-stop.json.tmp`, and registered worker worktrees
 exactly at the configured worktree root plus one task-ID component. `<ID>` must
 match `TF-[0-9]{3}`. Claim's `tasks/active/.claim-*.tmp` files and
