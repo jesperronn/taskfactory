@@ -733,8 +733,13 @@ taskfactory verify
 taskfactory integrate
 taskfactory check-main
 taskfactory promote <ID>
+taskfactory fail <ID> --outcome <FAILED|BLOCKED>
 taskfactory <command> --help
 ```
+
+`taskfactory fail` moves a claimed active task to `tasks/failed` and commits
+only that move. Its last attempt evidence must have the same outcome, or pass
+`--reason` when no evidence exists. `taskfactory requeue` does not exist yet.
 
 `taskfactory validate` with no arguments checks the task files in `inbox` and
 `ready`. Pass task files or folders to check only those, for example

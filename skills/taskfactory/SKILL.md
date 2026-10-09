@@ -28,6 +28,7 @@ authoritative. This skill is self-contained and works without them.
 | `taskfactory integrate <ID>`            | Rebase, verify, fast-forward main and archive an accepted task.            |
 | `taskfactory check-main`                | Rerun main's verification after integration stopped it.                    |
 | `taskfactory promote <ID>`              | Move an inbox task to ready and commit only that move.                     |
+| `taskfactory fail <ID> --outcome <O>`   | Move a claimed active task to failed; requeue does not exist yet.          |
 
 Anything not in this table is **not implemented**. Do not invent other
 subcommands or flags. Run `taskfactory <command> --help` for flags.
