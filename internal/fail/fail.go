@@ -175,6 +175,10 @@ func Fail(projectRoot, id string, opts Options) (string, error) {
 	if err := checkEvidence(root, id, opts); err != nil {
 		return "", err
 	}
+	stagePaths, err := lifecyclePaths(root, id, activeRel, failedRel)
+	if err != nil {
+		return "", err
+	}
 
 	if err := os.Rename(activeAbs, failedAbs); err != nil {
 		return "", fmt.Errorf("move %s to %s: %w", activeRel, failedRel, err)
@@ -190,13 +194,9 @@ func Fail(projectRoot, id string, opts Options) (string, error) {
 		return "", restore(fmt.Errorf("task tree is invalid after failing %s: %s", id, diagnostics[0]))
 	}
 
-	paths := []string{failedRel}
-	if _, err := git(root, "ls-files", "--error-unmatch", "--", activeRel); err == nil {
-		paths = []string{activeRel, failedRel}
-	}
-	if err := commitPaths(root, id, paths, opts); err != nil {
+	if err := commitPaths(root, id, stagePaths, opts); err != nil {
 		// Unstage only the moved paths so the index matches HEAD again.
-		if _, resetErr := git(root, append([]string{"reset", "-q", "--"}, paths...)...); resetErr != nil {
+		if _, resetErr := git(root, append([]string{"reset", "-q", "--"}, stagePaths...)...); resetErr != nil {
 			err = errors.Join(err, fmt.Errorf("unstage failed paths: %w", resetErr))
 		}
 		return "", restore(fmt.Errorf("commit failure of %s: %w", id, err))
@@ -225,6 +225,23 @@ func checkEvidence(root, id string, opts Options) error {
 		return fmt.Errorf("refusing to fail %s: no attempt evidence exists; pass --reason to record why", id)
 	}
 	return nil
+}
+
+// lifecyclePaths returns the paths the commit may stage. Claims are uncommitted
+// ready-to-active working-tree transitions, so when the active file is untracked
+// the committed transition is the tracked ready deletion plus the failed
+// addition. When the active file is tracked, its deletion plus the failed
+// addition are staged. When neither is tracked the move cannot be committed
+// correctly, so the command is refused before anything changes.
+func lifecyclePaths(root, id, activeRel, failedRel string) ([]string, error) {
+	if _, err := git(root, "ls-files", "--error-unmatch", "--", activeRel); err == nil {
+		return []string{activeRel, failedRel}, nil
+	}
+	readyRel := "tasks/ready/" + filepath.Base(activeRel)
+	if _, err := git(root, "ls-files", "--error-unmatch", "--", readyRel); err == nil {
+		return []string{readyRel, failedRel}, nil
+	}
+	return nil, fmt.Errorf("refusing to fail %s: neither %s nor %s is tracked in HEAD, so the lifecycle deletion cannot be committed", id, activeRel, readyRel)
 }
 
 // findActiveFile returns the name of the only active task file for id. It
