@@ -14,6 +14,7 @@ import (
 
 	"taskfactory/internal/claim"
 	"taskfactory/internal/config"
+	"taskfactory/internal/fail"
 	"taskfactory/internal/integrate"
 	"taskfactory/internal/promote"
 	"taskfactory/internal/taskvalidate"
@@ -43,6 +44,7 @@ var commandSummaries = []commandSummary{
 	{"integrate", "integrate <ID>", "fast-forward a verified task"},
 	{"check-main", "check-main", "recheck a stopped main"},
 	{"promote", "promote <ID>", "move an inbox task to ready"},
+	{"fail", "fail <ID> --outcome <FAILED|BLOCKED>", "move a claimed task to failed"},
 }
 
 // commandHelps maps each command in commandSummaries to its per-command help.
@@ -55,6 +57,7 @@ var commandHelps = map[string]string{
 	"integrate":  integrateHelp,
 	"check-main": checkMainHelp,
 	"promote":    promoteHelp,
+	"fail":       failHelp,
 }
 
 // styleArguments colors the words after a subcommand name: flags starting with
@@ -246,6 +249,47 @@ Exit codes:
   2  invalid usage
 `
 
+// failHelp is printed by "fail --help" and "fail -h".
+const failHelp = `Usage: taskfactory fail <ID> --outcome <FAILED|BLOCKED>
+
+Move the claimed active task <ID> to tasks/failed. The last attempt evidence
+record must have the same outcome. Without evidence, --reason is required and
+its text becomes the commit message body. The task file moves unchanged, the
+whole task tree is validated, and only the two task paths are committed. Any
+refusal or failure restores the file to tasks/active. The command never
+archives a task and never changes the evidence file.
+
+The commit runs as a plain git commit and follows your own Git signing
+configuration. TaskFactory never disables or overrides signing.
+
+Flags:
+  --outcome <FAILED|BLOCKED>  outcome that must match the last evidence record
+  --reason <text>             single-line reason, only when no evidence exists
+  --help, -h                  print this help and exit successfully
+
+Exit codes:
+  0  the task was moved and committed
+  1  the command was refused or failed; the file was restored
+  2  invalid usage
+`
+
+func failTask(args []string) error {
+	id, opts, err := fail.ParseArgs(args)
+	if err != nil {
+		return err
+	}
+	root, err := projectRoot()
+	if err != nil {
+		return err
+	}
+	failed, err := fail.Fail(root, id, opts)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stdout, "failed %s to %s\n", id, failed)
+	return nil
+}
+
 func promoteTask(args []string) error {
 	root, err := projectRoot()
 	if err != nil {
@@ -372,6 +416,17 @@ func main() {
 		if err := promoteTask(args[1:]); err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory promote", err.Error()))
 			var usage promote.UsageError
+			if errors.As(err, &usage) {
+				os.Exit(exitUsage)
+			}
+			os.Exit(1)
+		}
+		return
+	}
+	if len(args) > 0 && args[0] == "fail" {
+		if err := failTask(args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory fail", err.Error()))
+			var usage fail.UsageError
 			if errors.As(err, &usage) {
 				os.Exit(exitUsage)
 			}
