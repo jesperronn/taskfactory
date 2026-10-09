@@ -92,6 +92,61 @@ The **task contract defines when it is finished**.
 
 ---
 
+# Quick start
+
+This walks one small task through the whole loop with a local worker. Run it
+in a Git repository with at least one commit on `main`. Every step is a command
+that exists today; `requeue` is not one of them.
+
+1. Install. From a TaskFactory checkout run `bin/install`, which builds
+   `taskfactory` and prints a hint if its directory is not on `PATH`.
+2. Init. In your project run `taskfactory init`. It writes
+   `.taskfactory/config.toml` and the five `tasks/` directories, and prints
+   nothing. Edit `[verification]` in the config to your own test commands,
+   then commit the config: claim and integrate need it tracked. `work` also
+   reads `docs/worker-instructions.md` from the project, so add and commit
+   one before claiming (TF-060 tracks the missing default).
+3. Plan. Write `tasks/inbox/TF-001-<slug>.md` with a `# TF-001: title`
+   heading and the ready headings Goal, Dependencies, Scope, Constraints,
+   Success criteria (each `### CN:` followed by one `Check:` line) and
+   Verification. Run `taskfactory validate tasks/inbox/<file>`.
+4. Promote. `taskfactory promote TF-001` moves the file to `tasks/ready/`
+   and commits only that move.
+5. Claim. `taskfactory claim TF-001 --owner you` creates the branch
+   `task/TF-001` and the worktree `.taskfactory/worktrees/TF-001`.
+6. Work. `taskfactory work TF-001 --adapter pi --model <id> --timeout 8m`
+   launches a local worker in that worktree. Adapter and model are always
+   explicit. It prints the log path (under `.taskfactory/logs/TF-001/`) first.
+   Exit 0 only means the worker claims it is done. If the worker did not
+   commit, commit in the worktree yourself. Move
+   `.taskfactory/logs/` out of the project before `integrate`, which refuses
+   to run while it exists (TF-061).
+7. Verify. `taskfactory verify TF-001` reruns the task checks in the worktree
+   and appends evidence to `.taskfactory/evidence/TF-001.jsonl`. Only this
+   evidence counts, not the worker's report.
+8. Integrate. `taskfactory integrate TF-001` rebases the branch onto main,
+   verifies again, fast-forwards main and archives the task.
+9. Check main. `taskfactory check-main` reruns main's verification.
+
+If the worker cannot finish (a stall, a refusal, a failed check that it
+cannot repair), run `taskfactory fail TF-001 --outcome BLOCKED --reason "..."`
+(or `FAILED` after a failed verify attempt). It moves the task to
+`tasks/failed/` and commits only that move. There is no `requeue`: to retry,
+edit the task by hand into `tasks/ready/` and claim it again.
+
+Automatic versus a human decision:
+
+- Automatic once started: `claim` (branch and worktree), the worker's own
+  edits, `verify`, the rebase, recheck and archive inside `integrate`, and
+  `check-main`.
+- A human decides: what to plan, `promote`, which adapter and model `work`
+  uses, whether to commit what the worker left, `fail` (any step that gives
+  up on or retries work), `integrate`, and what to do when `check-main` fails.
+- `work` never commits, verifies, integrates or fails anything. TaskFactory
+  never overrides commit signing; see Commit signing below.
+
+---
+
 # The task lifecycle
 
 Every task exists in one of five directories:
@@ -786,9 +841,9 @@ mkdir -p .claude/skills
 cp -R /path/to/taskfactory/skills/taskfactory .claude/skills/
 ```
 
-Other harnesses may use an equivalent skills directory. Lifecycle commands are
-not implemented yet, and no CLI command launches worker adapters; the skill
-marks both as such. `bin/skill.test.sh` checks the frontmatter that harnesses
+Other harnesses may use an equivalent skills directory. The skill lists the
+commands that exist, and marks `requeue` and release as not implemented.
+`bin/skill.test.sh` checks the frontmatter that harnesses
 read.
 
 ---

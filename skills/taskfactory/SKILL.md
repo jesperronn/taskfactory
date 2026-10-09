@@ -28,7 +28,7 @@ authoritative. This skill is self-contained and works without them.
 | `taskfactory integrate <ID>`                  | Rebase, verify, fast-forward main and archive an accepted task.            |
 | `taskfactory check-main`                      | Rerun main's verification after integration stopped it.                    |
 | `taskfactory promote <ID>`                    | Move an inbox task to ready and commit only that move.                     |
-| `taskfactory fail <ID> --outcome <O>`         | Move a claimed active task to failed; requeue does not exist yet.          |
+| `taskfactory fail <ID> --outcome <O>`         | Move a claimed active task to failed; no requeue command.                  |
 | `taskfactory work <ID> --adapter A --model M` | Launch a local worker in a claimed task's worktree; writes only its log.   |
 
 Anything not in this table is **not implemented**. Do not invent other
@@ -36,10 +36,8 @@ subcommands or flags. Run `taskfactory <command> --help` for flags.
 
 ## Not yet implemented
 
-- **Lifecycle fail and requeue** (TF-033): no CLI command moves a task to
-  `tasks/failed/` or back to `tasks/ready/`.
-- **Worker launch**: adapters for OMP, Pi and Claude Code exist as Go packages,
-  but no CLI command starts them. Start workers manually.
+- **Requeue** (TF-049): no CLI command moves a failed task back to
+  `tasks/ready/`; retry by moving the file by hand.
 - **Release** (TF-032): there is no release script yet. `bin/build` exists.
 
 ## Setup in a new project

@@ -25,3 +25,5 @@ prerequisite signal.
 
 Planner note: the worker dispatch step is planned in TF-055, TF-056 and TF-057
 (see docs/dispatch-design.md).
+
+Note: TF-057 supersedes the worker dispatch part of this task.
