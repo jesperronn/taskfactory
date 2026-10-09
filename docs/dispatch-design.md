@@ -36,8 +36,9 @@ retries work is a human decision.
 1. Requires one active claimed task and explicit adapter and model.
 2. Runs adapter preflight: binary, model in catalog, endpoint reachable. A
    refusal exits 1 before launch and changes nothing.
-3. Builds the prompt from the task file, the worker instructions and a short
-   rules block (TF-055), and opens a log under `.taskfactory/logs/<ID>/`.
+3. Builds the prompt from the task file, the worker instructions (the project's
+   `docs/worker-instructions.md`, or a built-in text when it is missing) and a
+   short rules block (TF-055), and opens a log under `.taskfactory/logs/<ID>/`.
 4. Launches the adapter in the claimed worktree and waits.
 5. Maps the adapter result:
    - exit 0: prints `taskfactory verify <ID>`. A zero exit is a claim only.

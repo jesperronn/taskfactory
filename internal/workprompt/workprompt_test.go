@@ -220,15 +220,6 @@ func TestBuildRefusesMissingUnclaimedOrIncompleteTask(t *testing.T) {
 			t.Fatal("Build accepted a Claim block without Base commit")
 		}
 	})
-	t.Run("missing instructions", func(t *testing.T) {
-		f := newFixture(t)
-		if err := os.Remove(filepath.Join(f.worktree, "docs", "worker-instructions.md")); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := Build(f.root, testID); err == nil {
-			t.Fatal("Build accepted a worktree without worker instructions")
-		}
-	})
 }
 
 func TestRulesForbidIntegrateFailPushAndSigning(t *testing.T) {
@@ -334,4 +325,80 @@ func TestNoSecretsInPromptOrLogHeader(t *testing.T) {
 	if strings.Contains(string(data), secret) {
 		t.Fatal("log header contains the ANTHROPIC_AUTH_TOKEN value")
 	}
+}
+
+func removeInstructions(t *testing.T, f fixture) string {
+	t.Helper()
+	path := filepath.Join(f.worktree, "docs", "worker-instructions.md")
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestBuildFallback(t *testing.T) {
+	f := newFixture(t)
+	removeInstructions(t, f)
+	p, err := Build(f.root, testID)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if !strings.Contains(p.Text, BuiltInMarker) || !strings.Contains(p.Text, defaultInstructions) {
+		t.Fatalf("prompt lacks the marker or the built-in text:\n%s", p.Text)
+	}
+	if strings.Contains(p.Text, testInstructions) {
+		t.Fatal("prompt contains the file text although the file is missing")
+	}
+	if !strings.Contains(p.Text, "----- RULES -----") {
+		t.Fatal("prompt lacks the rules block")
+	}
+	again, err := Build(f.root, testID)
+	if err != nil || again.Text != p.Text {
+		t.Fatalf("fallback prompt is not deterministic: %v", err)
+	}
+	t.Setenv("TF_SECRET_PROBE", "s3cr3t-value")
+	third, err := Build(f.root, testID)
+	if err != nil || strings.Contains(third.Text, "s3cr3t-value") || third.Text != p.Text {
+		t.Fatalf("fallback prompt depends on the environment: %v", err)
+	}
+}
+
+func TestBuildVerbatim(t *testing.T) {
+	f := newFixture(t)
+	p, err := Build(f.root, testID)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if !strings.Contains(p.Text, "----- BEGIN docs/worker-instructions.md from the worktree -----\n"+testInstructions) {
+		t.Fatal("existing instructions are not embedded verbatim")
+	}
+	if strings.Contains(p.Text, BuiltInMarker) {
+		t.Fatal("prompt names the built-in text although the file exists")
+	}
+}
+
+func TestBuildInstructionsReadError(t *testing.T) {
+	t.Run("directory", func(t *testing.T) {
+		f := newFixture(t)
+		path := removeInstructions(t, f)
+		if err := os.Mkdir(path, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Build(f.root, testID); err == nil {
+			t.Fatal("Build accepted a directory as worker instructions")
+		}
+	})
+	t.Run("unreadable", func(t *testing.T) {
+		f := newFixture(t)
+		path := filepath.Join(f.worktree, "docs", "worker-instructions.md")
+		if err := os.Chmod(path, 0); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.ReadFile(path); err == nil {
+			t.Skip("file is readable despite mode 0 (running as root)")
+		}
+		if _, err := Build(f.root, testID); err == nil {
+			t.Fatal("Build accepted an unreadable instructions file")
+		}
+	})
 }

@@ -53,7 +53,8 @@ var (
 // verbatim; the worker instructions read from the claimed worktree; and a
 // closing rules block. It refuses a task that is not in tasks/active, a task
 // without a complete Claim block, and a worktree without the worker
-// instructions. It reads files only and is deterministic.
+// instructions only when the read fails for a reason other than the file not
+// existing; a missing file falls back to built-in text. It reads files only and is deterministic.
 func Build(projectRoot, id string) (Prompt, error) {
 	if !taskIDPattern.MatchString(id) {
 		return Prompt{}, fmt.Errorf("task %q is not a valid task ID (expected TF-NNN)", id)
@@ -80,7 +81,12 @@ func Build(projectRoot, id string) (Prompt, error) {
 		return Prompt{}, fmt.Errorf("refusing to build prompt for %s: incomplete Claim block", id)
 	}
 	instructions, err := os.ReadFile(filepath.Join(worktree, filepath.FromSlash(instructionsPath)))
-	if err != nil {
+	builtIn := false
+	switch {
+	case err == nil:
+	case errors.Is(err, os.ErrNotExist):
+		instructions, builtIn = []byte(defaultInstructions), true
+	default:
 		return Prompt{}, fmt.Errorf("refusing to build prompt for %s: read %s in worktree %s: %w", id, instructionsPath, worktree, err)
 	}
 
@@ -90,13 +96,39 @@ func Build(projectRoot, id string) (Prompt, error) {
 	b.Write(data)
 	b.WriteString(terminator(data))
 	fmt.Fprintf(&b, "----- END task file %s -----\n\n", rel)
-	fmt.Fprintf(&b, "----- BEGIN %s from the worktree -----\n", instructionsPath)
+	if builtIn {
+		fmt.Fprintf(&b, "%s\n", BuiltInMarker)
+	} else {
+		fmt.Fprintf(&b, "----- BEGIN %s from the worktree -----\n", instructionsPath)
+	}
 	b.Write(instructions)
 	b.WriteString(terminator(instructions))
-	fmt.Fprintf(&b, "----- END %s -----\n\n", instructionsPath)
+	if builtIn {
+		b.WriteString("----- END built-in worker instructions -----\n\n")
+	} else {
+		fmt.Fprintf(&b, "----- END %s -----\n\n", instructionsPath)
+	}
 	b.WriteString(rules(worktree))
 	return Prompt{Text: b.String(), Worktree: worktree, Branch: branch, BaseCommit: base}, nil
 }
+
+// BuiltInMarker is the line that introduces the built-in instructions in a
+// prompt built for a worktree without docs/worker-instructions.md.
+const BuiltInMarker = "Built-in worker instructions (the project has no docs/worker-instructions.md)"
+
+// defaultInstructions is used only when the worktree has no
+// docs/worker-instructions.md. It is constant, so the prompt stays
+// deterministic.
+const defaultInstructions = `Read the task contract above before editing anything.
+Work only inside the worktree named in the header. Keep unrelated files
+untouched.
+Run the task's own verification commands. Also run bin/test and bin/lint from
+the worktree root when they exist.
+Commit the result with plain git commit. Never change Git signing settings.
+Report each command you ran with its exit code, and the result commit.
+If a check cannot pass or you are blocked, stop and report the blocker with the
+failing command output. Do not weaken or skip a check to obtain a pass.
+`
 
 // terminator returns the newline needed to end data on its own line.
 func terminator(data []byte) string {

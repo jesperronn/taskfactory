@@ -104,8 +104,9 @@ that exists today; `requeue` is not one of them.
    `.taskfactory/config.toml` and the five `tasks/` directories, and prints
    nothing. Edit `[verification]` in the config to your own test commands,
    then commit the config: claim and integrate need it tracked. `work` also
-   reads `docs/worker-instructions.md` from the project, so add and commit
-   one before claiming (TF-060 tracks the missing default).
+   uses `docs/worker-instructions.md` from the claimed worktree when it
+   exists. When it does not, the prompt carries built-in worker instructions
+   and says so; `init` does not write the file.
 3. Plan. Write `tasks/inbox/TF-001-<slug>.md` with a `# TF-001: title`
    heading and the ready headings Goal, Dependencies, Scope, Constraints,
    Success criteria (each `### CN:` followed by one `Check:` line) and
