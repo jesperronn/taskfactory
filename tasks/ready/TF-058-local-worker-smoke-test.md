@@ -40,8 +40,3 @@ Check: bin/test
 
 Run both checks, then once with `TASKFACTORY_SMOKE=1`, the adapter and model set
 and the server up. Report exit codes and the skip line.
-
-## Notes
-
-Open questions: should the smoke test be run by CI? Proposal: no, local only.
-Which adapter and model does the owner want as the reference?
