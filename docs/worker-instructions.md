@@ -12,8 +12,14 @@ check and both wrappers. A passing report includes the task ID, changed files,
 result commit, and verification evidence. A failed or blocked report retains the
 failing command and enough context to continue.
 
-Before claiming work, validate the ready task with
-`go run ./cmd/taskfactory validate tasks/ready/<ID>-<slug>.md`. After editing a
+Before claiming work, run `bin/lint tasks/ready/<ID>-<slug>.md` from the
+repository root. It runs the Markdown lint and then
+`go run ./cmd/taskfactory validate` on that file, and it prints each failure
+with the file name and the check that failed. Run it again after editing the
+task file. Its exit code is 0 only when both halves pass. Files under
+`tasks/archive` are not validated by `bin/lint`. The single-file form,
+`go run ./cmd/taskfactory validate tasks/ready/<ID>-<slug>.md`, remains
+available for the validate half alone. After editing a
 task contract or changing its lifecycle state, run
 `go run ./cmd/taskfactory validate tasks` to check the whole tree: inbox, ready,
 active and failed. The archive is not contract-checked by this form; it is read
