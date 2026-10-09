@@ -34,7 +34,13 @@ Behavior:
    are retained.
 5. Run `taskfactory validate tasks`. If it fails, move the file back to
    `tasks/active/` and exit 1 without committing.
-6. Stage only the removed active path and the added failed path. Commit with
+6. Stage only the lifecycle paths and the added failed path. Claims are
+   uncommitted ready-to-active working-tree transitions, so: when
+   `tasks/active/<file>` is tracked in HEAD, stage its deletion and the failed
+   addition; when it is untracked and `tasks/ready/<file>` is tracked in HEAD,
+   stage the ready deletion and the failed addition; when neither is tracked,
+   refuse with exit 1 before any change. Stage nothing else, including the
+   evidence and `.taskfactory/` files. Commit with
    `git commit -m "docs: mark TF-NNN failed"` as plain Git, so the user's
    signing configuration applies. Never pass `--no-gpg-sign`, `-c
    commit.gpgsign=false`, or any other signing override. When `--reason` was
@@ -95,6 +101,10 @@ Check: go test ./internal/fail -run CheckNoSigningOverride
 ### C7: The whole task tree validates after the move
 
 Check: go run ./cmd/taskfactory validate tasks
+
+### C8: Tracked lifecycle states commit only the task move
+
+Check: go test ./internal/fail -run TrackedStates
 
 ## Verification
 
