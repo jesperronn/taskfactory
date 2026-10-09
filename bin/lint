@@ -42,11 +42,19 @@ is_shell() {
   [[ $first =~ $re ]]
 }
 
+# is_task_file PATH: a Markdown task file under tasks/, outside tasks/archive.
+# The archive is history and is not contract-checked.
+is_task_file() {
+  local p=${1#./}
+  [[ $p == tasks/*.md && $p != tasks/archive/* ]]
+}
+
 # Collect Go, Bash, and Markdown targets. Directories are walked for Go and
 # Bash; Markdown directories go to mdsmith, which walks them itself.
 go_files=()
 sh_files=()
 md_targets=()
+task_files=()
 vet_pkgs=()
 whole_project=0
 
@@ -70,7 +78,14 @@ else
       if compgen -G "$p/*.go" >/dev/null; then vet_pkgs+=("./$p"); fi
     else
       case "$p" in
-        *.md|*.markdown) md_targets+=("$p") ;;
+        *.md|*.markdown)
+          # Task files get both halves in the task loop below, not the batch.
+          if is_task_file "$p"; then
+            task_files+=("$p")
+          else
+            md_targets+=("$p")
+          fi
+          ;;
         *.go) go_files+=("$p") ;;
         *)
           if is_shell "$p"; then
@@ -94,6 +109,34 @@ if (( whole_project )) || (( ${#md_targets[@]} )); then
   mdsmith_args=("$mode")
   if (( ! whole_project )); then mdsmith_args+=(${md_targets[@]+"${md_targets[@]}"}); fi
   go run "$mdsmith_pkg" "${mdsmith_args[@]}" || md_status=$?
+fi
+
+# Task files: each one gets the Markdown lint and then the contract validation.
+# Both halves run even when the other fails, and each failure names the file.
+for tf in ${task_files[@]+"${task_files[@]}"}; do
+  md_file_status=0
+  go run "$mdsmith_pkg" "$mode" "$tf" || md_file_status=$?
+  if (( md_file_status != 0 )); then
+    echo "bin/lint: FAIL markdown lint: $tf (mdsmith exit $md_file_status)" >&2
+    if (( md_status == 0 )); then md_status=$md_file_status; fi
+  fi
+  if ! go run ./cmd/taskfactory validate "$tf"; then
+    echo "bin/lint: FAIL task validation: $tf" >&2
+    failed=1
+  fi
+done
+
+# Whole project: whole-tree task validation runs after the Markdown lint. It
+# needs the Go module, so it is skipped where there is none, as bin/test does.
+if (( whole_project )); then
+  if [[ -f go.mod ]]; then
+    if ! go run ./cmd/taskfactory validate tasks; then
+      echo "bin/lint: FAIL task validation: tasks" >&2
+      failed=1
+    fi
+  else
+    echo "SKIP: task validation (go.mod not found)" >&2
+  fi
 fi
 
 # Go formatting: gofmt. gofmt exits 0 even when it lists files, so the

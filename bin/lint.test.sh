@@ -17,6 +17,9 @@ case "$*" in
   vet\ *)
     printf '%s\n' "$*" > "$LINT_VET_FILE"
     exit 0 ;;
+  run\ ./cmd/taskfactory\ *)
+    printf '%s\n' "$*" > "$LINT_TF_FILE"
+    exit 0 ;;
   *) echo "unexpected go call: $*" >&2; exit 99 ;;
 esac
 EOF
@@ -25,6 +28,7 @@ chmod +x "$stub_dir/go"
 mdsmith='run github.com/jeduden/mdsmith/cmd/mdsmith@v0.57.0'
 args_file="$stub_dir/args"
 vet_file="$stub_dir/vet"
+tf_file="$stub_dir/taskfactory"
 for mode in check autofix; do
   for expected_status in 0 1 2; do
     if [[ $mode == autofix ]]; then
@@ -37,12 +41,17 @@ for mode in check autofix; do
     # The stub stands in for mdsmith's own exit codes: 0, 1 and 2 must pass through.
 
     actual_status=0
-    rm -f "$args_file" "$vet_file"
+    rm -f "$args_file" "$vet_file" "$tf_file"
     PATH="$stub_dir:$PATH" LINT_ARGS_FILE="$args_file" LINT_VET_FILE="$vet_file" \
-      LINT_STUB_EXIT="$expected_status" \
+      LINT_TF_FILE="$tf_file" LINT_STUB_EXIT="$expected_status" \
       "$repo_dir/bin/lint" ${option:+"$option"} || actual_status=$?
     actual_args=$(cat "$args_file")
     actual_vet=$(cat "$vet_file")
+    actual_tf=$(cat "$tf_file")
+    if [[ $actual_tf != "run ./cmd/taskfactory validate tasks" ]]; then
+      printf '[FAIL] %s: whole-tree validation args=%q\n' "$mode" "$actual_tf" >&2
+      exit 1
+    fi
 
     if [[ $actual_status != "$expected_status" || $actual_args != "$expected_args" ]]; then
       printf '[FAIL] %s: expected status=%s args=%q; actual status=%s args=%q\n' \
