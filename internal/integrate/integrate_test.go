@@ -342,6 +342,13 @@ type fixture struct{ root, candidate, result string }
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
+	return newFixtureWithGitignore(t, "")
+}
+
+// newFixtureWithGitignore commits gitignore as the project .gitignore when it
+// is not empty, before the task branch is created.
+func newFixtureWithGitignore(t *testing.T, gitignore string) fixture {
+	t.Helper()
 	root := t.TempDir()
 	run(t, root, "git", "init", "-b", "main")
 	run(t, root, "git", "config", "user.name", "Test")
@@ -356,6 +363,9 @@ func newFixture(t *testing.T) fixture {
 	write(t, root, ".taskfactory/config.toml", config)
 	baseTask := "# TF-901: Example\n\n## Goal\n\nDo it.\n\n## Dependencies\n\nNone\n\n## Scope\n\nImplement.\n\n## Constraints\n\nKeep it small.\n\n## Success criteria\n\n### C1: works\n\nCheck: true\n\n## Verification\n\nRun it.\n"
 	write(t, root, "tasks/ready/TF-901-example.md", baseTask)
+	if gitignore != "" {
+		write(t, root, ".gitignore", gitignore)
+	}
 	run(t, root, "git", "add", ".")
 	run(t, root, "git", "commit", "-m", "initial")
 	base, _ := git(root, "rev-parse", "HEAD")
@@ -470,5 +480,26 @@ func TestLogsNoFailedEvidence(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 	if len(lines) != 1 || !strings.Contains(lines[0], `"outcome":"PASS"`) || strings.Contains(string(data), "logs") {
 		t.Fatalf("evidence=%s", data)
+	}
+}
+
+func TestIntegrateWithIgnoredRuntime(t *testing.T) {
+	ignore := "# TaskFactory runtime files\n.taskfactory/claim.lock\n.taskfactory/integration.lock\n.taskfactory/evidence/\n.taskfactory/integration-evidence/\n.taskfactory/logs/\n.taskfactory/worktrees/\n"
+	f := newFixtureWithGitignore(t, ignore)
+	write(t, f.root, ".taskfactory/claim.lock", "")
+	writeWorkLogs(t, f.root)
+	if err := Run(f.root, "TF-901"); err != nil {
+		t.Fatalf("Run with ignored runtime paths: %v", err)
+	}
+	if err := CheckMain(f.root); err != nil {
+		t.Fatalf("CheckMain with ignored runtime paths: %v", err)
+	}
+	status, _ := git(f.root, "status", "--short")
+	if strings.TrimSpace(status) != "" {
+		t.Fatalf("status after integrate is not empty: %q", status)
+	}
+	tracked, _ := git(f.root, "ls-files", ".taskfactory")
+	if strings.TrimSpace(tracked) != ".taskfactory/config.toml" {
+		t.Fatalf("tracked .taskfactory files: %q", tracked)
 	}
 }

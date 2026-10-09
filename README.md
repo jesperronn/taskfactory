@@ -101,9 +101,14 @@ that exists today; `requeue` is not one of them.
 1. Install. From a TaskFactory checkout run `bin/install`, which builds
    `taskfactory` and prints a hint if its directory is not on `PATH`.
 2. Init. In your project run `taskfactory init`. It writes
-   `.taskfactory/config.toml` and the five `tasks/` directories, and prints
-   nothing. Edit `[verification]` in the config to your own test commands,
-   then commit the config: claim and integrate need it tracked. `work` also
+   `.taskfactory/config.toml`, the five `tasks/` directories and a
+   `.gitignore` (or appends to yours) that lists the runtime paths: the two
+   lock files, `evidence/`, `integration-evidence/`, `logs/` and `worktrees/`
+   under `.taskfactory/`. It never ignores the config and never edits other
+   lines. It prints nothing. Edit `[verification]` in the config to your own
+   test commands, then commit the config and the `.gitignore` together before
+   the first claim: claim and integrate need the config tracked, and an
+   uncommitted `.gitignore` would show as untracked. `work` also
    uses `docs/worker-instructions.md` from the claimed worktree when it
    exists. When it does not, the prompt carries built-in worker instructions
    and says so; `init` does not write the file.
@@ -155,14 +160,15 @@ that exists today; `requeue` is not one of them.
    launches a local worker in that worktree. Adapter and model are always
    explicit. It prints the log path (under `.taskfactory/logs/TF-001/`) first.
    Exit 0 only means the worker claims it is done. If the worker did not
-   commit, commit in the worktree yourself. The log directory stays
-   untracked; `integrate` allows it and never stages it.
+   commit, commit in the worktree yourself. The log directory is
+   ignored; `integrate` never stages it.
 7. Verify. `taskfactory verify TF-001` reruns the task checks in the worktree
    and appends evidence to `.taskfactory/evidence/TF-001.jsonl`. Only this
    evidence counts, not the worker's report.
 8. Integrate. `taskfactory integrate TF-001` rebases the branch onto main,
    verifies again, fast-forwards main and archives the task.
-9. Check main. `taskfactory check-main` reruns main's verification.
+9. Check main. `taskfactory check-main` reruns main's verification. After
+   a successful loop `git status --short` is empty.
 
 If the worker cannot finish (a stall, a refusal, a failed check that it
 cannot repair), run `taskfactory fail TF-001 --outcome BLOCKED --reason "..."`

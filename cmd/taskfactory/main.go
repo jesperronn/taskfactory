@@ -852,7 +852,11 @@ const initHelp = `Usage: taskfactory init
 
 Create the project configuration and the task state directories in the Git
 repository that contains the current directory. An existing valid configuration
-is kept unchanged, and missing task state directories are restored.
+is kept unchanged, and missing task state directories are restored. It also
+creates .gitignore, or appends to it, with the TaskFactory runtime paths
+(locks, evidence, logs and worktrees) that are not already listed; other lines
+are left alone and .taskfactory/config.toml is never ignored. Commit the
+configuration and .gitignore together before the first claim.
 
 Flags:
   --help, -h  print this help and exit successfully
@@ -886,6 +890,87 @@ func initializeProject() error {
 }
 
 func initializeAt(root string) error {
+	if err := initializeConfigAt(root); err != nil {
+		return err
+	}
+	return ensureGitignore(root)
+}
+
+// gitignoreComment and runtimeIgnorePaths are what init keeps in the project
+// .gitignore. config.toml is deliberately absent: it must stay trackable.
+const gitignoreComment = "# TaskFactory runtime files"
+
+var runtimeIgnorePaths = []string{
+	".taskfactory/claim.lock",
+	".taskfactory/integration.lock",
+	".taskfactory/evidence/",
+	".taskfactory/integration-evidence/",
+	".taskfactory/logs/",
+	".taskfactory/worktrees/",
+}
+
+// ensureGitignore appends the missing runtime paths to the project .gitignore,
+// creating it when absent. Existing lines are never changed or reordered, and a
+// rerun with every path present writes nothing.
+func ensureGitignore(root string) error {
+	path := filepath.Join(root, ".gitignore")
+	var existing []byte
+	info, err := os.Lstat(path)
+	switch {
+	case err == nil:
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("%s is not a regular file; refusing to modify it", path)
+		}
+		existing, err = os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", path, err)
+		}
+	case !os.IsNotExist(err):
+		return fmt.Errorf("inspect %s: %w", path, err)
+	}
+	present := map[string]bool{}
+	for _, line := range strings.Split(string(existing), "\n") {
+		present[strings.TrimSpace(line)] = true
+	}
+	var missing []string
+	for _, p := range runtimeIgnorePaths {
+		if !present[p] {
+			missing = append(missing, p)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	var add strings.Builder
+	if len(existing) > 0 {
+		if existing[len(existing)-1] != '\n' {
+			add.WriteString("\n")
+		}
+		if !present[gitignoreComment] {
+			add.WriteString("\n")
+		}
+	}
+	if !present[gitignoreComment] {
+		add.WriteString(gitignoreComment + "\n")
+	}
+	for _, p := range missing {
+		add.WriteString(p + "\n")
+	}
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
+	if err != nil {
+		return fmt.Errorf("open %s: %w", path, err)
+	}
+	if _, err := file.WriteString(add.String()); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", path, err)
+	}
+	return nil
+}
+
+func initializeConfigAt(root string) error {
 	configPath := filepath.Join(root, ".taskfactory", "config.toml")
 	if _, err := os.Stat(configPath); err == nil {
 		if _, err := config.Load(root); err != nil {

@@ -67,7 +67,14 @@ Evidence files are untracked. Worker attempts append to
 `.taskfactory/evidence/<ID>.jsonl` and integration attempts append to
 `.taskfactory/integration-evidence/<ID>.jsonl`. Neither is a Git commit. Verify
 does not stage them, and integration stages only the task paths it archives, so
-they appear in `git status` as untracked. `.taskfactory/config.toml` is written
+they are untracked. `taskfactory init` writes the project `.gitignore`, or
+appends to it, with the runtime paths `.taskfactory/claim.lock`,
+`.taskfactory/integration.lock`, `.taskfactory/evidence/`,
+`.taskfactory/integration-evidence/`, `.taskfactory/logs/` and
+`.taskfactory/worktrees/`, so `git status --short` is empty after a successful
+loop. It never ignores `.taskfactory/config.toml`. The runtime inventory reads
+the filesystem, not Git status, so ignored paths are still inventoried.
+`.taskfactory/config.toml` is written
 by init and is not committed by init; it must be tracked in HEAD before
 integration, and claim does not verify that it is tracked.
 

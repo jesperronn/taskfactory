@@ -37,21 +37,23 @@ Integration attempts are appended to
 `.taskfactory/`, not Git commits. `verify` does not stage or commit them, and
 `integrate` stages only the task paths it archives. `taskfactory work` writes
 its logs under `.taskfactory/logs/`; `integrate` allows that directory, never
-stages it and needs no manual move. `.gitignore` does not hide `.taskfactory/`,
-so `git status` lists these files as untracked. Do not commit them by hand.
-After integration, the dry run in `docs/experiments/e2e-dry-run.md` observed
-`.taskfactory/evidence/` and `.taskfactory/integration-evidence/` as untracked;
-that run was not repeated for this change.
+stages it and needs no manual move. `taskfactory init` writes a `.gitignore`
+that hides these runtime paths (the two lock files, `evidence/`,
+`integration-evidence/`, `logs/` and `worktrees/` under `.taskfactory/`), so a
+project that committed it has an empty `git status --short` after integrate.
+Older projects without those lines list the files as untracked. Do not commit
+them by hand. The dry run in `docs/experiments/e2e-dry-run.md` predates the
+`.gitignore` and observed them as untracked.
 
 TaskFactory commits follow the user's Git signing configuration. TaskFactory
 runs a plain `git commit` and never overrides signing. Automated workers run in
 an environment where signing is configured to work or is explicitly disabled by
 the environment owner, not by TaskFactory.
 
-`taskfactory init` writes `.taskfactory/config.toml` and does not commit it, so
-the file is untracked until someone commits it. Commit it, with the `tasks/`
-contracts, before the first claim. Claim reads the config from the project root
-and creates the task branch from `refs/heads/main`, so an uncommitted contract
+`taskfactory init` writes `.taskfactory/config.toml` and the `.gitignore` and
+does not commit them, so they are untracked until someone commits them. Commit
+both, with the `tasks/` contracts, before the first claim. Claim reads the
+config from the project root and creates the task branch from `refs/heads/main`, so an uncommitted contract
 is missing from the worker's checkout. Claim does not check that the config is
 tracked; that refusal is not verified. Integration refuses unless
 `.taskfactory/config.toml` is tracked in HEAD and unchanged.

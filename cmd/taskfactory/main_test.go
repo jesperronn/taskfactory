@@ -862,3 +862,63 @@ func TestReadmeQuickStartDependencies(t *testing.T) {
 		}
 	}
 }
+
+const wantGitignoreBlock = "# TaskFactory runtime files\n.taskfactory/claim.lock\n.taskfactory/integration.lock\n.taskfactory/evidence/\n.taskfactory/integration-evidence/\n.taskfactory/logs/\n.taskfactory/worktrees/\n"
+
+func TestInitGitignoreCreatedAndIdempotent(t *testing.T) {
+	binary := buildCLI(t)
+	root := initGitProject(t)
+	for i := 1; i <= 2; i++ {
+		if output, err := runCLI(t, binary, root, "init"); err != nil {
+			t.Fatalf("init run %d: %v\n%s", i, err, output)
+		}
+		got, err := os.ReadFile(filepath.Join(root, ".gitignore"))
+		if err != nil || string(got) != wantGitignoreBlock {
+			t.Fatalf("run %d .gitignore = %q, err=%v", i, got, err)
+		}
+	}
+	// The config stays trackable and every runtime path is ignored.
+	if err := exec.Command("git", "-C", root, "check-ignore", "-q", ".taskfactory/config.toml").Run(); processExitCode(err) != 1 {
+		t.Fatalf("config.toml must not be ignored: %v", err)
+	}
+	for _, p := range []string{".taskfactory/claim.lock", ".taskfactory/integration.lock", ".taskfactory/evidence/TF-001.jsonl", ".taskfactory/integration-evidence/TF-001.jsonl", ".taskfactory/logs/TF-001/a.log", ".taskfactory/worktrees/TF-001"} {
+		if err := exec.Command("git", "-C", root, "check-ignore", "-q", p).Run(); err != nil {
+			t.Errorf("%s is not ignored: %v", p, err)
+		}
+	}
+}
+
+func TestInitGitignoreKeepsExistingLines(t *testing.T) {
+	binary := buildCLI(t)
+	root := initGitProject(t)
+	existing := "build/\n*.log\n.taskfactory/logs/"
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= 2; i++ {
+		if output, err := runCLI(t, binary, root, "init"); err != nil {
+			t.Fatalf("init run %d: %v\n%s", i, err, output)
+		}
+	}
+	got, err := os.ReadFile(filepath.Join(root, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "build/\n*.log\n.taskfactory/logs/\n\n# TaskFactory runtime files\n.taskfactory/claim.lock\n.taskfactory/integration.lock\n.taskfactory/evidence/\n.taskfactory/integration-evidence/\n.taskfactory/worktrees/\n"
+	if string(got) != want {
+		t.Fatalf(".gitignore = %q, want %q", got, want)
+	}
+}
+
+func TestReadmeQuickStartGitignore(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	flat := strings.Join(strings.Fields(string(data)), " ")
+	for _, want := range []string{"`.gitignore`", "commit the config and the `.gitignore` together before the first claim", "`git status --short` is empty"} {
+		if !strings.Contains(flat, want) {
+			t.Errorf("README quick start does not contain %q", want)
+		}
+	}
+}
