@@ -287,7 +287,10 @@ append. Concurrent verifiers for the same task therefore serialize and receive
 distinct consecutive numbers. If any existing line is invalid or the file does
 not end in LF, the verifier must report an error and leave all existing bytes
 byte-for-byte unchanged; it must not repair, truncate, or reuse an attempt
-number. Evidence from prior runs is never inferred or fabricated. A successful
+number. `taskfactory requeue` is the one tool that resets the counter: it
+renames the whole file to `<ID>.attempts-<N>.jsonl`, where N is its highest
+attempt, and never edits or deletes it; the next attempt then starts at 1.
+Evidence from prior runs is never inferred or fabricated. A successful
 worker report alone does not archive a task: integration must succeed before the
 task moves to `tasks/archive/`. Evidence records worker attempts and do not
 replace integration evidence required by the protocol.

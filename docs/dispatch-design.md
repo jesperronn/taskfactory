@@ -24,7 +24,7 @@ Order: TF-055, then TF-056, then TF-057 and TF-058.
 | 4    | worker commits           | worker, plain `git commit` | worker |
 | 5    | independent check        | `verify <ID>`              | auto   |
 | 6    | active to failed         | `fail <ID> --outcome O`    | human  |
-| 7    | failed to ready or inbox | `requeue <ID>` (TF-049)    | human  |
+| 7    | failed to ready or inbox | `requeue <ID>`             | human  |
 | 8    | active to archive        | `integrate <ID>`           | human  |
 | 9    | main recheck             | `check-main`               | auto   |
 

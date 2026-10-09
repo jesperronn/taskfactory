@@ -20,6 +20,7 @@ import (
 	"taskfactory/internal/fail"
 	"taskfactory/internal/integrate"
 	"taskfactory/internal/promote"
+	"taskfactory/internal/requeue"
 	"taskfactory/internal/taskvalidate"
 	"taskfactory/internal/ui"
 	"taskfactory/internal/verify"
@@ -49,6 +50,7 @@ var commandSummaries = []commandSummary{
 	{"check-main", "check-main", "recheck a stopped main"},
 	{"promote", "promote <ID>", "move an inbox task to ready"},
 	{"fail", "fail <ID> --outcome <FAILED|BLOCKED>", "move a claimed task to failed"},
+	{"requeue", "requeue <ID> [--to ready|inbox]", "return a failed task to ready or inbox"},
 	{"work", "work <ID> --adapter <omp|pi|claude> --model <id>", "launch a local worker on a claimed task"},
 }
 
@@ -63,6 +65,7 @@ var commandHelps = map[string]string{
 	"check-main": checkMainHelp,
 	"promote":    promoteHelp,
 	"fail":       failHelp,
+	"requeue":    requeueHelp,
 	"work":       workHelp,
 }
 
@@ -279,6 +282,40 @@ Exit codes:
   2  invalid usage
 `
 
+// requeueHelp is printed by "requeue --help" and "requeue -h". Inside a project
+// the claimed failed task IDs are appended.
+const requeueHelp = `Usage: taskfactory requeue <ID> [--to ready|inbox]
+
+Return the failed task <ID> to tasks/ready (the default) or tasks/inbox. The task
+file moves unchanged from tasks/failed. For ready, the complete executable
+contract must validate; for inbox no contract check applies. The task tree is
+validated and only the two task paths are committed. Any refusal or failure
+restores the file to tasks/failed.
+
+A failed task that still has a Claim block is never requeued automatically: it
+is flagged for a human decision and the command refuses, listing every claimed
+failed task.
+
+The attempt counter is reset by renaming
+.taskfactory/evidence/<ID>.jsonl to .taskfactory/evidence/<ID>.attempts-<N>.jsonl,
+where N is its highest attempt number, so the next attempt starts at 1. The
+evidence bytes are never edited or deleted, the rename never overwrites an
+existing file, and the renamed file is never committed. The output and the commit
+message body name the new path.
+
+The commit runs as a plain git commit and follows your own Git signing
+configuration. TaskFactory never disables or overrides signing.
+
+Flags:
+  --to <ready|inbox>  target state, ready by default
+  --help, -h          print this help and exit successfully
+
+Exit codes:
+  0  the task was moved and committed
+  1  the command was refused or failed; the file was restored
+  2  invalid usage
+`
+
 // workHelp is printed by "work --help" and "work -h".
 const workHelp = `Usage: taskfactory work <ID> --adapter <omp|pi|claude> --model <id>
 
@@ -346,6 +383,43 @@ func failTask(args []string) error {
 	return nil
 }
 
+func requeueTask(args []string) error {
+	id, target, err := requeue.ParseArgs(args)
+	if err != nil {
+		return err
+	}
+	root, err := projectRoot()
+	if err != nil {
+		return err
+	}
+	res, err := requeue.Requeue(root, id, target)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stdout, "requeued %s to %s\n", id, res.Path)
+	if res.Aside != "" {
+		fmt.Fprintf(os.Stdout, "attempt counter reset: the %d earlier attempt(s) moved to %s; the next attempt starts at 1\n", res.Attempts, res.Aside)
+	}
+	return nil
+}
+
+// requeueHelpText returns requeueHelp. Inside a project it appends the claimed
+// failed task IDs; outside a project it is the static text only.
+func requeueHelpText() string {
+	root, err := projectRoot()
+	if err != nil {
+		return requeueHelp
+	}
+	ids, err := requeue.ClaimedFailed(root)
+	if err != nil {
+		return requeueHelp
+	}
+	if len(ids) == 0 {
+		return requeueHelp + "\nClaimed failed tasks in this project: none.\n"
+	}
+	return requeueHelp + "\nClaimed failed tasks in this project (human decision needed): " + strings.Join(ids, ", ") + "\n"
+}
+
 func promoteTask(args []string) error {
 	root, err := projectRoot()
 	if err != nil {
@@ -388,6 +462,10 @@ func main() {
 
 	args := fs.Args()
 	if len(args) > 0 && wantsHelp(args[1:]) {
+		if args[0] == "requeue" {
+			fmt.Fprint(os.Stdout, styleHelp(stdoutStyle, requeueHelpText()))
+			return
+		}
 		if text, ok := commandHelps[args[0]]; ok {
 			fmt.Fprint(os.Stdout, styleHelp(stdoutStyle, text))
 			return
@@ -483,6 +561,17 @@ func main() {
 		if err := failTask(args[1:]); err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory fail", err.Error()))
 			var usage fail.UsageError
+			if errors.As(err, &usage) {
+				os.Exit(exitUsage)
+			}
+			os.Exit(1)
+		}
+		return
+	}
+	if len(args) > 0 && args[0] == "requeue" {
+		if err := requeueTask(args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory requeue", err.Error()))
+			var usage requeue.UsageError
 			if errors.As(err, &usage) {
 				os.Exit(exitUsage)
 			}

@@ -96,7 +96,7 @@ The **task contract defines when it is finished**.
 
 This walks one small task through the whole loop with a local worker. Run it
 in a Git repository with at least one commit on `main`. Every step is a command
-that exists today; `requeue` is not one of them.
+that exists today, including `requeue` for the failed branch.
 
 1. Install. From a TaskFactory checkout run `bin/install`, which builds
    `taskfactory` and prints a hint if its directory is not on `PATH`.
@@ -186,8 +186,15 @@ git branch -d task/TF-001
 If the worker cannot finish (a stall, a refusal, a failed check that it
 cannot repair), run `taskfactory fail TF-001 --outcome BLOCKED --reason "..."`
 (or `FAILED` after a failed verify attempt). It moves the task to
-`tasks/failed/` and commits only that move. There is no `requeue`: to retry,
-edit the task by hand into `tasks/ready/` and claim it again.
+`tasks/failed/` and commits only that move. To retry, run
+`taskfactory requeue TF-001` (or `--to inbox`). It moves the unclaimed task
+back to `tasks/ready/` and commits only that move, and it resets the attempt
+counter by renaming the evidence file aside to
+`.taskfactory/evidence/TF-001.attempts-<N>.jsonl`, and the next attempt starts
+at 1. A failed task that still has a Claim block, which is every task failed
+after a claim, is flagged for a human decision and `requeue` refuses it.
+`taskfactory requeue --help` lists such claimed failed IDs. Worktrees and
+branches from the earlier claim remain and are yours to clean up.
 
 To see the fail branch for yourself, make a worker stall in your scratch repo
 with a one-second timeout. Claim a ready task, then run:
@@ -856,13 +863,18 @@ taskfactory integrate
 taskfactory check-main
 taskfactory promote <ID>
 taskfactory fail <ID> --outcome <FAILED|BLOCKED>
+taskfactory requeue <ID> [--to ready|inbox]
 taskfactory work <ID> --adapter <omp|pi|claude> --model <id>
 taskfactory <command> --help
 ```
 
 `taskfactory fail` moves a claimed active task to `tasks/failed` and commits
 only that move. Its last attempt evidence must have the same outcome, or pass
-`--reason` when no evidence exists. `taskfactory requeue` does not exist yet.
+`--reason` when no evidence exists. `taskfactory requeue` returns an unclaimed
+failed task to `tasks/ready` (default) or `tasks/inbox` and commits only that
+move; it refuses a failed task that has a Claim block, flagging it for a human
+decision, and renames its evidence file aside to
+`.taskfactory/evidence/<ID>.attempts-<N>.jsonl` to reset the attempt counter.
 
 `taskfactory work` launches the chosen local worker adapter in a claimed task's
 worktree. Adapter and model are always explicit; `--haiku-model` is also
@@ -909,7 +921,7 @@ cp -R /path/to/taskfactory/skills/taskfactory .claude/skills/
 ```
 
 Other harnesses may use an equivalent skills directory. The skill lists the
-commands that exist, and marks `requeue` and release as not implemented.
+commands that exist, and marks release as not implemented.
 `bin/skill.test.sh` checks the frontmatter that harnesses
 read.
 

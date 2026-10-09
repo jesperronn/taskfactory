@@ -61,6 +61,17 @@ files, verification commands and exit codes, attempt count, and relevant retry
 history. A failed task retains enough information for another worker to
 continue.
 
+### Requeue
+
+`taskfactory requeue <ID> [--to ready|inbox]` returns a failed task to
+`tasks/ready/` or `tasks/inbox/`. A failed task that still has a Claim block is
+never requeued automatically; it is flagged for a human decision. Requeue
+resets the worker attempt counter by renaming
+`.taskfactory/evidence/<ID>.jsonl` to
+`.taskfactory/evidence/<ID>.attempts-<N>.jsonl`, where N is its highest attempt
+number. The rename never overwrites and the old bytes are never rewritten, so
+the rule against rewriting evidence still holds. The next attempt is 1.
+
 ### Evidence files
 
 Evidence files are untracked. Worker attempts append to
