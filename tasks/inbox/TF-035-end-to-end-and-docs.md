@@ -22,12 +22,14 @@ Delivered:
   (`docs/experiments/e2e-local-worker.md`, integration commit `7f42701`).
 - Remediation tasks for the friction found: TF-060 (worker instructions
   fallback) and TF-061 (integrate allows the log directory), both archived.
+- Verbatim re-run of the quick start with zero workarounds, a real local
+  model and an integration commit in the record:
+  `docs/experiments/quickstart-verbatim-rerun-2.md`.
+- README fixes from that re-run: TF-064 (stall recipe for the fail branch)
+  and TF-065 (worktrees and branches remain after integrate and fail).
 
 Remaining:
 
-- Re-run the quick start verbatim in a scratch repo, now that TF-060 and
-  TF-061 are delivered, and record it. The TF-057 record states the verbatim
-  criterion was not met (manual steps 8 and 13).
 - Document the `requeue` branch in the quick start once TF-049 lands. Blocked
   on TF-049 via TF-033.
 - TF-020 (CI run on GitHub) as a prerequisite signal; still in inbox.
@@ -35,7 +37,9 @@ Remaining:
 ## Success criteria
 
 - The quick start is followed verbatim in a scratch repo without manual
-  fixes. Open: not yet re-run after TF-060 and TF-061.
+  fixes. Done: `docs/experiments/quickstart-verbatim-rerun-2.md` (zero
+  workarounds, real local model, worker commit and integration in the record).
 - Experiment record includes commands, exit codes and the integration commit.
-  Done: `docs/experiments/e2e-local-worker.md` (TF-057); the re-run needs its
-  own record.
+  Done: `docs/experiments/e2e-local-worker.md` (TF-057) and
+  `docs/experiments/quickstart-verbatim-rerun-2.md`.
+- The quick start documents the `requeue` branch. Open: blocked on TF-049.
