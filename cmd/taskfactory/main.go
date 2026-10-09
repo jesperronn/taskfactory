@@ -613,10 +613,9 @@ func validateProject(args []string) error {
 		fmt.Fprintln(os.Stdout, style.Green("inbox and ready tasks are valid"))
 	} else {
 		fmt.Fprintln(os.Stdout, style.Green(fmt.Sprintf("%d task file(s) valid", len(files))))
-		for _, f := range files {
-			if strings.HasPrefix(filepath.ToSlash(f), "tasks/inbox/") {
+		if len(args) == 1 && len(files) == 1 && strings.HasPrefix(filepath.ToSlash(files[0]), "tasks/inbox/") {
+			if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(files[0]))); err == nil && info.Mode().IsRegular() && !isDirArg(root, args[0]) {
 				fmt.Fprintln(os.Stdout, "note: inbox files are checked loosely; promote applies the full ready contract")
-				break
 			}
 		}
 	}
@@ -1053,4 +1052,14 @@ func ensureProjectDirectory(root, path string) error {
 		}
 	}
 	return nil
+}
+
+// isDirArg reports whether a validate argument names a directory.
+func isDirArg(root, arg string) bool {
+	path := arg
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(root, path)
+	}
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }

@@ -840,9 +840,11 @@ func TestValidateInboxNote(t *testing.T) {
 	if err != nil || !strings.Contains(string(output), "1 task file(s) valid\n") || !strings.Contains(string(output), note) {
 		t.Fatalf("inbox file: err=%v output=%s", err, output)
 	}
-	output, err = runCLI(t, binary, root, "validate", "tasks/ready/TF-101-example.md")
-	if err != nil || !strings.Contains(string(output), "1 task file(s) valid") || strings.Contains(string(output), note) {
-		t.Fatalf("ready file must not carry the inbox note: err=%v output=%s", err, output)
+	for _, args := range [][]string{{"validate", "tasks/ready/TF-101-example.md"}, {"validate", "tasks"}, {"validate", "tasks/inbox"}, {"validate"}} {
+		output, err = runCLI(t, binary, root, args...)
+		if err != nil || !strings.Contains(string(output), "valid") || strings.Contains(string(output), note) {
+			t.Fatalf("%v must not carry the inbox note: err=%v output=%s", args, err, output)
+		}
 	}
 	output, err = runCLI(t, binary, root, "validate", "--help")
 	if err != nil || !strings.Contains(string(output), "Inbox files are checked loosely") || !strings.Contains(string(output), "promote") {

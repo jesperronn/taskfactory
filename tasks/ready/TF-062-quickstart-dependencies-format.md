@@ -15,10 +15,11 @@ Inbox files stay loosely validated on purpose: do not make `validate` strict
 for them. Instead, README quick start step 3 states the Dependencies format
 (`None`, or lines `- TF-NNN`, nothing else, no trailing period) and shows one
 complete minimal ready-contract task. `validate --help` says inbox files are
-checked loosely and that `promote` applies the full ready contract. When the
-selection includes an inbox file, `validate` prints a second stdout line with
-that hint after its unchanged success line. `promote` keeps its message that
-names the violated rule.
+checked loosely and that `promote` applies the full ready contract. When one
+explicit argument names a single file in tasks/inbox, `validate` prints a
+second stdout line with that hint after its unchanged success line. Directory
+arguments and no argument print no hint. `promote` keeps its message that names
+the violated rule.
 
 ## Constraints
 
