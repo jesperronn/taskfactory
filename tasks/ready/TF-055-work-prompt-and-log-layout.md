@@ -87,7 +87,7 @@ Run each C-check, then `bin/test` and `bin/lint` from the repository root and
 report each exit code. Paste the prompt produced for a fixture task up to the
 end of the header, and the log path produced for a fixed timestamp.
 
-## Notes
+**Notes (not part of the contract):**
 
 Open questions for the owner (the defaults shown are the planner's proposal):
 
