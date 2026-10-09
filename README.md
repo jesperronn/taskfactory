@@ -743,6 +743,16 @@ the whole task tree.
 
 The exact interface will evolve while TaskFactory dogfoods itself.
 
+### Commit signing
+
+TaskFactory commits, including `taskfactory promote` and the archive commit
+made by `taskfactory integrate`, run a plain `git commit`. They follow your Git
+signing configuration: commits are signed when you have configured signing and
+unsigned otherwise. TaskFactory never passes `--no-gpg-sign` or any other
+signing override. Automated workers run in an environment where signing is
+configured to work or is explicitly disabled by the environment owner, not by
+TaskFactory.
+
 ## Install
 
 From a checkout, `bin/install` builds `taskfactory` with the same embedded

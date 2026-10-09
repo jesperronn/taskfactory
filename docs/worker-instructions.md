@@ -33,6 +33,11 @@ them by hand. After integration, the dry run in
 `.taskfactory/integration-evidence/` as untracked; that run was not repeated
 for this change.
 
+TaskFactory commits follow the user's Git signing configuration. TaskFactory
+runs a plain `git commit` and never overrides signing. Automated workers run in
+an environment where signing is configured to work or is explicitly disabled by
+the environment owner, not by TaskFactory.
+
 `taskfactory init` writes `.taskfactory/config.toml` and does not commit it, so
 the file is untracked until someone commits it. Commit it, with the `tasks/`
 contracts, before the first claim. Claim reads the config from the project root

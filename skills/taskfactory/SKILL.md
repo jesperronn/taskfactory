@@ -118,6 +118,9 @@ Rules:
   failure restores the file to `tasks/inbox/` and changes nothing else.
 - Promotion refuses when the index already has staged paths; unstage them
   first.
+- TaskFactory commits follow the user's Git signing configuration. Do not add
+  `--no-gpg-sign` or any signing override to TaskFactory commands or to
+  commands you run for the user.
 
 ## Orchestrator
 
