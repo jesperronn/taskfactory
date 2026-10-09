@@ -314,3 +314,78 @@ func TestIsolationRefusesStagedIndexAndCommitsOnlyTaskPaths(t *testing.T) {
 		}
 	})
 }
+
+// TestSigningFailureIsNotOverriddenByPromote sets the user's signing
+// configuration to a signer that always fails. Promote must run plain
+// git commit, so git invokes the signer, the commit fails, and the inbox file is
+// restored. A TaskFactory override such as --no-gpg-sign would skip the signer
+// and commit successfully.
+func TestSigningFailureIsNotOverriddenByPromote(t *testing.T) {
+	root := newRepo(t)
+	const name = "TF-040-signing.md"
+	content := validTask("TF-040", "signing")
+	writeTask(t, root, "inbox", name, content)
+	commitAll(t, root, "add proposal")
+
+	marker := filepath.Join(t.TempDir(), "signer-called")
+	signer := filepath.Join(t.TempDir(), "signer.sh")
+	writeFile(t, signer, "#!/bin/sh\necho called >> \""+marker+"\"\nexit 1\n")
+	if err := os.Chmod(signer, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "config", "commit.gpgsign", "true")
+	runGit(t, root, "config", "gpg.program", signer)
+	beforeHead := head(t, root)
+
+	if _, err := Promote(root, "TF-040"); err == nil {
+		t.Fatal("Promote succeeded although the user's signer failed")
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("signer was not invoked; TaskFactory bypassed signing: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(root, "tasks", "inbox", name))
+	if err != nil || string(got) != content {
+		t.Fatalf("inbox file not restored: %v", err)
+	}
+	if head(t, root) != beforeHead {
+		t.Fatal("HEAD moved despite the failed signature")
+	}
+}
+
+// TestSigningOverrideAbsentFromProductionSources fails when any non-test Go
+// file in the module reintroduces a commit signing override.
+func TestSigningOverrideAbsentFromProductionSources(t *testing.T) {
+	forbidden := []string{"no-gpg-sign", "commit.gpgsign", "gpgsign"}
+	repo, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = filepath.WalkDir(repo, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if entry.Name() == ".git" || entry.Name() == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		for _, word := range forbidden {
+			if strings.Contains(string(data), word) {
+				rel, _ := filepath.Rel(repo, path)
+				t.Errorf("%s contains %q; TaskFactory must respect the user's signing configuration", rel, word)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
