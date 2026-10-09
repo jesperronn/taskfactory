@@ -60,3 +60,29 @@ func TestPromoteHelpAndExitCodesMatchOtherCommands(t *testing.T) {
 		t.Errorf("promote invalid ID exit = %d, want 2; output: %s", got, out)
 	}
 }
+
+func TestPromoteNamesDependenciesRule(t *testing.T) {
+	binary := buildCLI(t)
+	project := initGitProject(t)
+	if out, err := runCLI(t, binary, project, "init"); err != nil {
+		t.Fatalf("init: %v\n%s", err, out)
+	}
+	task := "# TF-001: Example\n\n## Goal\n\nDo it.\n\n## Dependencies\n\nNone.\n\n## Scope\n\nImplement.\n\n## Constraints\n\nKeep it small.\n\n## Success criteria\n\n### C1: It works\n\nCheck: go test ./...\n\n## Verification\n\nRun check.\n"
+	if err := os.WriteFile(project+"/tasks/inbox/TF-001-example.md", []byte(task), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "-C", project, "add", "-A").CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", project, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "fixture").CombinedOutput(); err != nil {
+		t.Fatalf("fixture commit: %v\n%s", err, out)
+	}
+	// Inbox validation is loose: the file passes validate, promote refuses.
+	if out, err := runCLI(t, binary, project, "validate", "tasks/inbox/TF-001-example.md"); err != nil {
+		t.Fatalf("validate of loose inbox file: %v\n%s", err, out)
+	}
+	out, err := runCLI(t, binary, project, "promote", "TF-001")
+	if processExitCode(err) != 1 || !strings.Contains(string(out), "Dependencies: use None or - TF-NNN lines") {
+		t.Fatalf("promote should name the Dependencies rule: exit=%d output=%s", processExitCode(err), out)
+	}
+}

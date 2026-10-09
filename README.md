@@ -110,7 +110,43 @@ that exists today; `requeue` is not one of them.
 3. Plan. Write `tasks/inbox/TF-001-<slug>.md` with a `# TF-001: title`
    heading and the ready headings Goal, Dependencies, Scope, Constraints,
    Success criteria (each `### CN:` followed by one `Check:` line) and
-   Verification. Run `taskfactory validate tasks/inbox/<file>`.
+   Verification. Dependencies is exactly `None`, or one `- TF-NNN` line per
+   archived task and nothing else, with no trailing period: `None.` is
+   refused. `validate` checks inbox files loosely on purpose, so a passing
+   `taskfactory validate tasks/inbox/<file>` does not promise that `promote`
+   accepts the file; `promote` applies the full ready contract. A complete
+   minimal task:
+
+   ```markdown
+   # TF-001: Fix the greeting
+
+   ## Goal
+
+   Greet() returns "Hello".
+
+   ## Dependencies
+
+   None
+
+   ## Scope
+
+   Edit greeting.go only.
+
+   ## Constraints
+
+   Keep the change small.
+
+   ## Success criteria
+
+   ### C1: The greeting test passes
+
+   Check: go test ./... -run TestGreet -v
+
+   ## Verification
+
+   Run the check and report its exit code.
+   ```
+
 4. Promote. `taskfactory promote TF-001` moves the file to `tasks/ready/`
    and commits only that move.
 5. Claim. `taskfactory claim TF-001 --owner you` creates the branch

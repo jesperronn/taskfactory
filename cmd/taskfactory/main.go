@@ -562,7 +562,10 @@ func claimTask(args []string) error {
 // validateHelp is printed by "validate --help" and "validate -h".
 const validateHelp = `Usage: taskfactory validate [path...]
 
-Validate task files. With no arguments, validate every task file in tasks/inbox
+Validate task files. Inbox files are checked loosely, because inbox proposals
+are intentionally rough: "taskfactory promote" applies the full ready contract.
+In a ready task, Dependencies is None or lines of "- TF-NNN" and nothing else.
+With no arguments, validate every task file in tasks/inbox
 and tasks/ready. Each path is a task file or a folder inside the project's tasks
 directory; a folder selects the task files directly inside it. "tasks" selects
 every state except the archive: inbox, ready, active and failed. Relative paths
@@ -610,6 +613,12 @@ func validateProject(args []string) error {
 		fmt.Fprintln(os.Stdout, style.Green("inbox and ready tasks are valid"))
 	} else {
 		fmt.Fprintln(os.Stdout, style.Green(fmt.Sprintf("%d task file(s) valid", len(files))))
+		for _, f := range files {
+			if strings.HasPrefix(filepath.ToSlash(f), "tasks/inbox/") {
+				fmt.Fprintln(os.Stdout, "note: inbox files are checked loosely; promote applies the full ready contract")
+				break
+			}
+		}
 	}
 	return nil
 }

@@ -821,3 +821,44 @@ func TestTreeArchiveCLI(t *testing.T) {
 		t.Fatalf("unreadable archived ID should be reported once: exit=%d output=%s", processExitCode(err), output)
 	}
 }
+
+func TestValidateInboxNote(t *testing.T) {
+	binary := buildCLI(t)
+	root := initGitProject(t)
+	if output, err := runCLI(t, binary, root, "init"); err != nil {
+		t.Fatalf("init: %v\n%s", err, output)
+	}
+	ready := "# TF-101: Example\n\n## Goal\n\nDo it.\n\n## Dependencies\n\nNone\n\n## Scope\n\nImplement.\n\n## Constraints\n\nKeep it small.\n\n## Success criteria\n\n### C1: It works\n\nCheck: go test ./...\n\n## Verification\n\nRun check.\n"
+	if err := os.WriteFile(filepath.Join(root, "tasks", "ready", "TF-101-example.md"), []byte(ready), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "tasks", "inbox", "TF-102-idea.md"), []byte("# TF-102: Idea\nAnything goes.\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const note = "inbox files are checked loosely; promote applies the full ready contract"
+	output, err := runCLI(t, binary, root, "validate", "tasks/inbox/TF-102-idea.md")
+	if err != nil || !strings.Contains(string(output), "1 task file(s) valid\n") || !strings.Contains(string(output), note) {
+		t.Fatalf("inbox file: err=%v output=%s", err, output)
+	}
+	output, err = runCLI(t, binary, root, "validate", "tasks/ready/TF-101-example.md")
+	if err != nil || !strings.Contains(string(output), "1 task file(s) valid") || strings.Contains(string(output), note) {
+		t.Fatalf("ready file must not carry the inbox note: err=%v output=%s", err, output)
+	}
+	output, err = runCLI(t, binary, root, "validate", "--help")
+	if err != nil || !strings.Contains(string(output), "Inbox files are checked loosely") || !strings.Contains(string(output), "promote") {
+		t.Fatalf("validate --help: err=%v output=%s", err, output)
+	}
+}
+
+func TestReadmeQuickStartDependencies(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme := string(data)
+	for _, want := range []string{"exactly `None`", "`- TF-NNN` line", "`None.` is\n   refused", "## Dependencies\n\n   None\n", "### C1:", "Check: go test"} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("README quick start does not contain %q", want)
+		}
+	}
+}
