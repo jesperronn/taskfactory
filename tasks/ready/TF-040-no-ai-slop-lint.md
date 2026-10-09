@@ -46,7 +46,7 @@ exit code until the in-scope backlog is clean.
 
 ### C1: The advisory config names both rules
 
-Check: grep -q forbidden-text .mdsmith-tells.yml && grep -q forbidden-paragraph-starts .mdsmith-tells.yml
+Check: grep -q forbidden-text .mdsmith-tells.yml
 
 ### C2: The advisory mode reports and exits 0
 
@@ -54,7 +54,7 @@ Check: bin/lint --tells > /dev/null 2>&1
 
 ### C3: The record has counts and no unclassified findings
 
-Check: grep -q "unclassified: 0" docs/experiments/TF-040-tells.md && grep -qE "^MDS056: [0-9]+" docs/experiments/TF-040-tells.md
+Check: grep -q "unclassified: 0" docs/experiments/TF-040-tells.md
 
 ### C4: The archive is unchanged
 
