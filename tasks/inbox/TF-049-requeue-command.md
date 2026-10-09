@@ -44,10 +44,12 @@ Behavior:
    `tasks/failed/`, rename any aside evidence file back, and exit 1 without
    committing.
 6. Stage only the removed failed path and the added target path. Commit with
-   `git commit --no-gpg-sign`. The message is `docs: requeue TF-NNN to
-   <target>`. When a reset happened, the body names the aside path. The aside
-   evidence file is untracked and is never staged. Stage nothing else. Refuse
-   with exit 1 before any change when the index already has staged paths.
+   `git commit -m "docs: requeue TF-NNN to <target>"` as plain Git, so the
+   user's signing configuration applies. Never pass `--no-gpg-sign`, `-c
+   commit.gpgsign=false`, or any other signing override. When a reset happened,
+   the body names the aside path. The aside evidence file is untracked and is
+   never staged. Stage nothing else. Refuse with exit 1 before any change when
+   the index already has staged paths.
 
 Help: `requeue --help` and `requeue -h` print `requeueHelp` and exit 0. The
 help states the claimed-work rule and the counter reset. Inside a project it
@@ -64,7 +66,8 @@ Do not change `claim`, `verify`, `integrate`, `promote`, `fail`, or
 aside evidence rename, and the commit paths. Do not archive a task. Add no new
 Go dependencies; use the standard library and existing internal packages.
 Evidence bytes are never edited, truncated, or deleted; only the rename in
-step 3 moves them.
+step 3 moves them. Test fixtures that create a temporary repository set
+`commit.gpgsign` to `false` in that repository's own configuration only.
 
 ## Success criteria
 
@@ -92,7 +95,11 @@ Check: go test ./internal/requeue -run Inbox
 
 Check: go test ./cmd/taskfactory -run Requeue
 
-### C7: The whole task tree validates after the move
+### C7: No non-test Go file in internal/requeue overrides commit signing
+
+Check: go test ./internal/requeue -run CheckNoSigningOverride
+
+### C8: The whole task tree validates after the move
 
 Check: go run ./cmd/taskfactory validate tasks
 

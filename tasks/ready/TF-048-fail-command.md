@@ -35,8 +35,10 @@ Behavior:
 5. Run `taskfactory validate tasks`. If it fails, move the file back to
    `tasks/active/` and exit 1 without committing.
 6. Stage only the removed active path and the added failed path. Commit with
-   `git commit --no-gpg-sign -m "docs: mark TF-NNN failed"`. When `--reason`
-   was used, its text is added as the commit message body, because a verify
+   `git commit -m "docs: mark TF-NNN failed"` as plain Git, so the user's
+   signing configuration applies. Never pass `--no-gpg-sign`, `-c
+   commit.gpgsign=false`, or any other signing override. When `--reason` was
+   used, its text is added as the commit message body, because a verify
    evidence record must hold at least one check result and cannot carry a
    reason. Never create, modify, or stage the evidence file.
 
@@ -60,6 +62,9 @@ behavior. Do not touch any file other than the moved task and the commit
 paths. Do not archive a task; archive still requires integration. Add no new
 Go dependencies; use the standard library and existing internal packages. If
 the index already has staged paths, refuse with exit 1 before any change.
+Test fixtures that create a temporary repository set `commit.gpgsign` to
+`false` in that repository's own configuration only, so they do not depend on
+the developer's global Git configuration.
 
 ## Success criteria
 
@@ -83,7 +88,11 @@ Check: go test ./internal/fail -run Reason
 
 Check: go test ./cmd/taskfactory -run Fail
 
-### C6: The whole task tree validates after the move
+### C6: No non-test Go file in internal/fail overrides commit signing
+
+Check: go test ./internal/fail -run CheckNoSigningOverride
+
+### C7: The whole task tree validates after the move
 
 Check: go run ./cmd/taskfactory validate tasks
 
