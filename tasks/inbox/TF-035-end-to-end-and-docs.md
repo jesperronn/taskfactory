@@ -2,28 +2,40 @@
 
 ## Goal
 
-Prove the full loop works and document it.
+Prove the full loop works and document it. What remains is a verbatim re-run
+of the quick start, the requeue branch and the CI signal.
 
 ## Dependencies
 
 - TF-013
-- TF-016
+- TF-020
 - TF-033
 
 ## Scope
 
-Rewrite the README as a quick start (install, init, plan, dispatch worker,
-verify, integrate). Run one real task end to end through a local worker in a
-scratch repo, record the transcript under docs/experiments, and file remediation
-tasks for any friction found. Also covers TF-020 (CI run on GitHub) as a
-prerequisite signal.
+Delivered:
+
+- README quick start (install, init, plan, promote, claim, work, verify,
+  integrate, check-main, fail): TF-057 (`README.md`, "Quick start").
+- One real task end to end through a local worker in a scratch repo, with
+  commands, exit codes and the integration commit: TF-057
+  (`docs/experiments/e2e-local-worker.md`, integration commit `7f42701`).
+- Remediation tasks for the friction found: TF-060 (worker instructions
+  fallback) and TF-061 (integrate allows the log directory), both archived.
+
+Remaining:
+
+- Re-run the quick start verbatim in a scratch repo, now that TF-060 and
+  TF-061 are delivered, and record it. The TF-057 record states the verbatim
+  criterion was not met (manual steps 8 and 13).
+- Document the `requeue` branch in the quick start once TF-049 lands. Blocked
+  on TF-049 via TF-033.
+- TF-020 (CI run on GitHub) as a prerequisite signal; still in inbox.
 
 ## Success criteria
 
-- The quick start is followed verbatim in a scratch repo without manual fixes.
+- The quick start is followed verbatim in a scratch repo without manual
+  fixes. Open: not yet re-run after TF-060 and TF-061.
 - Experiment record includes commands, exit codes and the integration commit.
-
-Planner note: the worker dispatch step is planned in TF-055, TF-056 and TF-057
-(see docs/dispatch-design.md).
-
-Note: TF-057 supersedes the worker dispatch part of this task.
+  Done: `docs/experiments/e2e-local-worker.md` (TF-057); the re-run needs its
+  own record.
