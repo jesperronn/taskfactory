@@ -10,8 +10,10 @@ import (
 	"time"
 )
 
-// smokeEndpoint is the project-local oMLX server the smoke test needs.
-const smokeEndpoint = "127.0.0.1:8000"
+// smokeEndpointDefault is the project-local oMLX server the smoke test needs.
+// TASKFACTORY_SMOKE_ENDPOINT overrides it, which lets the dial-skip path be
+// shown against a closed port.
+const smokeEndpointDefault = "127.0.0.1:8000"
 
 // smokeTaskID is the one-line task claimed in the scratch repository.
 const smokeTaskID = "TF-901"
@@ -20,7 +22,8 @@ const smokeTaskID = "TF-901"
 const smokeTask = "# TF-901: Smoke\n\n## Goal\n\nCreate smoke.txt with one line.\n\n## Dependencies\n\nNone\n\n## Scope\n\nsmoke.txt only.\n\n## Constraints\n\nKeep it to one line.\n\n## Success criteria\n\n### C1: smoke.txt has content\n\nCheck: test -s smoke.txt\n\n## Verification\n\nRun check.\n"
 
 // TestWorkSmokeAgainstLocalOMLX is opt-in. It runs only when TASKFACTORY_SMOKE=1
-// is set and 127.0.0.1:8000 accepts a TCP connection; otherwise it skips. When
+// is set and the endpoint (127.0.0.1:8000 unless TASKFACTORY_SMOKE_ENDPOINT
+// overrides it) accepts a TCP connection; otherwise it skips. When
 // enabled it needs TASKFACTORY_SMOKE_ADAPTER and TASKFACTORY_SMOKE_MODEL, with
 // no defaults, and asserts only that work returned a result state and wrote a
 // log, not that the model succeeded.
@@ -28,9 +31,13 @@ func TestWorkSmokeAgainstLocalOMLX(t *testing.T) {
 	if os.Getenv("TASKFACTORY_SMOKE") != "1" {
 		t.Skip("smoke test skipped: set TASKFACTORY_SMOKE=1 to run it")
 	}
-	conn, err := net.DialTimeout("tcp", smokeEndpoint, 2*time.Second)
+	endpoint := os.Getenv("TASKFACTORY_SMOKE_ENDPOINT")
+	if endpoint == "" {
+		endpoint = smokeEndpointDefault
+	}
+	conn, err := net.DialTimeout("tcp", endpoint, 2*time.Second)
 	if err != nil {
-		t.Skipf("smoke test skipped: nothing accepts TCP connections at %s: %v", smokeEndpoint, err)
+		t.Skipf("smoke test skipped: nothing accepts TCP connections at %s: %v", endpoint, err)
 	}
 	_ = conn.Close()
 
@@ -44,12 +51,16 @@ func TestWorkSmokeAgainstLocalOMLX(t *testing.T) {
 	root := t.TempDir()
 	git := func(args ...string) {
 		t.Helper()
-		full := append([]string{"-C", root, "-c", "user.name=Smoke", "-c", "user.email=smoke@example.invalid"}, args...)
+		full := append([]string{"-C", root}, args...)
 		if output, err := exec.Command("git", full...).CombinedOutput(); err != nil {
 			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)
 		}
 	}
 	git("init", "--quiet", "--initial-branch=main")
+	// Local config only: the scratch repo never signs and needs an identity.
+	git("config", "commit.gpgsign", "false")
+	git("config", "user.name", "Smoke")
+	git("config", "user.email", "smoke@example.invalid")
 	if output, err := runCLI(t, binary, root, "init"); err != nil {
 		t.Fatalf("init: %v\n%s", err, output)
 	}
