@@ -60,3 +60,40 @@ run, and a resume that appends a new attempt number against the same base
 commit. Confirm branch, worktree path, and evidence bytes are preserved and that
 stall/failure never archive or complete the task. Run `bin/test`, `bin/lint`,
 and the whole-tree validator; report exact exits.
+
+## Outcome
+
+Closed. Owner decision (final): a stalled or stopped worker is recorded as
+`taskfactory fail <ID> --outcome BLOCKED --reason ...`. There is no `stalled`
+evidence outcome. `work` prints that command as a suggestion and never runs it.
+
+Coverage of each scope item:
+
+- Completion records a result commit and PASS: `internal/verify/verify.go`
+  (`ResultCommit`, `Outcome: "PASS"`); `TestRunResultCommitTracksCommittedWorktreeHead`
+  (`internal/verify/verify_test.go`).
+- Failure records FAILED and the evidence stays: `TestRunOrdersChecksStopsOnFailureAndRecordsOutput`
+  (`internal/verify/verify_test.go`); `TestVerifyCLIReturnsFailureAfterRecordingEvidence`
+  (`cmd/taskfactory/main_test.go`).
+- Failed or blocked run keeps branch, worktree, Claim and evidence:
+  `TestRetainsTaskAndEvidenceBytes` and `TestMovesBlockedTaskWithBlockedEvidence`
+  (`internal/fail/fail_test.go`); `TestRefusesWhenValidationFailsAndRestoresFile`.
+- Stall by timeout, exit and blocked states: `internal/adapter/common/common.go`
+  (`StateStalled`, `StateBlocked`); `TestLaunchMapsExitStallAndBlocked`
+  (`internal/adapter/common/common_test.go`); `TestRunStallsAtAdapterTimeout`
+  in `internal/adapter/omp`, `internal/adapter/pi` and `internal/adapter/claude`.
+- Stall or stop never completes or archives: `TestWorkNeverRunsLifecycleCommands`
+  and `TestSuggestsFailForBlockedAndStalledWithoutRunningIt`
+  (`internal/work/work_test.go`); `fail` only moves to `tasks/failed/`
+  (`TestMovesClaimedTaskWithFailedEvidence`).
+- Stop: no separate command. Owner decision: a stopped run is recorded with
+  `fail --outcome BLOCKED`, delivered by TF-048 (archived).
+- Resume appends a new attempt on the same base commit: `TestRunRepairCreatesNextAttempt`
+  (`internal/verify/verify_test.go`); the branch is kept by
+  `TestClaimRespectsCapacityAndPreservesExistingBranch`
+  (`internal/claim/operation_test.go`).
+- Requeue and hand-off of failed work: delivered by TF-049 (in progress, not
+  verified here). Not claimed as done by this task.
+
+Result: every item except requeue/resume is covered by the tests above. Requeue
+is owned by TF-049.

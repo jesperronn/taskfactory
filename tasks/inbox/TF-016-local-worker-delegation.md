@@ -41,10 +41,10 @@ live progress.
 
 ## Remaining gap
 
-- Stop and resume: TF-028 is still in inbox. The owner deferred the stall
-  mapping decision (expected: `fail --outcome BLOCKED`, delivered by TF-048).
-  TF-016 stays open until TF-028 is decided and delivered.
-- Hand off failed work for retry: needs `requeue` (TF-049, inbox).
+- Stop and resume: TF-028 is closed (archived). Owner decision: a stalled or
+  stopped worker is recorded with `fail <ID> --outcome BLOCKED`; there is no
+  `stalled` evidence outcome. Resume waits on `requeue`.
+- Hand off failed work for retry: needs `requeue` (TF-049, inbox; in progress).
 - Live progress: `work` writes the log when the run ends; streaming modes
   (`stream-json`, rpc) were deferred in the TF-056 notes.
 - Retry budgets: none exist; retries are manual `fail` then `requeue`.

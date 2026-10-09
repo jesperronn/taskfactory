@@ -150,8 +150,9 @@ exits with a shell exit code, which is how `state: exit` is produced.
 Completion, failure, stall, stop, and resume all keep the task's Git state
 (branch + worktree) and its evidence intact. A resume reuses the same branch,
 worktree, base commit, and appends a new attempt number; a stop records the
-point reached without archiving; a stall or failure records `stalled`/`FAILED`
-and leaves the worktree for repair or hand-off.
+point reached without archiving; a stall or stop is recorded with
+`fail --outcome BLOCKED` (no `stalled` evidence outcome), a failure with
+`FAILED`, and the worktree is left the worktree for repair or hand-off.
 
 ## How the worker runs `bin/test` and `bin/lint`
 
@@ -187,5 +188,6 @@ depends on the TF-015 experiment.
 - **TF-027** (removed): result/evidence recording and the independent `verify`
   call were already delivered by archived TF-011 and TF-022, so the proposal
   was removed as already delivered.
-- **TF-028** (inbox): Worker state machine for completion, failure, stall, stop,
-  and resume preserving Git state and evidence.
+- **TF-028** (archived, closed): Worker state machine for completion, failure,
+  stall, stop, and resume preserving Git state and evidence. Stall and stop are
+  recorded with `fail --outcome BLOCKED`; requeue is TF-049.
