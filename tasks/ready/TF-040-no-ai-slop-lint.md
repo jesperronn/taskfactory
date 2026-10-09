@@ -44,7 +44,7 @@ exit code until the in-scope backlog is clean.
 
 ## Success criteria
 
-### C1: The advisory config names both rules
+### C1: The advisory config names the forbidden-text rule
 
 Check: grep -q forbidden-text .mdsmith-tells.yml
 
