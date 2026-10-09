@@ -2,9 +2,9 @@
 
 ## Goal
 
-Add `taskfactory work <ID> --adapter <omp|pi|claude> --model <id>
-[--timeout <duration>]` so TaskFactory itself launches the chosen adapter in a
-claimed task's worktree. The command never commits, verifies, integrates or
+Add the command
+`taskfactory work <ID> --adapter <omp|pi|claude> --model <id> [--timeout <duration>]`
+so TaskFactory itself launches the chosen adapter in a claimed task's worktree. The command never commits, verifies, integrates or
 fails a task for the worker.
 
 ## Dependencies
@@ -103,7 +103,7 @@ a scratch repository with a fake adapter binary on PATH, claim a task and run
 `work` for an exit 0, an exit 1 and a timeout. Report each exit code, the
 printed next step and `git status` before and after.
 
-## Notes
+**Notes (not part of the contract):**
 
 Open questions for the owner:
 
