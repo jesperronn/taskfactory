@@ -734,12 +734,19 @@ taskfactory integrate
 taskfactory check-main
 taskfactory promote <ID>
 taskfactory fail <ID> --outcome <FAILED|BLOCKED>
+taskfactory work <ID> --adapter <omp|pi|claude> --model <id>
 taskfactory <command> --help
 ```
 
 `taskfactory fail` moves a claimed active task to `tasks/failed` and commits
 only that move. Its last attempt evidence must have the same outcome, or pass
 `--reason` when no evidence exists. `taskfactory requeue` does not exist yet.
+
+`taskfactory work` launches the chosen local worker adapter in a claimed task's
+worktree. Adapter and model are always explicit; `--haiku-model` is also
+required for `claude`. It writes only its log under `.taskfactory/logs/<ID>/`,
+and never commits, verifies, integrates or fails a task. A worker exit of 0 is
+a claim: run `taskfactory verify <ID>` next.
 
 `taskfactory validate` with no arguments checks the task files in `inbox` and
 `ready`. Pass task files or folders to check only those, for example
