@@ -234,8 +234,8 @@ const promoteHelp = `Usage: taskfactory promote <ID>
 
 Promote the inbox task <ID> to tasks/ready when its complete executable contract
 validates. The task file moves unchanged from tasks/inbox to tasks/ready, the
-whole task tree is validated, and only the two task paths are committed. Any
-refusal or failure restores the file to tasks/inbox.
+inbox, ready, active and failed task files are validated, and only the two task
+paths are committed. Any refusal or failure restores the file to tasks/inbox.
 
 The commit runs as a plain git commit and follows your own Git signing
 configuration. TaskFactory never disables or overrides signing.
@@ -255,9 +255,9 @@ const failHelp = `Usage: taskfactory fail <ID> --outcome <FAILED|BLOCKED>
 Move the claimed active task <ID> to tasks/failed. The last attempt evidence
 record must have the same outcome. Without evidence, --reason is required and
 its text becomes the commit message body. The task file moves unchanged, the
-whole task tree is validated, and only the two task paths are committed. Any
-refusal or failure restores the file to tasks/active. The command never
-archives a task and never changes the evidence file.
+inbox, ready, active and failed task files are validated, and only the two task
+paths are committed. Any refusal or failure restores the file to tasks/active.
+The command never archives a task and never changes the evidence file.
 
 The commit runs as a plain git commit and follows your own Git signing
 configuration. TaskFactory never disables or overrides signing.
@@ -700,8 +700,9 @@ func looksLikePath(arg string) bool {
 const statusHelp = `Usage: taskfactory status
 
 Print the number of task files in each state: inbox, ready, active, failed and
-archive. The whole task tree is validated first; any diagnostics are printed to
-stderr and no task file is changed.
+archive. The inbox, ready, active and failed task files are validated first,
+while the archive is read for task IDs and dependencies only; any diagnostics
+are printed to stderr and no task file is changed.
 
 Flags:
   --help, -h  print this help and exit successfully

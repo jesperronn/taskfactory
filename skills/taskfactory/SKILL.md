@@ -22,7 +22,7 @@ authoritative. This skill is self-contained and works without them.
 | --------------------------------------- | -------------------------------------------------------------------------- |
 | `taskfactory init`                      | Create `.taskfactory/config.toml` and the five `tasks/` state directories. |
 | `taskfactory status`                    | Show task counts per state.                                                |
-| `taskfactory validate [path...]`        | Validate task files, or the whole task tree when no path is given.         |
+| `taskfactory validate [path...]`        | Validate task files; with no path, the inbox and ready task files.         |
 | `taskfactory claim <ID> --owner <name>` | Move a ready task to active, write its Claim block, create worktree.       |
 | `taskfactory verify <ID>`               | Run the task's checks in its worktree and append attempt evidence.         |
 | `taskfactory integrate <ID>`            | Rebase, verify, fast-forward main and archive an accepted task.            |
@@ -115,8 +115,9 @@ Rules:
 - Refine inbox items into ready contracts using the template above.
 - Run `taskfactory promote <ID>` to move the single inbox file for that ID to
   `tasks/ready/`. It validates the file against the ready contract, validates
-  the whole task tree, and commits only the two task paths. A refusal or
-  failure restores the file to `tasks/inbox/` and changes nothing else.
+  the inbox, ready, active and failed task files, and commits only the two task
+  paths. A refusal or failure restores the file to `tasks/inbox/` and changes
+  nothing else.
 - Promotion refuses when the index already has staged paths; unstage them
   first.
 - TaskFactory commits follow the user's Git signing configuration. Do not add
