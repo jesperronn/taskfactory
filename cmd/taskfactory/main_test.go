@@ -791,3 +791,33 @@ func TestSummaryFail(t *testing.T) {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}
 }
+
+func TestTreeArchiveCLI(t *testing.T) {
+	binary := buildCLI(t)
+	root := initGitProject(t)
+	if output, err := runCLI(t, binary, root, "init"); err != nil {
+		t.Fatalf("init: %v\n%s", err, output)
+	}
+	valid := "# TF-101: Example\n\n## Goal\n\nDo it.\n\n## Dependencies\n\nNone\n\n## Scope\n\nImplement.\n\n## Constraints\n\nKeep it small.\n\n## Success criteria\n\n### C1: It works\n\nCheck: go test ./...\n\n## Verification\n\nRun check.\n"
+	if err := os.WriteFile(filepath.Join(root, "tasks", "ready", "TF-101-example.md"), []byte(valid), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	archivePath := filepath.Join(root, "tasks", "archive", "TF-102-old.md")
+	if err := os.WriteFile(archivePath, []byte("# TF-102: Broken\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := runCLI(t, binary, root, "validate", "tasks"); err != nil {
+		t.Fatalf("whole tree with broken archived contract: %v\n%s", err, output)
+	}
+	output, err := runCLI(t, binary, root, "validate", filepath.Join("tasks", "archive"))
+	if processExitCode(err) != 1 || !strings.Contains(string(output), "tasks/archive/TF-102-old.md") {
+		t.Fatalf("archive folder exit=%d output=%s", processExitCode(err), output)
+	}
+	if err := os.WriteFile(archivePath, []byte("# TF-103: Wrong ID\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output, err = runCLI(t, binary, root, "validate", "tasks")
+	if processExitCode(err) != 1 || strings.Count(string(output), "archive read") != 1 {
+		t.Fatalf("unreadable archived ID should be reported once: exit=%d output=%s", processExitCode(err), output)
+	}
+}

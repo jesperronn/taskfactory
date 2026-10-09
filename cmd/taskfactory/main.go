@@ -449,10 +449,13 @@ const validateHelp = `Usage: taskfactory validate [path...]
 
 Validate task files. With no arguments, validate every task file in tasks/inbox
 and tasks/ready. Each path is a task file or a folder inside the project's tasks
-directory; a folder selects the task files directly inside it, and "tasks"
-selects all five state directories. Relative paths are resolved from the
-project root. Task ID uniqueness and dependency references are always checked
-across the whole tree, but only diagnostics for the selected files are reported.
+directory; a folder selects the task files directly inside it. "tasks" selects
+every state except the archive: inbox, ready, active and failed. Relative paths
+are resolved from the project root. Task ID uniqueness and dependency references
+are checked across the whole tree, including tasks/archive, but only diagnostics
+for the selected files are reported. Archived files are not contract-checked
+unless named, but an archived file whose task ID cannot be read, or that is
+empty or not UTF-8, is always reported as an archive read error.
 
 Flags:
   --help, -h  print this help and exit successfully
@@ -561,7 +564,19 @@ func resolveValidateArg(root, arg string) ([]string, error) {
 	}
 	if info.IsDir() {
 		if rel == "tasks" {
-			return listTreeFiles(resolvedRoot, rel)
+			// The archive is read for IDs and dependencies but is not a
+			// contract-checked selection; name tasks/archive to check it.
+			files, err := listTreeFiles(resolvedRoot, rel)
+			if err != nil {
+				return nil, err
+			}
+			var kept []string
+			for _, file := range files {
+				if !strings.HasPrefix(file, "tasks/archive/") {
+					kept = append(kept, file)
+				}
+			}
+			return kept, nil
 		}
 		return listDirectoryFiles(resolvedRoot, rel)
 	}

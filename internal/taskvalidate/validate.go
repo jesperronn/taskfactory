@@ -15,11 +15,12 @@ import (
 )
 
 var (
-	filePattern       = regexp.MustCompile(`^(TF-[0-9]{3})-([a-z0-9]+(?:-[a-z0-9]+)*)\.md$`)
-	idPattern         = regexp.MustCompile(`^TF-[0-9]{3}$`)
-	criterionPattern  = regexp.MustCompile(`^### C([1-9][0-9]*): (.+)$`)
-	htmlPattern       = regexp.MustCompile(`<\s*/?\s*[A-Za-z!][^>]*>`)
-	inlineCodePattern = regexp.MustCompile("`[^`]*`")
+	filePattern           = regexp.MustCompile(`^(TF-[0-9]{3})-([a-z0-9]+(?:-[a-z0-9]+)*)\.md$`)
+	idPattern             = regexp.MustCompile(`^TF-[0-9]{3}$`)
+	archiveHeadingPattern = regexp.MustCompile(`^# (TF-[0-9]{3}): `)
+	criterionPattern      = regexp.MustCompile(`^### C([1-9][0-9]*): (.+)$`)
+	htmlPattern           = regexp.MustCompile(`<\s*/?\s*[A-Za-z!][^>]*>`)
+	inlineCodePattern     = regexp.MustCompile("`[^`]*`")
 )
 
 var states = []string{"inbox", "ready", "active", "failed", "archive"}
@@ -34,28 +35,29 @@ type task struct {
 	deps           []string
 }
 
-// Validate checks all tasks below root, or reports only diagnostics belonging
-// to selected. The complete tree is still read to enforce IDs and dependencies.
+// Validate checks the whole tree below root when selected is empty, or only
+// the task file named by selected otherwise. The whole tree means every state
+// except the archive's contract checks: archived files are read for task IDs
+// and dependency resolution, and their contracts are checked only when named.
 func Validate(root, selected string) []Diagnostic {
 	root, _ = filepath.Abs(root)
+	if selected == "" {
+		archive := filepath.Join(root, "tasks", "archive")
+		return validateTree(root, func(path string) bool { return filepath.Dir(path) != archive })
+	}
 	selectedAbs := ""
-	if selected != "" {
-		if filepath.IsAbs(selected) {
-			selectedAbs, _ = filepath.Abs(selected)
-		} else {
-			selectedAbs, _ = filepath.Abs(filepath.Join(root, selected))
-		}
+	if filepath.IsAbs(selected) {
+		selectedAbs, _ = filepath.Abs(selected)
+	} else {
+		selectedAbs, _ = filepath.Abs(filepath.Join(root, selected))
 	}
-	var keep func(path string) bool
-	if selectedAbs != "" {
-		keep = func(path string) bool { return path == selectedAbs }
-	}
-	return validateTree(root, keep)
+	return validateTree(root, func(path string) bool { return path == selectedAbs })
 }
 
 // ValidateFiles checks the whole tree below root but reports only diagnostics
 // for the files listed in files. Each entry is a slash-separated path relative
-// to root, such as "tasks/ready/TF-001-example.md".
+// to root, such as "tasks/ready/TF-001-example.md". Archive read errors are
+// reported even when the archived file is not listed.
 func ValidateFiles(root string, files []string) []Diagnostic {
 	root, _ = filepath.Abs(root)
 	selected := make(map[string]bool, len(files))
@@ -65,10 +67,13 @@ func ValidateFiles(root string, files []string) []Diagnostic {
 	return validateTree(root, func(path string) bool { return selected[path] })
 }
 
-// validateTree runs every check over the tree below root. When keep is not nil,
-// only diagnostics whose absolute file path satisfies keep are returned.
-func validateTree(root string, keep func(path string) bool) []Diagnostic {
+// validateTree runs every check over the tree below root. Diagnostics are kept
+// only for files that report accepts, except archive read errors, which are
+// always kept. An archived file's contract is checked only when report accepts
+// it, and its dependencies join the graph only then.
+func validateTree(root string, report func(path string) bool) []Diagnostic {
 	var diagnostics []Diagnostic
+	var always []Diagnostic
 	var tasksFound []task
 	validStates := map[string]bool{}
 	for _, state := range states {
@@ -98,6 +103,12 @@ func validateTree(root string, keep func(path string) bool) []Diagnostic {
 			}
 			if entry.Name() == ".gitkeep" && len(data) == 0 {
 				continue
+			}
+			if state == "archive" {
+				if problem := archiveProblem(entry.Name(), data); problem != "" {
+					always = append(always, Diagnostic{relPath(root, path), "archive read", problem})
+					continue
+				}
 			}
 			if len(data) == 0 {
 				diagnostics = append(diagnostics, Diagnostic{relPath(root, path), "heading", "empty task file must contain # TF-NNN: title"})
@@ -135,7 +146,7 @@ func validateTree(root string, keep func(path string) bool) []Diagnostic {
 					item.id = heading[1]
 				}
 			}
-			if state != "inbox" && utf8.Valid(data) {
+			if state != "inbox" && utf8.Valid(data) && (state != "archive" || report(path)) {
 				item.deps = validateContract(root, item, lines, &diagnostics)
 			}
 			tasksFound = append(tasksFound, item)
@@ -174,6 +185,10 @@ func validateTree(root string, keep func(path string) bool) []Diagnostic {
 	for id, matches := range byID {
 		if len(matches) > 1 {
 			for _, item := range matches {
+				if item.state == "archive" {
+					always = append(always, Diagnostic{item.rel, "archive read", fmt.Sprintf("duplicate task ID %s", id)})
+					continue
+				}
 				diagnostics = append(diagnostics, Diagnostic{item.rel, "ID", fmt.Sprintf("duplicate task ID %s", id)})
 			}
 		}
@@ -197,15 +212,13 @@ func validateTree(root string, keep func(path string) bool) []Diagnostic {
 			diagnostics = append(diagnostics, Diagnostic{matches[0].rel, "dependency", "dependency cycle detected"})
 		}
 	}
-	if keep != nil {
-		filtered := diagnostics[:0]
-		for _, d := range diagnostics {
-			if keep(filepath.Join(root, filepath.FromSlash(d.Path))) {
-				filtered = append(filtered, d)
-			}
+	filtered := diagnostics[:0]
+	for _, d := range diagnostics {
+		if report(filepath.Join(root, filepath.FromSlash(d.Path))) {
+			filtered = append(filtered, d)
 		}
-		diagnostics = filtered
 	}
+	diagnostics = append(filtered, always...)
 	sort.Slice(diagnostics, func(i, j int) bool {
 		if diagnostics[i].Path != diagnostics[j].Path {
 			return diagnostics[i].Path < diagnostics[j].Path
@@ -216,6 +229,34 @@ func validateTree(root string, keep func(path string) bool) []Diagnostic {
 		return diagnostics[i].Message < diagnostics[j].Message
 	})
 	return diagnostics
+}
+
+// archiveProblem reports why an archived file cannot provide a task ID for
+// tree-wide checks, or returns "" when its ID can be read. Such problems are
+// reported as archive read errors instead of contract diagnostics.
+func archiveProblem(name string, data []byte) string {
+	if len(data) == 0 {
+		return "archived task file is empty"
+	}
+	if !utf8.Valid(data) {
+		return "archived task file is not valid UTF-8"
+	}
+	fileID := ""
+	if m := filePattern.FindStringSubmatch(name); m != nil {
+		fileID = m[1]
+	}
+	firstLine := strings.SplitN(string(data), "\n", 2)[0]
+	headingID := ""
+	if m := archiveHeadingPattern.FindStringSubmatch(firstLine); m != nil {
+		headingID = m[1]
+	}
+	switch {
+	case fileID == "" && headingID == "":
+		return "cannot read task ID from filename or first line"
+	case fileID != "" && headingID != "" && fileID != headingID:
+		return fmt.Sprintf("heading ID %s does not match filename ID %s", headingID, fileID)
+	}
+	return ""
 }
 
 func validateContract(root string, item task, lines []string, ds *[]Diagnostic) []string {

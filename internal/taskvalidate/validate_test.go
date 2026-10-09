@@ -212,3 +212,74 @@ func TestValidateFilesReportsOnlySelectedFiles(t *testing.T) {
 		}
 	}
 }
+
+func TestTreeSkipsArchivedContracts(t *testing.T) {
+	root := project(t)
+	writeTask(t, root, "ready", "TF-101-example.md", validTask)
+	archived := filepath.Join("tasks", "archive", "TF-102-old.md")
+	writeTask(t, root, "archive", "TF-102-old.md", "# TF-102: Broken\n")
+	if got := Validate(root, ""); len(got) != 0 {
+		t.Fatalf("whole tree reported archived contract: %#v", got)
+	}
+	if got := ValidateFiles(root, []string{"tasks/ready/TF-101-example.md"}); len(got) != 0 {
+		t.Fatalf("selection reported archived contract: %#v", got)
+	}
+	if got := Validate(root, archived); len(got) == 0 || got[0].Path != "tasks/archive/TF-102-old.md" {
+		t.Fatalf("named archived file diagnostics = %#v, want its contract", got)
+	}
+	if got := ValidateFiles(root, []string{"tasks/archive/TF-102-old.md"}); len(got) == 0 {
+		t.Fatal("archive folder selection reported no contract diagnostics")
+	}
+}
+
+func TestTreeArchiveReadErrors(t *testing.T) {
+	root := project(t)
+	writeTask(t, root, "ready", "TF-101-example.md", validTask)
+	writeTask(t, root, "archive", "scratch.md", "# Scratch\n")
+	writeTask(t, root, "archive", "TF-104-mismatch.md", "# TF-105: Other\n")
+	writeTask(t, root, "archive", "TF-106-empty.md", "")
+	if err := os.WriteFile(filepath.Join(root, "tasks", "archive", "TF-107-binary.md"), []byte{0xff, 0xfe}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, got := range map[string][]Diagnostic{
+		"whole tree": Validate(root, ""),
+		"ready only": ValidateFiles(root, []string{"tasks/ready/TF-101-example.md"}),
+	} {
+		joined := diagnosticsText(got)
+		for _, file := range []string{"scratch.md", "TF-104-mismatch.md", "TF-106-empty.md", "TF-107-binary.md"} {
+			want := "tasks/archive/" + file + ": archive read"
+			if n := strings.Count(joined, want); n != 1 {
+				t.Errorf("%s: %q reported %d times, want once:\n%s", name, want, n, joined)
+			}
+		}
+	}
+}
+
+func TestTreeKeepsReadyFailures(t *testing.T) {
+	root := project(t)
+	writeTask(t, root, "archive", "TF-102-old.md", "# TF-102: Old\n")
+	dep := strings.Replace(strings.Replace(validTask, "TF-101", "TF-103", 1), "None", "- TF-102", 1)
+	writeTask(t, root, "ready", "TF-103-dep.md", dep)
+	if joined := diagnosticsText(Validate(root, "")); strings.Contains(joined, "dependency") {
+		t.Fatalf("archived dependency was not satisfied:\n%s", joined)
+	}
+
+	broken := strings.Replace(validTask, "Check: go test ./...", "Check:", 1)
+	writeTask(t, root, "ready", "TF-104-broken.md", strings.Replace(broken, "TF-101", "TF-104", 1))
+	if joined := diagnosticsText(Validate(root, "")); !strings.Contains(joined, "TF-104-broken.md: Success criteria") {
+		t.Fatalf("broken ready task not reported:\n%s", joined)
+	}
+
+	writeTask(t, root, "ready", "TF-105-ready-dep.md", strings.Replace(validTask, "TF-101", "TF-105", 1))
+	unresolved := strings.Replace(strings.Replace(validTask, "TF-101", "TF-106", 1), "None", "- TF-105", 1)
+	writeTask(t, root, "ready", "TF-106-unresolved.md", unresolved)
+	if joined := diagnosticsText(Validate(root, "")); !strings.Contains(joined, "TF-106-unresolved.md: dependency") {
+		t.Fatalf("ready dependency outside archive not reported:\n%s", joined)
+	}
+
+	writeTask(t, root, "archive", "TF-101-old.md", "# TF-101: Old\n")
+	writeTask(t, root, "ready", "TF-101-example.md", validTask)
+	if joined := diagnosticsText(Validate(root, "")); !strings.Contains(joined, "TF-101-example.md: ID: duplicate task ID TF-101") {
+		t.Fatalf("archive and ready duplicate not reported:\n%s", joined)
+	}
+}
