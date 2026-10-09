@@ -743,7 +743,7 @@ the whole task tree.
 
 The exact interface will evolve while TaskFactory dogfoods itself.
 
-### Commit signing
+## Commit signing
 
 TaskFactory commits, including `taskfactory promote` and the archive commit
 made by `taskfactory integrate`, run a plain `git commit`. They follow your Git

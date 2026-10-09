@@ -234,9 +234,8 @@ validates. The task file moves unchanged from tasks/inbox to tasks/ready, the
 whole task tree is validated, and only the two task paths are committed. Any
 refusal or failure restores the file to tasks/inbox.
 
-The commit runs as a plain git commit and follows your Git signing
-configuration (commit.gpgsign, gpg.program, user.signingkey). TaskFactory never
-disables or overrides signing.
+The commit runs as a plain git commit and follows your own Git signing
+configuration. TaskFactory never disables or overrides signing.
 
 Flags:
   --help, -h  print this help and exit successfully
