@@ -15,10 +15,13 @@ failing command and enough context to continue.
 Before claiming work, validate the ready task with
 `go run ./cmd/taskfactory validate tasks/ready/<ID>-<slug>.md`. After editing a
 task contract or changing its lifecycle state, run
-`go run ./cmd/taskfactory validate tasks` to check all five task directories. The
-single-file form still checks tree-wide ID uniqueness and dependency references,
-while reporting only diagnostics for the selected task. `bin/test` runs the
-whole-tree form automatically.
+`go run ./cmd/taskfactory validate tasks` to check the whole tree: inbox, ready,
+active and failed. The archive is not contract-checked by this form; it is read
+for task IDs and dependency resolution only, and an archived file whose ID
+cannot be read is reported as an archive read error. Name `tasks/archive` to
+check archived contracts. The single-file form still checks tree-wide ID
+uniqueness and dependency references, while reporting only diagnostics for the
+selected task. `bin/test` runs the whole-tree form automatically.
 
 ## Evidence and operational files
 

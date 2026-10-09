@@ -11,8 +11,9 @@ bin/lint
 Before claiming a task, validate its ready contract with
 `go run ./cmd/taskfactory validate tasks/ready/<ID>-<slug>.md`. After changing
 task files or moving a task between states, run
-`go run ./cmd/taskfactory validate tasks` to validate the complete task tree.
-`bin/test` also runs whole-tree validation.
+`go run ./cmd/taskfactory validate tasks` to validate the whole tree: every
+state except the archive's contract checks. Archived tasks are read for IDs and
+dependencies only. `bin/test` also runs whole-tree validation.
 
 Repair failures you introduced and rerun both checks. If a required check cannot
 run, report the blocker and the command output; do not claim it passed. Never

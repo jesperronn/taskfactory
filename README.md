@@ -739,7 +739,10 @@ taskfactory <command> --help
 `taskfactory validate` with no arguments checks the task files in `inbox` and
 `ready`. Pass task files or folders to check only those, for example
 `taskfactory validate tasks/archive`. Use `taskfactory validate tasks` to check
-the whole task tree.
+the whole tree: every state except the archive. Archived tasks are history, so
+the whole-tree form does not check their contracts. It still reads them for task
+IDs and dependency resolution, and reports an archived file whose ID cannot be
+read as an archive read error.
 
 The exact interface will evolve while TaskFactory dogfoods itself.
 

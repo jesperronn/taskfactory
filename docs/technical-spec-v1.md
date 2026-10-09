@@ -78,8 +78,12 @@ infrastructure yet.
 
 `taskfactory validate` with no arguments checks the inbox and ready task files.
 Paths given as arguments are task files or folders under `tasks/`;
-`taskfactory validate tasks` checks the whole tree. Tree-wide ID and dependency
-checks always run, but only diagnostics for the selected files are reported.
+`taskfactory validate tasks` checks the whole tree, meaning every state except
+the archive's contract checks. Archived files are still read for task IDs and
+dependency resolution, where a dependency is satisfied only by an archived task;
+an archived file whose ID cannot be read is reported as an archive read error.
+Tree-wide ID and dependency checks always run, but only diagnostics for the
+selected files are reported.
 
 Implement the protocol's invariants: one owner per claim, resolved dependencies,
 max four workers by default, separate worktrees, worker verification/repair

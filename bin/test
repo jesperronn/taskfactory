@@ -42,6 +42,8 @@ else
   printf 'SKIP: Go tests (go.mod not found)\n'
 fi
 
+# Whole-tree validation: every state except the archive's contract checks.
+# Archived files are still read for task IDs and dependency resolution.
 if [[ -f go.mod ]]; then
   if [[ -f .taskfactory/config.toml ]]; then
     printf '==> go run ./cmd/taskfactory validate tasks\n'
