@@ -11,8 +11,8 @@ None
 
 ## Scope
 
-README.md quick start only: the paragraph after step 9 that covers the fail
-branch. Add the stall recipe there.
+README.md quick start only: the paragraph that starts "If the worker cannot
+finish" and covers the fail branch. Add the stall recipe there.
 
 ## Constraints
 

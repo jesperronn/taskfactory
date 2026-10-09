@@ -176,6 +176,18 @@ cannot repair), run `taskfactory fail TF-001 --outcome BLOCKED --reason "..."`
 `tasks/failed/` and commits only that move. There is no `requeue`: to retry,
 edit the task by hand into `tasks/ready/` and claim it again.
 
+To see the fail branch for yourself, make a worker stall in your scratch repo
+with a one-second timeout. Claim a ready task, then run:
+
+```sh
+taskfactory work TF-001 --adapter pi --model <id> --timeout 1s
+```
+
+It prints the log path, then `worker stalled: timeout exceeded` with the
+adapter's progress note, and exits 1. It also prints a line that starts
+`suggestion, not run: taskfactory fail TF-001 --outcome BLOCKED`. Run that
+fail command yourself; `work` never fails a task.
+
 Automatic versus a human decision:
 
 - Automatic once started: `claim` (branch and worktree), the worker's own
