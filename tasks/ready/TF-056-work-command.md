@@ -3,9 +3,10 @@
 ## Goal
 
 Add the command
-`taskfactory work <ID> --adapter <omp|pi|claude> --model <id> [--timeout <duration>]`
-so TaskFactory itself launches the chosen adapter in a claimed task's worktree. The command never commits, verifies, integrates or
-fails a task for the worker.
+`taskfactory work <ID> --adapter <omp|pi|claude> --model <id>`, with an
+optional `--timeout <duration>`, so TaskFactory itself launches the chosen
+adapter in a claimed task's worktree. The command never commits, verifies,
+integrates or fails a task for the worker.
 
 ## Dependencies
 
