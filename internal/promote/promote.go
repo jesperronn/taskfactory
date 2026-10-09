@@ -149,7 +149,7 @@ func commitPaths(root, id string, paths []string) error {
 		return err
 	}
 	message := fmt.Sprintf("docs: promote %s to ready", id)
-	_, err := git(root, append([]string{"commit", "--quiet", "--no-gpg-sign", "--only", "-m", message, "--"}, paths...)...)
+	_, err := git(root, append([]string{"commit", "--quiet", "--only", "-m", message, "--"}, paths...)...)
 	return err
 }
 
