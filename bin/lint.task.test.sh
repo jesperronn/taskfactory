@@ -18,8 +18,39 @@ fi
 # The validator needs a Git working tree; the fixture only needs the directory.
 git -C "$project" init -q
 
-task_rel=tasks/ready/TF-041-lint-tasks-with-validate.md
-pristine="$repo_dir/$task_rel"
+# A self-contained ready-contract fixture, so this test never depends on a live
+# task staying in tasks/ready. Its one dependency, TF-003, is archived.
+task_rel=tasks/ready/TF-900-lint-fixture.md
+pristine="$fixture/pristine.md"
+cat > "$pristine" <<'TASK'
+# TF-900: Lint fixture
+
+## Goal
+
+Exercise the combined Markdown lint and contract validation.
+
+## Dependencies
+
+- TF-003
+
+## Scope
+
+A fixture task used only by bin/lint.task.test.sh.
+
+## Constraints
+
+Do not use this task for any real work.
+
+## Success criteria
+
+### C1: The fixture check passes
+
+Check: true
+
+## Verification
+
+Run the check and report the exit code.
+TASK
 target="$project/$task_rel"
 
 # misformat: a second blank line after the title breaks no-multiple-blanks
@@ -31,7 +62,7 @@ misformat() {
 # break_contract: a dependency on a task that does not exist fails validation
 # and leaves the Markdown intact.
 break_contract() {
-  sed 's/^- TF-045$/- TF-999/' "$pristine" > "$target"
+  sed 's/^- TF-003$/- TF-999/' "$pristine" > "$target"
 }
 
 run_lint() {  # run_lint ARGS...: sets status and output
@@ -89,7 +120,7 @@ printf '[PASS] both halves broken names both failures\n'
 # Archive: tasks/archive is not validated. The copy below has a broken contract
 # but clean Markdown, so a validate run would fail and exit 1.
 archive_rel=tasks/archive/TF-990-archived-copy.md
-sed -e 's/TF-041/TF-990/g' -e 's/^- TF-045$/- TF-999/' "$pristine" \
+sed -e 's/TF-900/TF-990/g' -e 's/^- TF-003$/- TF-999/' "$pristine" \
   > "$project/$archive_rel"
 run_lint "$archive_rel"
 if (( status != 0 )) || [[ $output == *"task validation"* ]]; then
