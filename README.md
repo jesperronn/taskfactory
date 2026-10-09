@@ -170,6 +170,19 @@ that exists today; `requeue` is not one of them.
 9. Check main. `taskfactory check-main` reruns main's verification. After
    a successful loop `git status --short` is empty.
 
+`integrate` and `fail` keep the task worktree and its branch. After either,
+`git worktree list` still shows `.taskfactory/worktrees/TF-001` on
+`task/TF-001`, and `git branch` still lists `task/TF-001`. Nothing removes
+them. Remove them yourself when you no longer need them:
+
+```sh
+git worktree remove .taskfactory/worktrees/TF-001
+git branch -d task/TF-001
+```
+
+`git branch -d` deletes the branch only when Git sees it as merged. After
+`integrate` the branch is merged into main, so it deletes.
+
 If the worker cannot finish (a stall, a refusal, a failed check that it
 cannot repair), run `taskfactory fail TF-001 --outcome BLOCKED --reason "..."`
 (or `FAILED` after a failed verify attempt). It moves the task to
