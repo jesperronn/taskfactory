@@ -7,9 +7,7 @@ of the quick start, the requeue branch and the CI signal.
 
 ## Dependencies
 
-- TF-013
 - TF-020
-- TF-033
 
 ## Scope
 
@@ -27,19 +25,23 @@ Delivered:
   `docs/experiments/quickstart-verbatim-rerun-2.md`.
 - README fixes from that re-run: TF-064 (stall recipe for the fail branch)
   and TF-065 (worktrees and branches remain after integrate and fail).
+- The `requeue` branch in the quick start: TF-049 (`README.md`, quick start
+  fail step and the command list; matches `taskfactory requeue --help`).
 
 Remaining:
 
-- Document the `requeue` branch in the quick start once TF-049 lands. Blocked
-  on TF-049 via TF-033.
-- TF-020 (CI run on GitHub) as a prerequisite signal; still in inbox.
+- TF-020 (CI run on GitHub) as a prerequisite signal; still in inbox. It
+  needs a push, so it is the only open item.
 
 ## Success criteria
 
 - The quick start is followed verbatim in a scratch repo without manual
-  fixes. Done: `docs/experiments/quickstart-verbatim-rerun-2.md` (zero
+  fixes. Met: `docs/experiments/quickstart-verbatim-rerun-2.md` (zero
   workarounds, real local model, worker commit and integration in the record).
 - Experiment record includes commands, exit codes and the integration commit.
-  Done: `docs/experiments/e2e-local-worker.md` (TF-057) and
+  Met: `docs/experiments/e2e-local-worker.md` (TF-057) and
   `docs/experiments/quickstart-verbatim-rerun-2.md`.
-- The quick start documents the `requeue` branch. Open: blocked on TF-049.
+- The quick start documents the `requeue` branch. Met by TF-049: `README.md`
+  states that `taskfactory requeue TF-001` (or `--to inbox`) retries an
+  unclaimed failed task and that claimed failed tasks are refused.
+- CI signal (TF-020): open, needs a push to GitHub.
