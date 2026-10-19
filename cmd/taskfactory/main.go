@@ -297,10 +297,23 @@ is flagged for a human decision and the command refuses, listing every claimed
 failed task. Make that decision with --discard-claim: it removes the whole
 Claim block from the task file and then proceeds as for an unclaimed task. The
 commit message body records the discarded claim (owner, branch, base commit and
-worktree path) so nothing is lost. --discard-claim never deletes the worktree or
-the branch; remove them yourself with git worktree remove <worktree path> and
-git branch -d <branch> (or -D when it is unmerged). On a task without a Claim
-block the flag is accepted and nothing is discarded.
+worktree path) so nothing is lost. On a task without a Claim block the flag is
+accepted and nothing is discarded.
+
+After the requeue commit, requeue removes the task's old worktree and branch so
+the task can be claimed again: the ones recorded in the Claim block, or the
+conventional .taskfactory/worktrees/<ID> and task/<ID> when there is no Claim
+block. It does so only when that is safe: the worktree is clean (no changes, no
+untracked files), the branch has no commits outside local main, and the
+worktree is inside .taskfactory/worktrees and is not the main checkout. These
+checks run first; if one fails requeue exits 1 and changes nothing, and prints
+the manual commands: git worktree remove <worktree path>, then git branch -d
+<branch> (or git branch -D <branch> if you decide to discard the commits). The
+cleanup never forces anything and never uses -D. Unmerged worker commits always
+need your decision; failed tasks usually carry worker commits, so the refusal is
+the common case and the manual commands remain the way. A missing worktree or
+branch is not an error. If the cleanup fails after the commit, requeue exits 1
+and says the task was requeued and what was left behind.
 
 The attempt counter is reset by renaming
 .taskfactory/evidence/<ID>.jsonl to .taskfactory/evidence/<ID>.attempts-<N>.jsonl,
@@ -318,7 +331,8 @@ Flags:
 
 Exit codes:
   0  the task was moved and committed
-  1  the command was refused or failed; the file was restored
+  1  the command was refused or failed; the file was restored, or the task was
+     requeued but removing its old worktree or branch failed (stated in the error)
   2  invalid usage
 `
 
@@ -400,20 +414,39 @@ func requeueTask(args []string) error {
 	}
 	res, err := requeue.RequeueWith(root, id, target, opts)
 	if err != nil {
+		var cleanup requeue.CleanupError
+		if errors.As(err, &cleanup) {
+			printRequeued(id, opts, res)
+		}
 		return err
 	}
+	printRequeued(id, opts, res)
+	return nil
+}
+
+// printRequeued reports a successful requeue, including what the safe cleanup
+// removed. It is also used when the cleanup failed after the commit.
+func printRequeued(id string, opts requeue.Options, res requeue.Result) {
 	fmt.Fprintf(os.Stdout, "requeued %s to %s\n", id, res.Path)
 	if opts.DiscardClaim {
 		if res.Discarded == "" {
 			fmt.Fprintf(os.Stdout, "%s had no Claim block; nothing was discarded\n", id)
 		} else {
-			fmt.Fprintf(os.Stdout, "discarded the Claim block (recorded in the commit message); the worktree and branch were not touched\n")
+			fmt.Fprintf(os.Stdout, "discarded the Claim block (recorded in the commit message)\n")
 		}
 	}
 	if res.Aside != "" {
 		fmt.Fprintf(os.Stdout, "attempt counter reset: the %d earlier attempt(s) moved to %s; the next attempt starts at 1\n", res.Attempts, res.Aside)
 	}
-	return nil
+	if res.RemovedWorktree != "" {
+		fmt.Fprintf(os.Stdout, "removed worktree %s\n", res.RemovedWorktree)
+	}
+	if res.RemovedBranch != "" {
+		fmt.Fprintf(os.Stdout, "removed branch %s\n", res.RemovedBranch)
+	}
+	if res.RemovedWorktree == "" && res.RemovedBranch == "" {
+		fmt.Fprintf(os.Stdout, "no old worktree or branch to remove\n")
+	}
 }
 
 // requeueHelpText returns requeueHelp. Inside a project it appends the claimed

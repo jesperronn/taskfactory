@@ -1,7 +1,9 @@
 // Package requeue moves one failed task file back to tasks/ready or
 // tasks/inbox and commits only the two task paths involved. The task file is
-// never edited, except that --discard-claim removes its Claim block. The attempt counter is reset by renaming the old evidence file
-// aside; the evidence bytes are never edited, truncated or deleted.
+// never edited, except that --discard-claim removes its Claim block. The attempt
+// counter is reset by renaming the old evidence file aside; the evidence bytes
+// are never edited, truncated or deleted. After the commit it removes the task's
+// old worktree and branch when that is safe (see cleanup.go).
 package requeue
 
 import (
@@ -50,6 +52,10 @@ type Result struct {
 	Aside     string
 	Attempts  int
 	Discarded string
+	// RemovedWorktree and RemovedBranch name what the safe cleanup removed
+	// after the commit; each is empty when there was nothing to remove.
+	RemovedWorktree string
+	RemovedBranch   string
 }
 
 // ParseArgs parses the arguments after "requeue" like ParseOptions and drops
@@ -164,8 +170,9 @@ func Requeue(projectRoot, id, target string) (Result, error) {
 
 // RequeueWith is Requeue with options. With DiscardClaim, a Claim block in the
 // failed task is removed from the moved file and recorded in the commit message
-// body; the worktree and branch of the claim are never touched. Without it, a
-// claimed task is refused as before.
+// body. Whenever the old worktree and branch are clean and merged into main they
+// are removed after the commit; otherwise requeue refuses before any change.
+// Without the flag, a claimed task is refused as before.
 func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 	if !idPattern.MatchString(id) {
 		return Result{}, usagef("task %q is not a valid task ID (expected TF-NNN)", id)
@@ -214,6 +221,11 @@ func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 		if hasClaim(newData) {
 			return Result{}, fmt.Errorf("refusing to requeue %s: the Claim block could not be removed cleanly", id)
 		}
+	}
+	// Safety checks for the old worktree and branch run before any change.
+	plan, err := planCleanup(root, id, claimBlockOf(data, hasClaim(data)))
+	if err != nil {
+		return Result{}, err
 	}
 	if _, err := os.Lstat(targetAbs); err == nil {
 		return Result{}, fmt.Errorf("refusing to requeue %s: %s already exists", id, targetRel)
@@ -281,7 +293,23 @@ func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 		}
 		return Result{}, restore(fmt.Errorf("commit requeue of %s: %w", id, err))
 	}
-	return Result{Path: targetRel, Aside: asideRel, Attempts: attempts, Discarded: discarded}, nil
+	res := Result{Path: targetRel, Aside: asideRel, Attempts: attempts, Discarded: discarded}
+	// The cleanup runs last, after the requeue commit succeeded.
+	removedWorktree, removedBranch, err := plan.run(root)
+	res.RemovedWorktree, res.RemovedBranch = removedWorktree, removedBranch
+	if err != nil {
+		return res, cleanupFailure(id, targetRel, plan, removedWorktree, err)
+	}
+	return res, nil
+}
+
+// claimBlockOf returns the Claim block text of data, or "" when it has none.
+func claimBlockOf(data []byte, claimed bool) string {
+	if !claimed {
+		return ""
+	}
+	_, block := stripClaim(data)
+	return block
 }
 
 // claimedRefusal builds the human-decision refusal listing every claimed failed

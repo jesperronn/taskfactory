@@ -103,3 +103,28 @@ func TestRequeueDiscardClaimFlagUsageAndHelp(t *testing.T) {
 		})
 	}
 }
+
+func TestRequeueCleanupHelp(t *testing.T) {
+	binary := buildCLI(t)
+	out, err := runCLI(t, binary, t.TempDir(), "requeue", "--help")
+	if got := processExitCode(err); got != 0 {
+		t.Fatalf("exit = %d; output: %s", got, out)
+	}
+	for _, want := range []string{
+		"removes the task's old worktree and branch",
+		"changes nothing",
+		"git worktree remove <worktree path>",
+		"git branch -d",
+		"git branch -D <branch>",
+		"Unmerged worker commits always",
+		"the refusal is\nthe common case",
+		"was requeued and what was left behind",
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("help lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(string(out), "never deletes the worktree") {
+		t.Error("help still says requeue never deletes the worktree")
+	}
+}

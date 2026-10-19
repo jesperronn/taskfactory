@@ -70,9 +70,27 @@ decision and the refusal (exit 1) names `--discard-claim`. With that flag the
 owner decides: requeue removes the whole Claim block, then proceeds as for an
 unclaimed task, and the commit message body records the discarded claim
 (owner, branch, base commit and worktree). On a task without a Claim block the
-flag discards nothing and is not an error. It never deletes the worktree or
-the branch; those are removed by hand. This is the only case where a Claim
-block is removed; the retention rule applies to every other transition. Requeue
+flag discards nothing and is not an error. This is the only case where a Claim
+block is removed; the retention rule applies to every other transition.
+
+After the requeue commit, requeue removes the task's old worktree and branch so
+the task can be claimed again. They are the Worktree and Branch recorded in the
+Claim block, read before the block is removed, or, with no Claim block, the
+conventional `.taskfactory/worktrees/<ID>` and `task/<ID>` when they exist. A
+worktree path outside the project's `.taskfactory/worktrees` is never touched.
+The cleanup is safe only when the worktree is clean (`git status --porcelain`
+prints nothing, untracked files included), the branch has no commits outside
+local main (`git rev-list main..<branch>` is empty, which includes a branch
+still at its Claim base commit) and the worktree is not the project's main
+checkout. These checks run first; if one fails, requeue exits 1 and changes
+nothing, and prints `git worktree remove <path>` then `git branch -d <branch>`
+(or `-D` if the human decides to discard the commits). If safe, the cleanup
+runs last with `git worktree remove` and `git branch -d`, never forced and never
+`-D`; a missing worktree or branch is not an error, and a cleanup failure after
+the commit exits 1 and states that the task was requeued. Unmerged worker
+commits therefore always need the human to decide; failed tasks usually carry
+worker commits, so the refusal is the common case and the manual commands
+remain the way. Requeue
 resets the worker attempt counter by renaming
 `.taskfactory/evidence/<ID>.jsonl` to
 `.taskfactory/evidence/<ID>.attempts-<N>.jsonl`, where N is its highest attempt

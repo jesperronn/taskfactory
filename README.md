@@ -198,15 +198,37 @@ run `taskfactory requeue TF-001 --discard-claim` (add `--to inbox` if needed).
 It removes the whole Claim block from the task file, then requeues as above.
 The commit message body records the discarded claim (owner, branch, base
 commit and worktree path), so nothing is lost. On a task without a Claim block
-the flag is accepted and nothing is discarded. `--discard-claim` never deletes
-the worktree or the branch of the earlier claim; remove them yourself:
+the flag is accepted and nothing is discarded.
+
+After the requeue commit, `requeue` also removes the task's old worktree and
+branch, so that `taskfactory claim` can create them again (otherwise the claim
+fails with `branch task/TF-001 already exists`). It removes the ones recorded
+in the Claim block, or the conventional `.taskfactory/worktrees/TF-001` and
+`task/TF-001` when there is no Claim block. It does this only when it is safe:
+the worktree has no changes and no untracked files, the branch has no commits
+that are not already on local `main` (a branch still at its claim base commit
+counts), and the worktree is inside `.taskfactory/worktrees` and is not the
+main checkout. These checks run before anything changes. If one fails,
+`requeue` exits 1, changes nothing and prints the commands below. The cleanup
+runs `git worktree remove` and `git branch -d`, never with force and never with
+`-D`. A worktree or branch that is already gone is not an error. If the cleanup
+fails after the commit, `requeue` exits 1 and says the task was requeued and
+what it left behind.
+
+Unmerged worker commits therefore always need your decision. A failed task
+usually carries worker commits, so the refusal is the common case, and the
+manual commands remain the way. Inspect the commits with
+`git log --oneline main..task/TF-001`, then remove the worktree and branch
+yourself and run `requeue` again:
 
 ```sh
-git worktree remove <worktree path from the commit message>
-git branch -D <branch from the commit message>
+git worktree remove <worktree path from the Claim block>
+git branch -d <branch from the Claim block>
 ```
 
-Use `git branch -d` instead when the branch is merged.
+Use `git branch -D <branch>` instead only when you decide to discard the
+unmerged commits, and `git worktree remove --force` only to discard changes
+in the worktree.
 
 To see the fail branch for yourself, make a worker stall in your scratch repo
 with a one-second timeout. Claim a ready task, then run:
@@ -887,7 +909,9 @@ failed task to `tasks/ready` (default) or `tasks/inbox` and commits only that
 move; it refuses a failed task that has a Claim block, flagging it for a human
 decision, unless `--discard-claim` removes the block and records it in the
 commit message. It renames its evidence file aside to
-`.taskfactory/evidence/<ID>.attempts-<N>.jsonl` to reset the attempt counter.
+`.taskfactory/evidence/<ID>.attempts-<N>.jsonl` to reset the attempt counter,
+and removes the task's old worktree and branch when they are clean and merged
+into main; otherwise it refuses and changes nothing.
 
 `taskfactory work` launches the chosen local worker adapter in a claimed task's
 worktree. Adapter and model are always explicit; `--haiku-model` is also
