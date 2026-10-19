@@ -38,8 +38,8 @@ Owner decision, final:
    `git worktree remove <path>` without `--force`, then
    `git branch -d <branch>`, never `-D`. If the cleanup fails after the commit,
    requeue exits 1 and states plainly that the task was requeued and committed,
-   and what was left behind. The success output reports what was removed. A worktree or
-   branch that is already missing is not an error.
+   and what was left behind. The success output reports what was removed. A
+   worktree or branch that is already missing is not an error.
 5. Nothing is removed when requeue is refused for any other reason.
 6. Unmerged worker commits always need the human to decide. Failed tasks
    usually carry worker commits, so the refusal is the common case and the
