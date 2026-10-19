@@ -203,7 +203,7 @@ the worktree or the branch of the earlier claim; remove them yourself:
 
 ```sh
 git worktree remove <worktree path from the commit message>
-git branch -D task/TF-001-impl
+git branch -D <branch from the commit message>
 ```
 
 Use `git branch -d` instead when the branch is merged.
