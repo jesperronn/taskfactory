@@ -32,8 +32,9 @@ authoritative. This skill is self-contained and works without them.
 | `taskfactory requeue <ID> [--to <state>]`     | Requeue a failed task; removes its old worktree and branch if safe.        |
 | `taskfactory work <ID> --adapter A --model M` | Launch a local worker in a claimed task's worktree; writes only its log.   |
 
-Anything not in this table is **not implemented**. Do not invent other
-subcommands or flags. Run `taskfactory <command> --help` for flags.
+Any subcommand not in this table is **not implemented**. Flags that exist are
+the ones in a command's `--help` and in this skill, such as `requeue
+--discard-claim` below. Do not invent others.
 
 ## Not yet implemented
 
@@ -134,6 +135,16 @@ Rules:
   deciding on retry, escalation or integration.
 - Integrate one candidate at a time with `taskfactory integrate <ID>`. Do not
   integrate a task whose latest attempt is not `PASS`.
+- A stalled or failed worker is recorded with `taskfactory fail <ID> --outcome
+  BLOCKED` (or `FAILED`); `work` prints that command as a suggestion and never
+  runs it. To retry, a planner or orchestrator runs `taskfactory requeue <ID>`.
+  A failed task that still has a Claim block is refused as a human decision:
+  rerun with `--discard-claim` to remove the Claim block (it is recorded in the
+  commit message). The old evidence is renamed aside and the attempt counter
+  restarts at 1. `requeue` also removes the old worktree and branch, but only
+  when the worktree is clean and the branch has no commits that are not on
+  main; otherwise it refuses, changes nothing and prints the git commands for
+  the human to run.
 - If main fails its checks, stop integration and create a remediation task
   (stop-the-line; see `docs/protocol-v1.md` when present).
 
