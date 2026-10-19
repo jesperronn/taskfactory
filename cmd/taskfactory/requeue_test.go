@@ -73,3 +73,33 @@ func TestRequeueHelpListsClaimedFailedTasksInsideProject(t *testing.T) {
 		t.Errorf("help does not list only TF-007: %s", out)
 	}
 }
+
+func TestRequeueDiscardClaimFlagUsageAndHelp(t *testing.T) {
+	binary := buildCLI(t)
+	outside := t.TempDir()
+	tests := []struct {
+		name     string
+		args     []string
+		exitCode int
+		want     string
+	}{
+		{"help names flag", []string{"requeue", "--help"}, 0, "--discard-claim"},
+		{"help names worktree removal", []string{"requeue", "--help"}, 0, "git worktree remove"},
+		{"flag with value", []string{"requeue", "TF-001", "--discard-claim=yes"}, 2, "takes no value"},
+		{"repeated flag", []string{"requeue", "TF-001", "--discard-claim", "--discard-claim"}, 2, "only once"},
+		{"bad target with flag", []string{"requeue", "TF-001", "--discard-claim", "--to", "active"}, 2, "ready or inbox"},
+		{"unknown flag", []string{"requeue", "TF-001", "--discard"}, 2, "unknown argument"},
+		{"accepted outside project", []string{"requeue", "TF-001", "--discard-claim"}, 1, "not inside a Git working tree"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := runCLI(t, binary, outside, tt.args...)
+			if got := processExitCode(err); got != tt.exitCode {
+				t.Fatalf("exit = %d, want %d; output: %s", got, tt.exitCode, out)
+			}
+			if !strings.Contains(string(out), tt.want) {
+				t.Errorf("output %q lacks %q", out, tt.want)
+			}
+		})
+	}
+}

@@ -50,7 +50,7 @@ var commandSummaries = []commandSummary{
 	{"check-main", "check-main", "recheck a stopped main"},
 	{"promote", "promote <ID>", "move an inbox task to ready"},
 	{"fail", "fail <ID> --outcome <FAILED|BLOCKED>", "move a claimed task to failed"},
-	{"requeue", "requeue <ID> [--to ready|inbox]", "return a failed task to ready or inbox"},
+	{"requeue", "requeue <ID> [--to ready|inbox] [--discard-claim]", "return a failed task to ready or inbox"},
 	{"work", "work <ID> --adapter <omp|pi|claude> --model <id>", "launch a local worker on a claimed task"},
 }
 
@@ -284,7 +284,7 @@ Exit codes:
 
 // requeueHelp is printed by "requeue --help" and "requeue -h". Inside a project
 // the claimed failed task IDs are appended.
-const requeueHelp = `Usage: taskfactory requeue <ID> [--to ready|inbox]
+const requeueHelp = `Usage: taskfactory requeue <ID> [--to ready|inbox] [--discard-claim]
 
 Return the failed task <ID> to tasks/ready (the default) or tasks/inbox. The task
 file moves unchanged from tasks/failed. For ready, the complete executable
@@ -294,7 +294,13 @@ restores the file to tasks/failed.
 
 A failed task that still has a Claim block is never requeued automatically: it
 is flagged for a human decision and the command refuses, listing every claimed
-failed task.
+failed task. Make that decision with --discard-claim: it removes the whole
+Claim block from the task file and then proceeds as for an unclaimed task. The
+commit message body records the discarded claim (owner, branch, base commit and
+worktree path) so nothing is lost. --discard-claim never deletes the worktree or
+the branch; remove them yourself with git worktree remove <worktree path> and
+git branch -d <branch> (or -D when it is unmerged). On a task without a Claim
+block the flag is accepted and nothing is discarded.
 
 The attempt counter is reset by renaming
 .taskfactory/evidence/<ID>.jsonl to .taskfactory/evidence/<ID>.attempts-<N>.jsonl,
@@ -384,7 +390,7 @@ func failTask(args []string) error {
 }
 
 func requeueTask(args []string) error {
-	id, target, err := requeue.ParseArgs(args)
+	id, target, opts, err := requeue.ParseOptions(args)
 	if err != nil {
 		return err
 	}
@@ -392,11 +398,18 @@ func requeueTask(args []string) error {
 	if err != nil {
 		return err
 	}
-	res, err := requeue.Requeue(root, id, target)
+	res, err := requeue.RequeueWith(root, id, target, opts)
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stdout, "requeued %s to %s\n", id, res.Path)
+	if opts.DiscardClaim {
+		if res.Discarded == "" {
+			fmt.Fprintf(os.Stdout, "%s had no Claim block; nothing was discarded\n", id)
+		} else {
+			fmt.Fprintf(os.Stdout, "discarded the Claim block (recorded in the commit message); the worktree and branch were not touched\n")
+		}
+	}
 	if res.Aside != "" {
 		fmt.Fprintf(os.Stdout, "attempt counter reset: the %d earlier attempt(s) moved to %s; the next attempt starts at 1\n", res.Attempts, res.Aside)
 	}

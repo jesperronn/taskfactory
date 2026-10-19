@@ -8,9 +8,10 @@ import (
 )
 
 // CheckNoSigningOverride fails when any non-test Go file in this package
-// contains a signing override. The requeue command must run a plain git commit.
+// contains a signing override. The requeue command, including --discard-claim,
+// must run a plain git commit.
 func TestCheckNoSigningOverride(t *testing.T) {
-	banned := []string{"no-gpg-sign", "gpgsign"}
+	banned := []string{"no-gpg-sign", "gpgsign", "gpg-sign", "commit.gpg", "signingkey", `"-S"`}
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatal(err)

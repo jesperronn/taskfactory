@@ -63,9 +63,16 @@ continue.
 
 ### Requeue
 
-`taskfactory requeue <ID> [--to ready|inbox]` returns a failed task to
-`tasks/ready/` or `tasks/inbox/`. A failed task that still has a Claim block is
-never requeued automatically; it is flagged for a human decision. Requeue
+`taskfactory requeue <ID> [--to ready|inbox] [--discard-claim]` returns a
+failed task to `tasks/ready/` or `tasks/inbox/`. A failed task that still has a
+Claim block is never requeued automatically; it is flagged for a human
+decision and the refusal (exit 1) names `--discard-claim`. With that flag the
+owner decides: requeue removes the whole Claim block, then proceeds as for an
+unclaimed task, and the commit message body records the discarded claim
+(owner, branch, base commit and worktree). On a task without a Claim block the
+flag discards nothing and is not an error. It never deletes the worktree or
+the branch; those are removed by hand. This is the only case where a Claim
+block is removed; the retention rule applies to every other transition. Requeue
 resets the worker attempt counter by renaming
 `.taskfactory/evidence/<ID>.jsonl` to
 `.taskfactory/evidence/<ID>.attempts-<N>.jsonl`, where N is its highest attempt

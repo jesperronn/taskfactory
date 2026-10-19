@@ -1,6 +1,6 @@
-// Package requeue moves one unclaimed failed task file back to tasks/ready or
+// Package requeue moves one failed task file back to tasks/ready or
 // tasks/inbox and commits only the two task paths involved. The task file is
-// never edited. The attempt counter is reset by renaming the old evidence file
+// never edited, except that --discard-claim removes its Claim block. The attempt counter is reset by renaming the old evidence file
 // aside; the evidence bytes are never edited, truncated or deleted.
 package requeue
 
@@ -36,56 +36,85 @@ func usagef(format string, args ...any) error {
 	return UsageError{fmt.Sprintf(format, args...)}
 }
 
-// Result describes a successful requeue. Aside is the slash-separated path the
-// old evidence file was renamed to, or empty when no evidence was reset.
-type Result struct {
-	Path     string
-	Aside    string
-	Attempts int
+// Options holds the optional requeue flags. DiscardClaim removes the Claim
+// block from a claimed failed task and records it in the commit message.
+type Options struct {
+	DiscardClaim bool
 }
 
-// ParseArgs parses the arguments after "requeue": one task ID and an optional
-// --to ready|inbox, given as "--to value" or "--to=value". It returns the ID
-// and the target state, which defaults to "ready". Unknown, repeated or extra
-// arguments are usage errors.
+// Result describes a successful requeue. Aside is the slash-separated path the
+// old evidence file was renamed to, or empty when no evidence was reset.
+// Discarded is the Claim block that was removed, or empty when none was.
+type Result struct {
+	Path      string
+	Aside     string
+	Attempts  int
+	Discarded string
+}
+
+// ParseArgs parses the arguments after "requeue" like ParseOptions and drops
+// the options. It returns the ID and the target state.
 func ParseArgs(args []string) (string, string, error) {
+	id, target, _, err := ParseOptions(args)
+	return id, target, err
+}
+
+// ParseOptions parses the arguments after "requeue": one task ID, an optional
+// --to ready|inbox, given as "--to value" or "--to=value", and an optional
+// --discard-claim. It returns the ID, the target state, which defaults to
+// "ready", and the options. Unknown, repeated or extra arguments and a value
+// given to --discard-claim are usage errors.
+func ParseOptions(args []string) (string, string, Options, error) {
 	id, target, seenTo := "", "ready", false
+	var opts Options
+	seenDiscard := false
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		name, value, hasValue := strings.Cut(arg, "=")
+		if name == "--discard-claim" {
+			if hasValue {
+				return "", "", opts, usagef("--discard-claim takes no value, got %q", arg)
+			}
+			if seenDiscard {
+				return "", "", opts, usagef("--discard-claim may be given only once")
+			}
+			seenDiscard = true
+			opts.DiscardClaim = true
+			continue
+		}
 		if name != "--to" {
 			if strings.HasPrefix(arg, "-") {
-				return "", "", usagef("unknown argument %q", arg)
+				return "", "", opts, usagef("unknown argument %q", arg)
 			}
 			if id != "" {
-				return "", "", usagef("unexpected extra argument %q", arg)
+				return "", "", opts, usagef("unexpected extra argument %q", arg)
 			}
 			id = arg
 			continue
 		}
 		if seenTo {
-			return "", "", usagef("--to may be given only once")
+			return "", "", opts, usagef("--to may be given only once")
 		}
 		seenTo = true
 		if !hasValue {
 			if i+1 >= len(args) {
-				return "", "", usagef("--to requires a value; use ready or inbox")
+				return "", "", opts, usagef("--to requires a value; use ready or inbox")
 			}
 			i++
 			value = args[i]
 		}
 		if value != "ready" && value != "inbox" {
-			return "", "", usagef("--to must be ready or inbox, not %q", value)
+			return "", "", opts, usagef("--to must be ready or inbox, not %q", value)
 		}
 		target = value
 	}
 	if id == "" {
-		return "", "", usagef("missing task ID; usage: taskfactory requeue <ID> [--to ready|inbox]")
+		return "", "", opts, usagef("missing task ID; usage: taskfactory requeue <ID> [--to ready|inbox] [--discard-claim]")
 	}
 	if !idPattern.MatchString(id) {
-		return "", "", usagef("task %q is not a valid task ID (expected TF-NNN)", id)
+		return "", "", opts, usagef("task %q is not a valid task ID (expected TF-NNN)", id)
 	}
-	return id, target, nil
+	return id, target, opts, nil
 }
 
 // ClaimedFailed returns the sorted IDs of failed task files that still carry a
@@ -130,6 +159,14 @@ func hasClaim(data []byte) bool {
 // tree and commits only the task paths. Any refusal or failure restores the
 // file and the evidence name and changes nothing else.
 func Requeue(projectRoot, id, target string) (Result, error) {
+	return RequeueWith(projectRoot, id, target, Options{})
+}
+
+// RequeueWith is Requeue with options. With DiscardClaim, a Claim block in the
+// failed task is removed from the moved file and recorded in the commit message
+// body; the worktree and branch of the claim are never touched. Without it, a
+// claimed task is refused as before.
+func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 	if !idPattern.MatchString(id) {
 		return Result{}, usagef("task %q is not a valid task ID (expected TF-NNN)", id)
 	}
@@ -168,8 +205,15 @@ func Requeue(projectRoot, id, target string) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("read %s: %w", failedRel, err)
 	}
+	newData, discarded := data, ""
 	if hasClaim(data) {
-		return Result{}, claimedRefusal(root, id)
+		if !opts.DiscardClaim {
+			return Result{}, claimedRefusal(root, id)
+		}
+		newData, discarded = stripClaim(data)
+		if hasClaim(newData) {
+			return Result{}, fmt.Errorf("refusing to requeue %s: the Claim block could not be removed cleanly", id)
+		}
 	}
 	if _, err := os.Lstat(targetAbs); err == nil {
 		return Result{}, fmt.Errorf("refusing to requeue %s: %s already exists", id, targetRel)
@@ -194,7 +238,17 @@ func Requeue(projectRoot, id, target string) (Result, error) {
 		if err := os.Rename(targetAbs, failedAbs); err != nil {
 			return fmt.Errorf("%w; manual recovery required: restore %s to %s: %v", cause, targetRel, failedRel, err)
 		}
+		if discarded != "" {
+			if err := os.WriteFile(failedAbs, data, info.Mode().Perm()); err != nil {
+				return fmt.Errorf("%w; manual recovery required: rewrite the Claim block of %s: %v", cause, failedRel, err)
+			}
+		}
 		return cause
+	}
+	if discarded != "" {
+		if err := os.WriteFile(targetAbs, newData, info.Mode().Perm()); err != nil {
+			return Result{}, restore(fmt.Errorf("remove the Claim block from %s: %w", targetRel, err))
+		}
 	}
 	if target == "ready" {
 		if diagnostics := taskvalidate.ValidateFiles(root, []string{targetRel}); len(diagnostics) > 0 {
@@ -220,14 +274,14 @@ func Requeue(projectRoot, id, target string) (Result, error) {
 		}
 	}
 
-	if err := commitPaths(root, id, target, paths, asideRel, attempts); err != nil {
+	if err := commitPaths(root, id, target, paths, asideRel, attempts, discarded); err != nil {
 		// Unstage only the moved paths so the index matches HEAD again.
 		if _, resetErr := git(root, append([]string{"reset", "-q", "--"}, paths...)...); resetErr != nil {
 			err = errors.Join(err, fmt.Errorf("unstage requeued paths: %w", resetErr))
 		}
 		return Result{}, restore(fmt.Errorf("commit requeue of %s: %w", id, err))
 	}
-	return Result{Path: targetRel, Aside: asideRel, Attempts: attempts}, nil
+	return Result{Path: targetRel, Aside: asideRel, Attempts: attempts, Discarded: discarded}, nil
 }
 
 // claimedRefusal builds the human-decision refusal listing every claimed failed
@@ -238,7 +292,7 @@ func claimedRefusal(root, id string) error {
 	if err != nil || list == "" {
 		list = id
 	}
-	return fmt.Errorf("refusing to requeue %s: it still has a Claim block, so it is flagged for a human decision; claimed failed tasks: %s", id, list)
+	return fmt.Errorf("refusing to requeue %s: it still has a Claim block, so it is flagged for a human decision; claimed failed tasks: %s; to decide, rerun with --discard-claim, which removes the Claim block and records it in the commit message", id, list)
 }
 
 // planEvidence returns the evidence path, the aside path and the highest
@@ -316,7 +370,7 @@ func findFailedFile(root, id string) (string, error) {
 
 // commitPaths stages the given paths and commits only their contents with
 // --only. When the counter was reset, the body names the aside file.
-func commitPaths(root, id, target string, paths []string, asideRel string, attempts int) error {
+func commitPaths(root, id, target string, paths []string, asideRel string, attempts int, discarded string) error {
 	if _, err := git(root, append([]string{"add", "--all", "--"}, paths...)...); err != nil {
 		return err
 	}
@@ -324,8 +378,41 @@ func commitPaths(root, id, target string, paths []string, asideRel string, attem
 	if asideRel != "" {
 		args = append(args, "-m", fmt.Sprintf("Attempt counter reset: the evidence file with %d attempt(s) was renamed to %s. The next attempt starts at 1.", attempts, asideRel))
 	}
+	if discarded != "" {
+		args = append(args, "-m", "Discarded claim (removed from the task file; the worktree and branch were not touched):\n\n"+discarded)
+	}
 	_, err := git(root, append(append(args, "--"), paths...)...)
 	return err
+}
+
+// stripClaim removes every "## Claim" section from data: the heading line, the
+// lines up to the next "## " heading or the end of the file, and the blank
+// lines before the heading. The rest of the file is kept byte for byte. It
+// returns the new bytes and the removed block, trimmed of surrounding blank
+// lines and with the lines exactly as they were.
+func stripClaim(data []byte) ([]byte, string) {
+	lines := strings.SplitAfter(string(data), "\n")
+	var kept, removed []string
+	for i := 0; i < len(lines); i++ {
+		if strings.TrimRight(lines[i], "\r\n") != "## Claim" {
+			kept = append(kept, lines[i])
+			continue
+		}
+		for len(kept) > 0 && strings.TrimRight(kept[len(kept)-1], "\r\n") == "" {
+			kept = kept[:len(kept)-1]
+		}
+		start := i
+		i++
+		for i < len(lines) && !strings.HasPrefix(lines[i], "## ") {
+			i++
+		}
+		removed = append(removed, strings.TrimSpace(strings.Join(lines[start:i], "")))
+		if i < len(lines) {
+			kept = append(kept, "\n")
+		}
+		i--
+	}
+	return []byte(strings.Join(kept, "")), strings.Join(removed, "\n\n")
 }
 
 // git runs git with -C root and returns its stdout. Failures include stderr.
