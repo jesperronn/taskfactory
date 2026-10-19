@@ -29,7 +29,7 @@ authoritative. This skill is self-contained and works without them.
 | `taskfactory check-main`                      | Rerun main's verification after integration stopped it.                    |
 | `taskfactory promote <ID>`                    | Move an inbox task to ready and commit only that move.                     |
 | `taskfactory fail <ID> --outcome <O>`         | Move a claimed active task to failed and commit only that move.            |
-| `taskfactory requeue <ID> [--to <state>]`     | Requeue a failed task; `--discard-claim` decides a claimed one; safe cleanup. |
+| `taskfactory requeue <ID> [--to <state>]`     | Requeue a failed task; removes its old worktree and branch if safe.        |
 | `taskfactory work <ID> --adapter A --model M` | Launch a local worker in a claimed task's worktree; writes only its log.   |
 
 Anything not in this table is **not implemented**. Do not invent other
