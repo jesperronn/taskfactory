@@ -2,9 +2,8 @@
 
 Question: does shorter, simpler worker-facing text measurably help a small
 local model finish tasks? This branch measures the text, simplifies two
-files, and prepares the experiment. **The worker experiment was not run**:
-the local model server was down (see "Experiment: not measured"). There is
-no evidence either way that simpler text helps the worker.
+files, and runs 18 worker runs. Result: all 18 passed, so the experiment
+shows no measurable difference between the original and simplified text.
 
 ## Method
 
@@ -108,47 +107,67 @@ Not changed: protocol, task-format, README and the task files. They are
 large, normative or recorded evidence, and rewording them was not needed to
 answer the question. The archive is untouched.
 
-## Experiment: not measured
+## Experiment
 
-Plan: three tiny task types (fix a return value so a test passes, add a
-function a test already calls, fix gofmt and vet complaints), two
-conditions (A original instructions and verbose task, B simplified
-instructions and short task, same requirements), three runs each, 18 runs,
-one at a time on pi with `Ornith-1.5-35B-A3B-MLX-4bit`.
+Three tiny task types: (1) fix a return value so a test passes, (2) add a
+function a test already calls, (3) fix gofmt and vet complaints. Two
+conditions: A = original `worker-instructions.md` (from `main`) and verbose
+task text; B = simplified instructions and short task text with the same
+requirements and `Check:` lines. Three repetitions per cell, 18 runs, one at
+a time, in a fresh scratch repo each, with pi and
+`Ornith-1.5-35B-A3B-MLX-4bit`, `--timeout 8m`, then `taskfactory verify`.
+Order: A then B in repetitions 1 and 3, B then A in repetition 2. Harness:
+`docs/experiments/TF-039-run.sh`; texts: `docs/experiments/TF-039-fixtures/`.
+No run was repeated or discarded. Invalid runs: 0, so each condition has 9
+valid runs.
 
-Blocker: before starting, `curl -s -m 3 http://127.0.0.1:8000/v1/models`
-returned nothing (HTTP code 000), `lsof` showed no listener on port 8000 and
-no omlx or mlx process was running. A `taskfactory work` preflight confirmed
-`endpoint 127.0.0.1:8000 is unreachable ... connection refused`. The
-worker did not start the server. Zero worker runs were made, so there is no
-comparison table and the answer to the question is unknown.
+| Rep | Cond | Type | Work exit | Verify | Secs | Committed |
+| --- | ---- | ---- | --------- | ------ | ---- | --------- |
+| 1   | A    | 1    | 0         | PASS   | 66   | yes       |
+| 1   | B    | 1    | 0         | PASS   | 51   | yes       |
+| 1   | A    | 2    | 0         | PASS   | 25   | yes       |
+| 1   | B    | 2    | 0         | PASS   | 27   | yes       |
+| 1   | A    | 3    | 0         | PASS   | 31   | yes       |
+| 1   | B    | 3    | 0         | PASS   | 22   | yes       |
+| 2   | B    | 1    | 0         | PASS   | 29   | yes       |
+| 2   | A    | 1    | 0         | PASS   | 29   | yes       |
+| 2   | B    | 2    | 0         | PASS   | 40   | yes       |
+| 2   | A    | 2    | 0         | PASS   | 35   | yes       |
+| 2   | B    | 3    | 0         | PASS   | 185  | yes       |
+| 2   | A    | 3    | 0         | PASS   | 36   | yes       |
+| 3   | A    | 1    | 0         | PASS   | 24   | yes       |
+| 3   | B    | 1    | 0         | PASS   | 34   | yes       |
+| 3   | A    | 2    | 0         | PASS   | 36   | yes       |
+| 3   | B    | 2    | 0         | PASS   | 37   | yes       |
+| 3   | A    | 3    | 0         | PASS   | 51   | yes       |
+| 3   | B    | 3    | 0         | PASS   | 60   | yes       |
 
-What is ready to run (not run against a model):
+Summary (pass rate, median wall seconds):
 
-- `docs/experiments/TF-039-run.sh BINARY A|B 1|2|3` builds a scratch repo
-  with local Git config, copies the original (A, from `main`) or simplified
-  (B) instructions, writes the task, then runs promote, claim, work and
-  verify and prints one result line.
-- `docs/experiments/TF-039-fixtures/t1-A.task` to `t3-B.task` are the six
-  task texts. B has the same goals, scope, constraints and `Check:` lines as
-  A, in short sentences.
-- Setup check: with the server down, each of the six cases reached the work
-  step, preflight refused, and `verify` then reported the expected FAIL for
-  an unfixed task (1 check failed). These are not experiment runs.
+| Group  | A pass | A median | B pass | B median |
+| ------ | ------ | -------- | ------ | -------- |
+| Type 1 | 3/3    | 29       | 3/3    | 34       |
+| Type 2 | 3/3    | 35       | 3/3    | 37       |
+| Type 3 | 3/3    | 36       | 3/3    | 60       |
+| All    | 9/9    | 35       | 9/9    | 37       |
 
-Run order for 18 runs (alternate, one at a time): for round 1 to 3, for
-type 1 to 3, run A then B in round 1 and 3, B then A in round 2. Record
-work exit code, verify result, seconds and whether a commit exists. Do not
-rerun failures. With n of 3 per cell and a 35B local model, run-to-run
-noise alone can explain small differences.
+Odd: one B run (rep 2, type 3) took 185 s against 22 to 60 s for its
+siblings. Its cause was not investigated. Without it the B median is 35.
+
+Conclusion: no measurable difference. Both conditions passed every run, so
+the pass rate cannot separate them (a ceiling effect: the tasks are too easy
+to fail). Median times differ by 2 s overall, well inside the run-to-run
+spread (22 to 185 s). With n of 9 per condition, three per task type, only
+a large effect on pass rate or time could show, and these tasks leave no
+room for one. The data cannot say whether simpler text helps harder tasks,
+longer contexts or weaker models.
 
 ## Recommendation
 
-Drop nothing and adopt nothing on evidence yet, because no runs were made.
-The simplified `worker-instructions.md` is cheap and keeps every
-requirement, so it can be merged as plain editing. Keep the readability
+Adopt for worker instructions only, as a style guide, not a gate. The
+simplified `worker-instructions.md` keeps every requirement and showed no
+harm, but also no measurable gain, so do not claim a benefit. Keep the
 rules advisory (`bin/lint --readability`) and out of the default lint:
-23 + 26 findings remain in the protocol, task-format and README files and
-the task files. Decide the per-kind thresholds after the experiment runs.
-If it shows no difference, adopt the worker-instruction threshold only as a
-style guide for new text, not as a gate.
+23 MDS023, 26 MDS024 and 6 MDS036 findings remain in the protocol,
+task-format and README files and the task files. Do not enable them
+repo-wide. To learn more, rerun with harder tasks or a weaker model.
