@@ -23,3 +23,12 @@ local dry run.
 - `bin/release --dry-run v0.0.0-test` builds archives and checksums in a temp
   directory and does not tag or push.
 - Release is refused on a dirty tree or failing checks.
+
+## Closed
+
+Delivered:
+
+- Nothing delivered. The original scope is split into new tasks.
+
+Remainder: TF-069, TF-070, TF-071, TF-072, TF-073, TF-074, TF-075, TF-076,
+TF-077
