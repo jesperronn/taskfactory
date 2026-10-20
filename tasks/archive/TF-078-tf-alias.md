@@ -105,3 +105,11 @@ Run `bin/install.test.sh` with no argument and then with each scenario
 name, `bin/test`, `bin/lint` and
 `go run ./cmd/taskfactory validate tasks` from the repository root and report
 each exit code. Also report the README grep result.
+
+## Claim
+
+Owner: sonnet-worker
+Branch: task/TF-078
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-078
+Base commit: 855fa6589b889ad86b935db86c4d2bd17c524d90
+Started at: 2026-10-20T22:28:34Z
