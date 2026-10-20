@@ -37,3 +37,31 @@ if (( good_status != 0 )); then
   exit 1
 fi
 printf '[PASS] formatted Markdown exits 0\n'
+
+# Claimed task worktrees live under .taskfactory/ and are full repository
+# copies. A whole-project run must ignore that tree, but not be too broad.
+wt="$fixture/project/.taskfactory/worktrees/TF-999"
+mkdir -p "$wt/docs" "$wt/bin"
+printf '# Title\n\n\nBad spacing.\n' > "$wt/docs/bad.md"
+printf 'package x\nfunc  f( ){}\n' > "$wt/bad.go"
+printf '#!/usr/bin/env bash\necho $1\n' > "$wt/bin/bad.sh"
+wt_status=0
+wt_output=$("$fixture/project/bin/lint" 2>&1) || wt_status=$?
+if (( wt_status != 0 )); then
+  printf '[FAIL] .taskfactory worktrees ignored: exit=%s output=%s\n' "$wt_status" "$wt_output" >&2
+  exit 1
+fi
+printf '[PASS] whole-project lint ignores .taskfactory/worktrees and exits 0\n'
+
+printf 'package x\nfunc  f( ){}\n' > "$fixture/project/bad.go"
+printf '#!/usr/bin/env bash\necho $1\n' > "$fixture/project/bin/bad.sh"
+printf '# Title\n\n\nBad spacing.\n' > "$fixture/project/docs/bad.md"
+out_status=0
+out_output=$("$fixture/project/bin/lint" 2>&1) || out_status=$?
+if (( out_status == 0 )) || [[ $out_output != *docs/bad.md* ]] ||
+  [[ $out_output != *"bad.go"* ]] || [[ $out_output != *"bin/bad.sh"* ]] ||
+  [[ $out_output == *.taskfactory* ]]; then
+  printf '[FAIL] bad files outside .taskfactory: exit=%s output=%s\n' "$out_status" "$out_output" >&2
+  exit 1
+fi
+printf '[PASS] bad files outside .taskfactory still fail and are named\n'

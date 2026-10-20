@@ -87,9 +87,9 @@ whole_project=0
 if (( ${#paths[@]} == 0 )); then
   whole_project=1
   while IFS= read -r f; do go_files+=("${f#./}"); done < <(
-    find . \( -name .git -o -name .claude -o -name node_modules \) -prune -o -name '*.go' -type f -print)
+    find . \( -name .git -o -name .claude -o -name .taskfactory -o -name node_modules \) -prune -o -name '*.go' -type f -print)
   while IFS= read -r f; do sh_files+=("${f#./}"); done < <(
-    find . \( -name .git -o -name .claude -o -name node_modules \) -prune -o -name '*.sh' -type f -print)
+    find . \( -name .git -o -name .claude -o -name .taskfactory -o -name node_modules \) -prune -o -name '*.sh' -type f -print)
   for f in bin/*; do
     if [[ -f $f ]] && is_shell "$f"; then sh_files+=("$f"); fi
   done

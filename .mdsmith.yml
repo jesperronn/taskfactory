@@ -38,3 +38,4 @@ ignore:
   - testdata/markdown/**
   - node_modules/**
   - .claude/worktrees/**
+  - .taskfactory/**
