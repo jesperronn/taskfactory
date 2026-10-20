@@ -49,7 +49,7 @@ if want archives; then
     "taskfactory_${v}_darwin_arm64.tar.gz" \
     "taskfactory_${v}_linux_amd64.tar.gz" \
     "taskfactory_${v}_linux_arm64.tar.gz")
-  assert_eq "$(cd "${out}" && ls | LC_ALL=C sort)" "${expected}" "exactly the five archives and SHA256SUMS exist"
+  assert_eq "$(cd "${out}" && find . -mindepth 1 -maxdepth 1 | sed 's|^\./||' | LC_ALL=C sort)" "${expected}" "exactly the five archives and SHA256SUMS exist"
   for t in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64; do
     assert_eq "$(tar -tzf "${out}/taskfactory_${v}_${t}.tar.gz" | LC_ALL=C sort)" "LICENSE
 taskfactory" "${t} archive holds only the binary and LICENSE"

@@ -55,7 +55,7 @@ frontmatter_ok "${skill_md}" || die "SKILL.md frontmatter needs name and descrip
 
 if [[ -e "${out_arg}" ]]; then
   [[ -d "${out_arg}" ]] || die "output path exists and is not a directory: ${out_arg}"
-  if [[ -n "$(ls -A "${out_arg}")" ]]; then
+  if [[ -n "$(find "${out_arg}" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
     die "output directory is not empty: ${out_arg}"
   fi
 fi
