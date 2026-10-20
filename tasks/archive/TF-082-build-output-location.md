@@ -77,3 +77,11 @@ Check: bin/test
 Run `bin/build.test.sh output`, `bin/test`, `bin/lint` and
 `go run ./cmd/taskfactory validate tasks` from the repository root and report
 each exit code.
+
+## Claim
+
+Owner: sonnet-worker-082
+Branch: task/TF-082
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-082
+Base commit: 8a61ce51d8251750d46e7f0084685c29b72c6012
+Started at: 2026-10-20T23:09:03Z
