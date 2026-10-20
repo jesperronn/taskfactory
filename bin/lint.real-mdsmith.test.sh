@@ -44,7 +44,7 @@ wt="$fixture/project/.taskfactory/worktrees/TF-999"
 mkdir -p "$wt/docs" "$wt/bin"
 printf '# Title\n\n\nBad spacing.\n' > "$wt/docs/bad.md"
 printf 'package x\nfunc  f( ){}\n' > "$wt/bad.go"
-printf '#!/usr/bin/env bash\necho $1\n' > "$wt/bin/bad.sh"
+printf "%s\n" "#!/usr/bin/env bash" "echo \$1" > "$wt/bin/bad.sh"
 wt_status=0
 wt_output=$("$fixture/project/bin/lint" 2>&1) || wt_status=$?
 if (( wt_status != 0 )); then
@@ -54,7 +54,7 @@ fi
 printf '[PASS] whole-project lint ignores .taskfactory/worktrees and exits 0\n'
 
 printf 'package x\nfunc  f( ){}\n' > "$fixture/project/bad.go"
-printf '#!/usr/bin/env bash\necho $1\n' > "$fixture/project/bin/bad.sh"
+printf "%s\n" "#!/usr/bin/env bash" "echo \$1" > "$fixture/project/bin/bad.sh"
 printf '# Title\n\n\nBad spacing.\n' > "$fixture/project/docs/bad.md"
 out_status=0
 out_output=$("$fixture/project/bin/lint" 2>&1) || out_status=$?
