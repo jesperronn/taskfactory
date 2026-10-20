@@ -62,7 +62,7 @@ EOP
   read -r b1 b2 b3 <<EOP
 ${pb}
 EOP
-  local x y
+  local x y z
   for x in 1 2 3; do
     eval "y=\$a${x}; z=\$b${x}"
     if ((10#${y} < 10#${z})); then
