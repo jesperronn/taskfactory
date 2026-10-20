@@ -48,7 +48,7 @@ user's own git configuration. `bin/release` refuses to create the tag unless
 
 ## The `bin/release` command
 
-`bin/release <version> [--tag] [--allow-unsigned]` is a dry run by default
+`bin/release <version> [--tag [--publish]] [--allow-unsigned]` is a dry run by default
 and changes nothing in the repository. It collects and reports all gate
 failures together and exits 1 if any failed (usage errors exit 2). The gates
 are: the branch is `main`, the tree is clean (untracked files included),
@@ -57,7 +57,8 @@ not exist, and `bin/test` and `bin/lint` pass. It then prints the last tag
 and the bump advice, runs `bin/package` into a temporary directory, and
 prints the exact `git push origin <tag>` command for a human. With `--tag` it
 also creates the annotated tag locally with
-`git tag -a <version> -m "Release <version>"`. It never pushes.
+`git tag -a <version> -m "Release <version>"`. It never pushes unless
+`--publish` is given (see Publishing).
 
 Tests override parts through environment variables: `RELEASE_TEST_CMD`,
 `RELEASE_LINT_CMD`, `RELEASE_PACKAGE_CMD`, `RELEASE_NO_ORIGIN_OK=1` (skip the
@@ -99,13 +100,42 @@ Two paths publish a release, and both are idempotent:
 
 - A GitHub Actions workflow runs on a pushed tag and uses only the built-in
   `GITHUB_TOKEN`. This is the normal path.
-- The local fallback `bin/release --publish` is for when the workflow is
-  unavailable. It may push the tag.
+- The local fallback `bin/release --tag --publish` is for when the workflow
+  is unavailable. It may push the tag.
 
-The race: a tag push from the local path also triggers the workflow, so the
-two can run at the same time. Idempotency means whichever runs second finds
-the existing release and does not create a duplicate. Prefer the workflow;
-use the fallback only when it cannot run.
+### Local fallback: `bin/release <version> --tag --publish`
+
+`--publish` requires `--tag` (otherwise exit 2), is never the default and is
+the only path that pushes or calls `gh`. `--allow-unsigned` works as for
+`--tag`. The order is:
+
+1. The TF-073 gates, including the signing gate.
+2. `gh release view <version>`. If a release already exists, or its state
+   cannot be read (anything other than "release not found"), the script exits
+   1 before creating the tag or pushing anything, so the repository is left
+   unchanged.
+3. `bin/package` runs once and its output is reused.
+4. The annotated tag is created locally, then pushed with
+   `git push origin <version>`.
+5. `gh release view` is checked again. If the workflow already created the
+   release, only missing or changed assets are uploaded
+   (`bin/release-publish`, `gh release upload --clobber`) and the script
+   prints "release already created by the workflow, assets reconciled".
+   Otherwise `bin/release-publish` creates the release and the script prints
+   "created by local publish".
+
+If publishing fails after the push, the tag is on origin and the script says
+so; the workflow may have published the release, so the human checks and
+decides.
+
+The race: the tag push also starts the workflow. The workflow may create the
+release between the second check and the publish, so both paths are
+idempotent instead of exclusive: whichever runs second finds the existing
+release and only reconciles assets. The workflow is the normal path. Use the
+local path only when Actions is unavailable, and then do not wait for or rerun
+the workflow. Because the tag push starts it anyway, check the Actions run
+afterwards. What real GitHub and `gh` do here is unverified until a human
+runs it with a real push.
 
 ## Automated workers
 

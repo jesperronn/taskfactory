@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bin/release <version> [--tag] [--allow-unsigned]
+# bin/release <version> [--tag [--publish]] [--allow-unsigned]
 #
 # Default is a DRY RUN that changes nothing in the repository: it checks the
 # gates, prints the bump advice, builds the artifacts into a temporary
@@ -9,6 +9,15 @@
 # never signs explicitly, never pushes, never publishes and never uses the
 # network except the optional `git fetch origin`. Signing follows the user's
 # own git configuration. Policy: docs/release.md.
+#
+# --publish (requires --tag, never the default; the local fallback for when
+# GitHub Actions is unavailable) is the ONLY path that pushes or uses gh.
+# Order: gates and signing gate; gh release view (a release that already
+# exists, or an unreadable state, stops here with the repository unchanged);
+# bin/package once; create the tag; git push origin <version>; gh release
+# view again (the workflow may have created the release meanwhile); then
+# bin/release-publish, which is idempotent: it creates the release or only
+# uploads missing/changed assets. Every gh call goes through gh_cmd.
 #
 # Environment overrides (meant for tests; the real checks take minutes):
 #   RELEASE_TEST_CMD       command run instead of bin/test
@@ -27,15 +36,21 @@ script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "${script_dir}/release.lib.sh"
 
 usage() {
-  echo "Usage: bin/release <version> [--tag] [--allow-unsigned]" >&2
+  echo "Usage: bin/release <version> [--tag [--publish]] [--allow-unsigned]" >&2
+}
+
+gh_cmd() {
+  gh "$@"
 }
 
 version=""
 do_tag=0
 allow_unsigned=0
+do_publish=0
 for arg in "$@"; do
   case "${arg}" in
     --tag) do_tag=1 ;;
+    --publish) do_publish=1 ;;
     --allow-unsigned) allow_unsigned=1 ;;
     -*) echo "bin/release: unknown option: ${arg}" >&2; usage; exit 2 ;;
     *)
@@ -45,6 +60,11 @@ for arg in "$@"; do
   esac
 done
 if [[ -z "${version}" ]]; then usage; exit 2; fi
+if (( do_publish )) && (( ! do_tag )); then
+  echo "bin/release: --publish requires --tag" >&2
+  usage
+  exit 2
+fi
 if ! release_parse_version "${version}" >/dev/null; then
   echo "bin/release: invalid version: ${version} (want vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N)" >&2
   usage
@@ -150,6 +170,20 @@ if (( ${#failures[@]} )); then
   exit 1
 fi
 
+# --publish: refuse before anything changes when a release exists or its
+# state cannot be read. Nothing is tagged or pushed at this point.
+if (( do_publish )); then
+  if view_out=$(gh_cmd release view "${version}" 2>&1); then
+    echo "bin/release: a GitHub release ${version} already exists; nothing was tagged or pushed." >&2
+    exit 1
+  elif [[ "${view_out}" != *"release not found"* ]]; then
+    printf '%s\n' "${view_out}" >&2
+    echo "bin/release: cannot read the release state for ${version}; nothing was tagged or pushed." >&2
+    exit 1
+  fi
+  echo "ok: no GitHub release ${version} yet"
+fi
+
 # Prove the artifacts build.
 pkg_out=$(mktemp -d "${TMPDIR:-/tmp}/release-package.XXXXXX")
 pkg_dir="${pkg_out}/artifacts"
@@ -166,12 +200,41 @@ done
 echo "checksums: ${pkg_dir}/SHA256SUMS"
 
 echo
-if (( do_tag )); then
-  git tag -a "${version}" -m "Release ${version}"
-  echo "Created annotated tag ${version} locally. Nothing was pushed."
-else
+if (( ! do_tag )); then
   echo "Dry run: nothing was changed. A real run with --tag would create the"
   echo "annotated tag ${version} locally (message: Release ${version})."
+  echo "To publish, a human runs:"
+  echo "  git push origin ${version}"
+  exit 0
 fi
-echo "To publish, a human runs:"
-echo "  git push origin ${version}"
+
+git tag -a "${version}" -m "Release ${version}"
+if (( ! do_publish )); then
+  echo "Created annotated tag ${version} locally. Nothing was pushed."
+  echo "To publish, a human runs:"
+  echo "  git push origin ${version}"
+  exit 0
+fi
+
+echo "Created annotated tag ${version} locally."
+git push origin "${version}" || {
+  echo "bin/release: git push failed; the local tag ${version} remains. Nothing was published." >&2
+  exit 1
+}
+echo "Pushed tag ${version}. This also starts the release workflow; check the Actions run afterwards."
+
+if view_out=$(gh_cmd release view "${version}" 2>&1); then
+  path_msg="release already created by the workflow, assets reconciled"
+elif [[ "${view_out}" == *"release not found"* ]]; then
+  path_msg="created by local publish"
+else
+  printf '%s\n' "${view_out}" >&2
+  echo "bin/release: the tag ${version} WAS pushed, but the release state cannot be read. Check the Actions run and the releases page, then decide; do not blindly rerun." >&2
+  exit 1
+fi
+if "${script_dir}/release-publish" "${version}" "${pkg_dir}"; then
+  echo "${path_msg}"
+else
+  echo "bin/release: publishing failed. The tag ${version} WAS pushed; the workflow may have published the release. Check the Actions run and the releases page, then decide what to do." >&2
+  exit 1
+fi

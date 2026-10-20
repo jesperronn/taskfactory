@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests for bin/release.
-# Usage: bin/release.test.sh [dry-run|gates|tag|signing|versions|no-signing-flags]
+# Usage: bin/release.test.sh [dry-run|gates|tag|signing|versions|no-signing-flags|publish-needs-flag|publish-existing|publish-new|publish-race|publish-failures]
 # With no argument every section runs. Zero assertions is a failure.
 set -euo pipefail
 
@@ -33,7 +33,7 @@ assert_lacks() { # text needle context
 
 section=${1:-all}
 case "${section}" in
-  all|dry-run|gates|tag|signing|versions|no-signing-flags) ;;
+  all|dry-run|gates|tag|signing|versions|no-signing-flags|publish-needs-flag|publish-existing|publish-new|publish-race|publish-failures) ;;
   *) echo "unknown section: ${section}" >&2; exit 2 ;;
 esac
 want() { [[ "${section}" == all || "${section}" == "$1" ]]; }
@@ -247,21 +247,194 @@ if want no-signing-flags; then
     esac
   done
   pass "git tag is called without signing flags"
-  for word in 'git push' 'gh ' 'curl' 'wget' '--force-sign'; do
+  for word in 'curl' 'wget' '--force-sign'; do
     case "${code}" in
-      *"${word}"*) 
-        # The printed hint 'git push origin' is an echo, not a call.
-        if [[ "${word}" == 'git push' ]]; then
-          if printf '%s\n' "${code}" | grep 'git push' | grep -qv '^[[:space:]]*echo '; then fail "bin/release runs git push"; fi
-        else
-          fail "bin/release contains '${word}'"
-        fi ;;
+      *"${word}"*) fail "bin/release contains '${word}'" ;;
     esac
   done
-  pass "no push, gh or network tools are invoked"
+  pass "no network tools or forced signing"
+  # git push appears once, as a real call guarded by the --publish path
+  # (the earlier exit 0 for a run without --publish); the hints are echoes.
+  pushlines=$(printf '%s\n' "${code}" | grep 'git push' | grep -v '^[[:space:]]*echo ' || true)
+  # shellcheck disable=SC2016
+  assert_eq "${pushlines}" 'git push origin "${version}" || {' "git push is called exactly once with the tag"
+  assert_eq "$(printf '%s\n' "${code}" | grep -c 'git push origin "\${version}" ||')" 1 "one push call site"
+  before_push=$(printf '%s\n' "${code}" | sed -n '1,/^git push origin/p')
+  assert_has "${before_push}" "if (( ! do_publish )); then" "the push is preceded by the no --publish exit"
+  # gh is only invoked inside gh_cmd.
+  ghlines=$(printf '%s\n' "${code}" | grep -E '(^|[^_a-z])gh ' | grep -v 'gh_cmd' | grep -v '^[[:space:]]*\(echo\|printf\)' || true)
+  assert_eq "${ghlines}" '  gh "$@"' "gh is only called through gh_cmd"
   tagline=$(printf '%s\n' "${code}" | grep 'git tag')
   # shellcheck disable=SC2016
-  assert_eq "${tagline}" '  git tag -a "${version}" -m "Release ${version}"' "the tag command is exactly git tag -a with the message"
+  assert_eq "${tagline}" 'git tag -a "${version}" -m "Release ${version}"' "the tag command is exactly git tag -a with the message"
+fi
+
+# --- publish sections: fake gh first on PATH, bare local origin. ---
+# Fake gh state dir FAKE_GH_DIR: calls.log (one line per call), exists
+# (present = release exists), prerelease, views (counter).
+# FAKE_GH_VIEW_FAIL=1: view fails with HTTP 500. FAKE_GH_CREATE_FAIL=1: create
+# fails. FAKE_GH_APPEAR_AT=N: from the Nth view call on, the release exists.
+mkdir -p "${tmp}/fakebin"
+cat > "${tmp}/fakebin/gh" <<'FAKE'
+#!/usr/bin/env bash
+echo "$*" >> "${FAKE_GH_DIR}/calls.log"
+[[ "$1" == release ]] || exit 3
+case "$2" in
+  view)
+    c=$(cat "${FAKE_GH_DIR}/views" 2>/dev/null || echo 0)
+    c=$((c + 1)); echo "${c}" > "${FAKE_GH_DIR}/views"
+    if [[ -n "${FAKE_GH_VIEW_FAIL:-}" ]]; then echo "HTTP 500" >&2; exit 1; fi
+    if [[ -n "${FAKE_GH_APPEAR_AT:-}" && ${c} -ge ${FAKE_GH_APPEAR_AT} && ! -f "${FAKE_GH_DIR}/exists" ]]; then
+      : > "${FAKE_GH_DIR}/exists"; echo "${FAKE_GH_PRERELEASE:-true}" > "${FAKE_GH_DIR}/prerelease"
+    fi
+    [[ -f "${FAKE_GH_DIR}/exists" ]] || { echo "release not found" >&2; exit 1; }
+    if [[ "$*" == *"--json isPrerelease"* ]]; then cat "${FAKE_GH_DIR}/prerelease"; fi
+    ;;
+  create)
+    [[ -z "${FAKE_GH_CREATE_FAIL:-}" ]] || { echo "boom" >&2; exit 1; }
+    : > "${FAKE_GH_DIR}/exists"
+    if [[ "$*" == *" --prerelease "* ]]; then echo true > "${FAKE_GH_DIR}/prerelease"; else echo false > "${FAKE_GH_DIR}/prerelease"; fi
+    ;;
+  edit) echo "${4#--prerelease=}" > "${FAKE_GH_DIR}/prerelease" ;;
+  upload) ;;
+  *) exit 3 ;;
+esac
+FAKE
+chmod +x "${tmp}/fakebin/gh"
+export PATH="${tmp}/fakebin:${PATH}"
+
+gh_n=0
+new_gh() { # [existing-prerelease-value]
+  gh_n=$((gh_n + 1))
+  FAKE_GH_DIR="${tmp}/gh${gh_n}"
+  export FAKE_GH_DIR
+  mkdir -p "${FAKE_GH_DIR}"
+  : > "${FAKE_GH_DIR}/calls.log"
+  if [[ -n "${1-}" ]]; then : > "${FAKE_GH_DIR}/exists"; echo "$1" > "${FAKE_GH_DIR}/prerelease"; fi
+}
+gh_calls() { cat "${FAKE_GH_DIR}/calls.log"; }
+gh_count() { grep -c "$1" "${FAKE_GH_DIR}/calls.log" || true; }
+sign_fixture() { # signed tagging via a stand-in gpg.program
+  local g="${tmp}/gpg-pub-stub"
+  cat > "${g}" <<'GPG'
+#!/usr/bin/env bash
+cat > /dev/null
+echo "[GNUPG:] SIG_CREATED D 1 8 00 0 0 0 0" >&2
+printf '%s\n' "-----BEGIN PGP SIGNATURE-----" stub "-----END PGP SIGNATURE-----"
+GPG
+  chmod +x "${g}"
+  git -C "${fx}" config tag.gpgSign true
+  git -C "${fx}" config gpg.program "${g}"
+}
+
+if want publish-needs-flag; then
+  new_fixture pnf; new_gh
+  before=$(snapshot)
+  run_release v1.0.0-rc.1 --publish
+  assert_eq "${status}" 2 "--publish without --tag exits 2"
+  assert_has "${out}" "--publish requires --tag" "usage error names the rule"
+  assert_eq "$(snapshot)" "${before}" "usage error changes nothing"
+  assert_eq "$(gh_calls)" "" "usage error never calls gh"
+  run_release v1.0.0-rc.1
+  assert_eq "${status}" 0 "dry run still exits 0"
+  assert_eq "$(gh_calls)" "" "dry run never calls gh"
+  assert_eq "$(snapshot)" "${before}" "dry run changes nothing"
+  sign_fixture
+  run_release v1.0.0-rc.1 --tag
+  assert_eq "${status}" 0 "--tag without --publish succeeds"
+  assert_eq "$(git -C "${origin}" tag --list)" "" "--tag without --publish pushes nothing"
+  assert_eq "$(gh_calls)" "" "--tag without --publish never calls gh"
+  assert_has "${out}" "Nothing was pushed" "--tag says nothing was pushed"
+  run_release v1.0.0-rc.2 --tag --allow-unsigned
+  assert_eq "$(git -C "${origin}" tag --list)" "" "--allow-unsigned without --publish pushes nothing"
+fi
+
+if want publish-existing; then
+  new_fixture pex; new_gh true; sign_fixture
+  before=$(snapshot)
+  run_release v1.0.0-rc.1 --tag --publish
+  assert_eq "${status}" 1 "an existing release exits 1"
+  assert_has "${out}" "already exists" "existing release is named"
+  assert_eq "$(git -C "${origin}" tag --list)" "" "existing release: origin has no tag"
+  assert_eq "$(snapshot)" "${before}" "existing release: local repository unchanged (no local tag)"
+  assert_eq "$(gh_count 'release create')" 0 "existing release: no create"
+  assert_eq "$(gh_count 'release upload')" 0 "existing release: no upload"
+fi
+
+if want publish-failures; then
+  new_fixture pfail; new_gh; sign_fixture
+  before=$(snapshot)
+  FAKE_GH_VIEW_FAIL=1 run_release v1.0.0-rc.1 --tag --publish
+  assert_eq "${status}" 1 "gh view HTTP 500 exits 1"
+  assert_has "${out}" "cannot read the release state" "unreadable state is named"
+  assert_eq "$(snapshot)" "${before}" "unreadable state: nothing tagged or pushed"
+  # Signing gate still applies to --publish.
+  new_fixture pfail2; new_gh
+  before=$(snapshot)
+  run_release v1.0.0-rc.1 --tag --publish
+  assert_eq "${status}" 1 "--publish without tag.gpgSign exits 1"
+  assert_has "${out}" "signing: tag.gpgSign is not true" "signing gate applies to --publish"
+  assert_eq "$(gh_calls)" "" "failed gate never calls gh"
+  assert_eq "$(snapshot)" "${before}" "failed gate changes nothing"
+  # Create fails after the push.
+  new_fixture pfail3; new_gh; sign_fixture
+  FAKE_GH_CREATE_FAIL=1 run_release v1.0.0-rc.1 --tag --publish
+  assert_eq "${status}" 1 "create failure exits non-zero"
+  assert_has "${out}" "WAS pushed" "create failure says the tag was pushed"
+  assert_has "${out}" "workflow may have published" "create failure says the workflow may have published"
+  assert_eq "$(git -C "${origin}" tag --list)" "v1.0.0-rc.1" "the tag is on origin after the create failure"
+  # View failing only after the push.
+  new_fixture pfail4; new_gh; sign_fixture
+  # Fail the second view only: wrap via a flag file read by a dedicated fake.
+  printf '#!/usr/bin/env bash\nif [[ "$2" == view ]]; then n=$(cat "%s/n" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "%s/n"; if [[ $n -ge 2 ]]; then echo "HTTP 500" >&2; exit 1; fi; echo "release not found" >&2; exit 1; fi\nexit 3\n' "${FAKE_GH_DIR}" "${FAKE_GH_DIR}" > "${tmp}/fakebin2-gh"
+  mkdir -p "${tmp}/fakebin2"; cp "${tmp}/fakebin2-gh" "${tmp}/fakebin2/gh"; chmod +x "${tmp}/fakebin2/gh"
+  PATH="${tmp}/fakebin2:${PATH}" run_release v1.0.0-rc.1 --tag --publish
+  assert_eq "${status}" 1 "second view failing exits 1"
+  assert_has "${out}" "WAS pushed" "second view failure says the tag was pushed"
+fi
+
+if want publish-new; then
+  new_fixture pnew; new_gh; sign_fixture
+  run_release v1.0.0-rc.1 --tag --publish
+  assert_eq "${status}" 0 "publish of a new release exits 0"
+  assert_has "${out}" "created by local publish" "the create path is named"
+  assert_has "${out}" "check the Actions run" "the human is told to check the Actions run"
+  assert_eq "$(git -C "${origin}" cat-file -t v1.0.0-rc.1)" tag "origin has an annotated tag"
+  assert_eq "$(git -C "${origin}" tag -l --format='%(contents:subject)' v1.0.0-rc.1)" "Release v1.0.0-rc.1" "origin tag message"
+  assert_eq "$(gh_count 'release view')" 3 "release state checked twice by bin/release plus once inside bin/release-publish"
+  assert_eq "$(gh_count 'release create')" 1 "exactly one create call"
+  assert_eq "$(gh_count 'release upload')" 0 "no upload on the create path"
+  create=$(grep 'release create' "${FAKE_GH_DIR}/calls.log")
+  assert_has "${create}" "release create v1.0.0-rc.1 --title v1.0.0-rc.1 --notes Release v1.0.0-rc.1 --prerelease " "rc create arguments"
+  assert_has "${create}" "taskfactory-skill_v1.0.0-rc.1.tar.gz" "create includes the skill archive"
+  assert_has "${create}" "SHA256SUMS" "create includes the checksums"
+  # Stable: no --prerelease.
+  new_fixture pnew2; new_gh; sign_fixture
+  run_release v1.0.0 --tag --publish
+  assert_eq "${status}" 0 "stable publish exits 0"
+  create=$(grep 'release create' "${FAKE_GH_DIR}/calls.log")
+  assert_has "${create}" "release create v1.0.0 --title v1.0.0 --notes Release v1.0.0 " "stable create arguments"
+  assert_lacks "${create}" "--prerelease" "stable release is not a prerelease"
+  # Unsigned path with --allow-unsigned.
+  new_fixture pnew3; new_gh
+  run_release v1.0.0-rc.1 --tag --publish --allow-unsigned
+  assert_eq "${status}" 0 "--allow-unsigned publish exits 0"
+  assert_eq "$(git -C "${origin}" tag --list)" "v1.0.0-rc.1" "unsigned publish pushed the tag"
+fi
+
+if want publish-race; then
+  new_fixture prace; new_gh; sign_fixture
+  FAKE_GH_APPEAR_AT=2 FAKE_GH_PRERELEASE=true run_release v1.0.0-rc.1 --tag --publish
+  assert_eq "${status}" 0 "race path exits 0"
+  assert_has "${out}" "release already created by the workflow, assets reconciled" "the reconcile path is named"
+  assert_eq "$(git -C "${origin}" tag --list)" "v1.0.0-rc.1" "race: tag pushed once"
+  assert_eq "$(gh_count 'release create')" 0 "race: no create call"
+  assert_eq "$(gh_count 'release edit')" 0 "race: matching prerelease flag is not edited"
+  assert_eq "$(gh_count 'release upload')" 1 "race: one upload call"
+  up=$(grep 'release upload' "${FAKE_GH_DIR}/calls.log")
+  assert_has "${up}" "release upload v1.0.0-rc.1 " "upload targets the version"
+  assert_has "${up}" "--clobber" "upload uses --clobber"
+  assert_has "${up}" "SHA256SUMS" "upload includes the checksums"
 fi
 
 if (( assertions == 0 )); then
