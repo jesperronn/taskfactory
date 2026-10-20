@@ -44,6 +44,10 @@ without the alias.
 `taskfactory` does, with the full name still preferred in docs and generated
 prompts.
 7. Windows is out of scope because of symlinks; the README says so.
+8. `bin/install.test.sh` runs one named scenario per argument and all of them
+with no argument, which is what `bin/test` does. The scenarios are `default`,
+`idempotent`, `optout`, `foreign`, `shadow`, `help` and `usage`. An unknown scenario
+name exits 2 and each scenario prints a line starting with its name and PASS.
 
 ## Constraints
 
@@ -57,38 +61,47 @@ Tests use temporary directories only.
 
 ### C1: Default install creates a relative tf symlink and versions match
 
-Check: bin/install.test.sh
+Check: bin/install.test.sh default
 
-### C2: A second install is idempotent and the opt-out creates no symlink
+### C2: A second install is idempotent
 
-Check: bin/install.test.sh
+Check: bin/install.test.sh idempotent
 
-### C3: A foreign tf file or symlink is left untouched with a warning, exit 0
+### C3: The opt-out variable creates no symlink
 
-Check: bin/install.test.sh
+Check: bin/install.test.sh optout
 
-### C4: A shadowing tf earlier on PATH warns; tf --help equals taskfactory
+### C4: A foreign tf file or symlink is left untouched, with a warning
 
-Check: bin/install.test.sh
+Check: bin/install.test.sh foreign
 
-### C5: An extra argument to bin/install still exits 2
+### C5: A shadowing tf earlier on PATH produces a warning
 
-Check: bin/install.test.sh
+Check: bin/install.test.sh shadow
 
-### C6: The README documents the opt-out variable
+### C6: An extra argument to bin/install still exits 2
+
+Check: bin/install.test.sh usage
+
+### C7: The README documents the opt-out variable
 
 Check: grep -q TASKFACTORY_NO_ALIAS README.md
 
-### C7: The full test suite passes
+### C8: tf --help output equals taskfactory --help
+
+Check: bin/install.test.sh help
+
+### C9: The full test suite passes
 
 Check: bin/test
 
-### C8: The whole task tree validates
+### C10: The whole task tree validates
 
 Check: go run ./cmd/taskfactory validate tasks
 
 ## Verification
 
-Run `bin/install.test.sh`, `bin/test`, `bin/lint` and
+Run `bin/install.test.sh` with no argument and then with each scenario
+name, `bin/test`, `bin/lint` and
 `go run ./cmd/taskfactory validate tasks` from the repository root and report
 each exit code. Also report the README grep result.
