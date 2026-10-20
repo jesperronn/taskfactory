@@ -14,9 +14,14 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 output=${1:-bin/out/taskfactory}
 
-# The version comes from git when available; plain builds outside a Git
-# checkout (or without commits) keep the development default.
-if ! version=$(git describe --always --dirty 2>/dev/null) || [[ -z "${version}" ]]; then
+# The version is plain `git describe --dirty`: the tag at HEAD, otherwise
+# <tag>-<N>-g<hash>, with -dirty on a dirty tree. With no tags it is
+# dev-<hash>; outside a Git checkout (or without commits) it is dev.
+if version=$(git describe --dirty 2>/dev/null) && [[ -n "${version}" ]]; then
+  :
+elif hash=$(git rev-parse --short HEAD 2>/dev/null) && [[ -n "${hash}" ]]; then
+  version=dev-${hash}
+else
   version=dev
 fi
 

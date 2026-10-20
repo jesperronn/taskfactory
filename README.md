@@ -944,6 +944,10 @@ TaskFactory.
 
 ## Install
 
+`bin/build` embeds the output of `git describe --dirty`, so untagged commits
+build as `<tag>-<N>-g<hash>` (`dev-<hash>` with no tags, `dev` outside a Git
+checkout).
+
 From a checkout, `bin/install` builds `taskfactory` with the same embedded
 version as `bin/build` and writes it to the first of PREFIX, GOBIN, or the
 GOPATH bin directory that applies. Set PREFIX to choose a directory. The script
