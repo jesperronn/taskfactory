@@ -12,10 +12,6 @@ usage() {
   echo "Usage: bin/package <version> <output-dir>" >&2
 }
 
-# One place to change the accepted version grammar. TF-070's library accepts
-# stable versions only until TF-071 adds -rc.N, so this is a local copy.
-PACKAGE_VERSION_REGEX='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$'
-
 die() {
   echo "bin/package: $*" >&2
   exit 1
