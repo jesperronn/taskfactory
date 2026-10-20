@@ -23,7 +23,7 @@ name is still preferred in docs and generated prompts.
 
 | Command                                       | Purpose                                                                    |
 | --------------------------------------------- | -------------------------------------------------------------------------- |
-| `taskfactory init`                            | Create `.taskfactory/config.toml` and the five `tasks/` state directories. |
+| `taskfactory init [path]`                     | Create `.taskfactory/config.toml` and the five `tasks/` state directories; the path may be any directory inside the project. |
 | `taskfactory status`                          | Show task counts per state.                                                |
 | `taskfactory validate [path...]`              | Validate task files; with no path, the inbox and ready task files.         |
 | `taskfactory claim <ID> --owner <name>`       | Move a ready task to active, write its Claim block, create worktree.       |
@@ -48,7 +48,7 @@ the ones in a command's `--help` and in this skill, such as `requeue
 
 1. Use a Git repository with at least one commit. Claim records `HEAD` as the
    base commit.
-2. Run `taskfactory init`.
+2. Run `taskfactory init [path]` (the path may be any directory inside the project).
 3. Edit `[verification]` in `.taskfactory/config.toml`. `init` writes Go
    defaults (`go test ./...`); replace them with the project's own commands
    for `worker` and `integration`.

@@ -102,7 +102,8 @@ that exists today, including `requeue` for the failed branch.
    `taskfactory` (and the short `tf` alias, which works anywhere `taskfactory`
    does; the full name is still preferred in docs and prompts) and prints a
    hint if its directory is not on `PATH`.
-2. Init. In your project run `taskfactory init`. It writes
+2. Init. In your project run `taskfactory init [path]`; the path may be any
+   directory inside the project and defaults to the current directory. It writes
    `.taskfactory/config.toml`, the five `tasks/` directories and a
    `.gitignore` (or appends to yours) that lists the runtime paths: the two
    lock files, `evidence/`, `integration-evidence/`, `logs/` and `worktrees/`
@@ -890,7 +891,7 @@ The initial command direction is:
 taskfactory --help
 taskfactory --version
 
-taskfactory init
+taskfactory init [path]
 taskfactory status
 taskfactory validate
 taskfactory claim

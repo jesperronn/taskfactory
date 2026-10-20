@@ -41,7 +41,7 @@ type commandSummary struct {
 
 // commandSummaries lists every command in top-level usage order.
 var commandSummaries = []commandSummary{
-	{"init", "init", "initialize project config"},
+	{"init", "init [path]", "initialize project config"},
 	{"status", "status", "show tasks by state"},
 	{"validate", "validate [path...]", "check task files"},
 	{"claim", "claim <ID> --owner <name>", "claim a ready task"},
@@ -517,8 +517,20 @@ func main() {
 			return
 		}
 	}
-	if len(args) == 1 && args[0] == "init" {
-		if err := initializeProject(); err != nil {
+	if len(args) >= 1 && args[0] == "init" {
+		if len(args) > 2 {
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory init", fmt.Sprintf("unexpected extra argument %q; usage: taskfactory init [path]", args[2])))
+			os.Exit(exitUsage)
+		}
+		target := ""
+		if len(args) == 2 {
+			target = args[1]
+			if strings.HasPrefix(target, "-") {
+				fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory init", fmt.Sprintf("unknown flag %q; usage: taskfactory init [path]", target)))
+				os.Exit(exitUsage)
+			}
+		}
+		if err := initializeProject(target); err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory init", err.Error()))
 			os.Exit(1)
 		}
@@ -982,15 +994,21 @@ func projectRoot() (string, error) {
 }
 
 // initHelp is printed by "init --help" and "init -h".
-const initHelp = `Usage: taskfactory init
+const initHelp = `Usage: taskfactory init [path]
 
 Create the project configuration and the task state directories in the Git
-repository that contains the current directory. An existing valid configuration
+repository that contains path, which may be any directory inside the project
+(relative or absolute; a symlink is followed). Without path, the current
+directory is used. An existing valid configuration
 is kept unchanged, and missing task state directories are restored. It also
 creates .gitignore, or appends to it, with the TaskFactory runtime paths
 (locks, evidence, logs and worktrees) that are not already listed; other lines
 are left alone and .taskfactory/config.toml is never ignored. Commit the
 configuration and .gitignore together before the first claim.
+
+Arguments:
+  path        a directory inside the Git working tree to initialize
+              (default: the current directory)
 
 Flags:
   --help, -h  print this help and exit successfully
@@ -1001,15 +1019,30 @@ Exit codes:
   2  invalid usage
 `
 
-func initializeProject() error {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("determine current directory: %w", err)
+func initializeProject(target string) error {
+	dir := target
+	if target == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("determine current directory: %w", err)
+		}
+		dir = cwd
+	} else {
+		info, err := os.Stat(target)
+		if err != nil {
+			return fmt.Errorf("path %s does not exist or cannot be read", target)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("path %s is not a directory", target)
+		}
 	}
-	command := exec.Command("git", "-C", cwd, "rev-parse", "--path-format=absolute", "--show-toplevel")
+	command := exec.Command("git", "-C", dir, "rev-parse", "--path-format=absolute", "--show-toplevel")
 	output, err := command.Output()
 	if err != nil {
-		return fmt.Errorf("current directory is not inside a Git working tree")
+		if target == "" {
+			return fmt.Errorf("current directory is not inside a Git working tree")
+		}
+		return fmt.Errorf("path %s is not inside a Git working tree", target)
 	}
 	root := filepath.Clean(strings.TrimSuffix(string(output), "\n"))
 	root, _ = filepath.Abs(root)
