@@ -957,6 +957,11 @@ TaskFactory.
 build as `<tag>-<N>-g<hash>` (`dev-<hash>` with no tags, `dev` outside a Git
 checkout).
 
+The default output is `dist/taskfactory`; `bin/build [output-path]` overrides
+it. A default build (or any output inside `dist/`) first empties `dist/`, so
+stale release artifacts never mix with fresh ones; an output path elsewhere
+removes nothing. `bin/install` puts the binary on PATH.
+
 From a checkout, `bin/install` builds `taskfactory` with the same embedded
 version as `bin/build` and writes it to the first of PREFIX, GOBIN, or the
 GOPATH bin directory that applies. Set PREFIX to choose a directory. The script

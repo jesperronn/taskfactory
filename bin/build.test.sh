@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-scenarios=(tagged untagged dirty notag nogit)
+scenarios=(tagged untagged dirty notag nogit output)
 
 is_scenario() {
   local name=$1 s
@@ -77,8 +77,8 @@ check_version() {
   local dir="${fixture_root}/${name}"
   local build_output version_output
   build_output=$(cd / && "${dir}/bin/build" 2>&1)
-  assert_contains "${build_output}" "built bin/out/taskfactory (version ${expected})" "${name} PASS build prints version ${expected}"
-  version_output=$("${dir}/bin/out/taskfactory" --version)
+  assert_contains "${build_output}" "built dist/taskfactory (version ${expected})" "${name} PASS build prints version ${expected}"
+  version_output=$("${dir}/dist/taskfactory" --version)
   assert_contains "${version_output}" "taskfactory version ${expected}" "${name} PASS binary reports ${expected}"
 }
 
@@ -126,6 +126,53 @@ scenario_notag() {
 scenario_nogit() {
   new_fixture nogit
   check_version nogit dev
+}
+
+scenario_output() {
+  git_fixture output
+  local dir="${fixture_root}/output" out
+  mkdir -p "${dir}/dist/sub"
+  echo stale >"${dir}/dist/stale.tar.gz"
+  echo stale >"${dir}/dist/sub/old"
+  out=$(cd / && "${dir}/bin/build" 2>&1)
+  assert_contains "${out}" 'built dist/taskfactory' 'output PASS default path is dist/taskfactory'
+  test -x "${dir}/dist/taskfactory"
+  test ! -e "${dir}/dist/stale.tar.gz" && test ! -e "${dir}/dist/sub"
+  printf '[PASS] output PASS default build removes stale files in dist/\n'
+
+  echo keep >"${dir}/dist/keep"
+  out=$(cd / && "${dir}/bin/build" dist/custom-bin 2>&1)
+  assert_contains "${out}" 'built dist/custom-bin' 'output PASS explicit path inside dist/ builds'
+  test ! -e "${dir}/dist/keep" && test -x "${dir}/dist/custom-bin" && test ! -e "${dir}/dist/taskfactory"
+  printf '[PASS] output PASS explicit path inside dist/ also empties dist/\n'
+
+  echo keep >"${dir}/dist/keep"
+  out=$(cd / && "${dir}/bin/build" other/tf-bin 2>&1)
+  assert_contains "${out}" 'built other/tf-bin' 'output PASS explicit path outside dist/ is honored'
+  test -x "${dir}/other/tf-bin" && test -e "${dir}/dist/keep"
+  printf '[PASS] output PASS explicit path outside dist/ leaves dist/ alone\n'
+
+  # Guards: a path that only looks like dist/ must not trigger removal.
+  out=$(cd / && "${dir}/bin/build" dist/../other/tf-bin2 2>&1)
+  test -x "${dir}/other/tf-bin2" && test -e "${dir}/dist/keep"
+  out=$(cd / && "${dir}/bin/build" /dev/null/x 2>&1) && { echo '[FAIL] impossible path built' >&2; exit 1; }
+  test -e "${dir}/dist/keep"
+  mkdir -p "${dir}/distfoo" && echo keep >"${dir}/distfoo/keep"
+  (cd / && "${dir}/bin/build" distfoo/tf-bin >/dev/null 2>&1)
+  test -e "${dir}/distfoo/keep" && test -e "${dir}/dist/keep"
+  printf '[PASS] output PASS dist/.. and dist-prefixed paths never remove anything\n'
+
+  # A symlinked dist/ resolves outside the repo, so nothing is removed.
+  local target="${fixture_root}/symtarget" status=0
+  mkdir -p "${target}" && echo keep >"${target}/keep"
+  rm -rf "${dir}/dist" && ln -s "${target}" "${dir}/dist"
+  out=$(cd / && "${dir}/bin/build" 2>&1) || status=$?
+  test -e "${target}/keep"
+  printf '[PASS] output PASS symlinked dist/ target is left intact (status %s)\n' "${status}"
+
+  grep -qx 'dist/' "${repo_root}/.gitignore"
+  ! grep -q 'bin/out' "${repo_root}/.gitignore"
+  printf '[PASS] output PASS .gitignore lists dist/ and not bin/out/\n'
 }
 
 for name in "$@"; do

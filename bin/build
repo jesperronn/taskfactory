@@ -12,7 +12,7 @@ fi
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-output=${1:-bin/out/taskfactory}
+output=${1:-dist/taskfactory}
 
 # The version is plain `git describe --dirty`: the tag at HEAD, otherwise
 # <tag>-<N>-g<hash>, with -dirty on a dirty tree. With no tags it is
@@ -25,6 +25,31 @@ else
   version=dev
 fi
 
+# clean_dist empties <repo>/dist (never the folder itself). It refuses unless
+# the directory is non-empty, is a real directory (not a symlink) and resolves
+# to exactly <repo root>/dist.
+clean_dist() {
+  local root=$1 dist=$2
+  if [[ -z "${root}" || -z "${dist}" || "${dist}" != "${root}/dist" ]]; then
+    echo "bin/build: refusing to clean unexpected dist path: '${dist}'" >&2
+    return 1
+  fi
+  if [[ -L "${dist}" ]]; then
+    echo "bin/build: refusing to clean symlinked ${dist}" >&2
+    return 1
+  fi
+  if [[ -d "${dist}" ]]; then
+    find "${dist}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+  fi
+}
+
+repo_root=$(pwd -P)
+mkdir -p "$(dirname "${output}")"
+out_dir=$(cd "$(dirname "${output}")" && pwd -P)
+out_abs=${out_dir}/$(basename "${output}")
+if [[ "${out_abs}" == "${repo_root}/dist/"* ]]; then
+  clean_dist "${repo_root}" "${repo_root}/dist"
+fi
 mkdir -p "$(dirname "${output}")"
 go build -ldflags "-X main.version=${version}" -o "${output}" ./cmd/taskfactory
 printf 'built %s (version %s)\n' "${output}" "${version}"

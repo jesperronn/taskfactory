@@ -29,7 +29,7 @@ go.work.sum
 .env
 
 # Local build output from bin/build
-bin/out/
+dist/
 
 # Editor/IDE
 # .idea/
