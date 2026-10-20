@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for bin/release.lib.sh. Usage: release.version.test.sh [section]
-# Sections: parse compare last-tag advice check (default: all).
+# Sections: parse compare last-tag advice check parse-rc compare-rc next-rc
+# (default: all).
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -59,7 +60,7 @@ section_parse() {
     pass "accepts ${v} (${out})"
   done
   assert_eq "$(release_parse_version v1.22.333)" "1 22 333" "parse components"
-  for v in 1.2.3 v1.2 v01.2.3 v1.02.3 v1.2.03 v1.2.3-rc.1 v1.2.3.4 v-1.2.3 "" latest "v1.2.3 " va.b.c; do
+  for v in 1.2.3 v1.2 v01.2.3 v1.02.3 v1.2.03 v1.2.3.4 v-1.2.3 "" latest "v1.2.3 " va.b.c; do
     if release_parse_version "${v}" >/dev/null; then fail "parse accepted '${v}'"; fi
     pass "rejects '${v}'"
   done
@@ -196,7 +197,7 @@ section_check() {
   assert_eq "${rc}" 1 "no tag: invalid version refused"
   rc=0
   release_check_version v1.0.0-rc.1 >/dev/null 2>&1 || rc=$?
-  assert_eq "${rc}" 1 "no tag: rc refused until prerelease support"
+  assert_eq "${rc}" 0 "no tag: first rc accepted (TF-071 changed from refused)"
   annotated v1.2.0
   commit "feat: n"
   for v in v1.2.0 v1.1.9 v0.9.0; do
@@ -230,6 +231,118 @@ section_check() {
   assert_eq "${rc}" 1 "refused by numeric precedence against v1.10.0"
 }
 
+section_parse_rc() {
+  local v out
+  for v in v1.0.0-rc.1 v1.0.0-rc.2 v0.1.0-rc.10 v10.2.3-rc.99; do
+    out=$(release_parse_version "${v}") || fail "parse rejected ${v}"
+    pass "accepts ${v} (${out})"
+  done
+  assert_eq "$(release_parse_version v1.2.3-rc.14)" "1 2 3 rc 14" "rc components"
+  assert_eq "$(release_parse_version v1.2.3)" "1 2 3" "stable output unchanged"
+  for v in v1.0.0-rc.0 v1.0.0-rc.01 v1.0.0-rc v1.0.0-rc. v1.0.0-rc.1.2 v1.0.0-beta.1 \
+    v1.0.0-RC.1 v1.0.0-rc1 v1.0.0-rc.-1 v1.0.0-rc.x v1.0.0- v1.0.0-rc.1\  v01.0.0-rc.1 1.0.0-rc.1 v1.0.0+build; do
+    if release_parse_version "${v}" >/dev/null; then fail "parse accepted '${v}'"; fi
+    pass "rejects '${v}'"
+  done
+  release_is_prerelease v1.0.0-rc.1 || fail "rc not prerelease"
+  pass "rc is a prerelease"
+  local rc=0
+  release_is_prerelease v1.0.0 || rc=$?
+  assert_eq "${rc}" 1 "stable is not a prerelease"
+  rc=0
+  release_is_prerelease bogus || rc=$?
+  assert_eq "${rc}" 2 "invalid is neither (2)"
+}
+
+section_compare_rc() {
+  assert_eq "$(release_compare_versions v1.0.0-rc.1 v1.0.0-rc.2)" less "rc.1 < rc.2"
+  assert_eq "$(release_compare_versions v1.0.0-rc.2 v1.0.0-rc.1)" greater "rc.2 > rc.1"
+  assert_eq "$(release_compare_versions v1.0.0-rc.2 v1.0.0-rc.10)" less "rc numeric: rc.2 < rc.10"
+  assert_eq "$(release_compare_versions v1.0.0-rc.10 v1.0.0-rc.9)" greater "rc numeric: rc.10 > rc.9"
+  assert_eq "$(release_compare_versions v1.0.0-rc.10 v1.0.0)" less "rc.10 < stable"
+  assert_eq "$(release_compare_versions v1.0.0 v1.0.0-rc.10)" greater "stable > rc.10"
+  assert_eq "$(release_compare_versions v1.0.0-rc.1 v0.9.9)" greater "rc.1 > v0.9.9"
+  assert_eq "$(release_compare_versions v1.0.0-rc.5 v1.0.1)" less "rc of lower core < higher stable"
+  assert_eq "$(release_compare_versions v1.0.1-rc.1 v1.0.0)" greater "rc of higher core > lower stable"
+  assert_eq "$(release_compare_versions v1.0.0-rc.3 v1.0.0-rc.3)" equal "equal rc"
+  local rc=0
+  release_compare_versions v1.0.0-rc.0 v1.0.0 >/dev/null || rc=$?
+  assert_eq "${rc}" 2 "invalid rc returns 2"
+  # lookups and check
+  new_repo
+  commit "feat: a"
+  annotated v0.9.0
+  commit "feat: b"
+  annotated v1.0.0-rc.1
+  assert_eq "$(release_last_stable_tag)" v0.9.0 "last stable skips rc"
+  assert_eq "$(release_last_tag)" v0.9.0 "release_last_tag stays stable-only"
+  assert_eq "$(release_last_any_tag)" v1.0.0-rc.1 "last any includes rc"
+  annotated v1.0.0-rc.2
+  git tag v1.0.0-rc.10
+  assert_eq "$(release_last_any_tag)" v1.0.0-rc.10 "last any is numeric, not lexical"
+  local err
+  for v in v1.0.0-rc.10 v1.0.0-rc.3 v0.9.5; do
+    rc=0
+    err=$(release_check_version "${v}" 2>&1) || rc=$?
+    assert_eq "${rc}" 1 "refuses ${v} (not greater than rc.10)"
+    assert_contains "${err}" "not greater" "refusal message for ${v}"
+  done
+  rc=0
+  release_check_version v1.0.0-rc.11 >/dev/null 2>&1 || rc=$?
+  assert_eq "${rc}" 0 "rc.11 after rc.10 accepted"
+  rc=0
+  err=$(release_check_version v1.0.0 2>&1) || rc=$?
+  assert_eq "${rc}" 0 "stable base allowed after its rc"
+  assert_eq "${err}" "" "stable after rc is silent (major bump vs v0.9.0)"
+  # advice for a prerelease is computed against the last stable tag
+  new_repo
+  commit "feat: a"
+  annotated v1.0.0
+  commit "feat: b"
+  commit "docs: c"
+  rc=0
+  err=$(release_check_version v1.0.1-rc.1 2>&1) || rc=$?
+  assert_eq "${rc}" 0 "patch rc exits 0"
+  assert_contains "${err}" "advise minor" "rc advice uses commits since last stable"
+  err=$(release_check_version v1.1.0-rc.2 2>&1) || true
+  assert_eq "${err}" "" "matching rc bump is silent"
+  annotated v1.1.0-rc.1
+  rc=0
+  release_check_version v1.0.5 >/dev/null 2>&1 || rc=$?
+  assert_eq "${rc}" 1 "stable below last rc refused"
+  err=$(release_check_version v1.1.0-rc.2 2>&1) || true
+  assert_eq "${err}" "" "rc.2 after rc.1 silent (advice from last stable)"
+}
+
+section_next_rc() {
+  new_repo
+  commit "feat: a"
+  assert_eq "$(release_next_rc v1.0.0)" 1 "no tags: rc.1"
+  annotated v1.0.0-rc.1
+  assert_eq "$(release_next_rc v1.0.0)" 2 "after rc.1: rc.2"
+  git tag v1.0.0-rc.3
+  assert_eq "$(release_next_rc v1.0.0)" 4 "rc.1 and rc.3: rc.4"
+  git tag v1.0.0-rc.9
+  git tag v1.0.0-rc.10
+  assert_eq "$(release_next_rc v1.0.0)" 11 "numeric max, not lexical"
+  assert_eq "$(release_next_rc v1.1.0)" 1 "other base unaffected"
+  assert_eq "$(release_next_rc v1.0.1)" 1 "patch differs: separate base"
+  git tag v1.0.0
+  git tag v11.0.0-rc.5
+  assert_eq "$(release_next_rc v1.0.0)" 11 "stable tag and other-version rc ignored"
+  assert_eq "$(release_next_rc v1.0.0)" 11 "does not prefix-match v1.0.0 vs v11.0.0"
+  git tag v1.0.0-rc.07
+  git tag v1.0.0-beta.1
+  assert_eq "$(release_next_rc v1.0.0)" 11 "malformed and other-label tags ignored"
+  local rc=0
+  release_next_rc v1.0.0-rc.1 >/dev/null || rc=$?
+  assert_eq "${rc}" 2 "rc base rejected"
+  rc=0
+  release_next_rc nope >/dev/null || rc=$?
+  assert_eq "${rc}" 2 "invalid base rejected"
+  assert_eq "$(git tag --list | grep -c .)" 8 "library created no tags"
+}
+
 run_section() {
   assertions=0
   "section_${1//-/_}"
@@ -238,12 +351,12 @@ run_section() {
 }
 
 case "${1-all}" in
-  parse | compare | last-tag | advice | check) run_section "$1" ;;
+  parse | compare | last-tag | advice | check | parse-rc | compare-rc | next-rc) run_section "$1" ;;
   all)
-    for s in parse compare last-tag advice check; do run_section "${s}"; done
+    for s in parse compare last-tag advice check parse-rc compare-rc next-rc; do run_section "${s}"; done
     ;;
   *)
-    printf 'unknown section: %s (parse compare last-tag advice check)\n' "$1" >&2
+    printf 'unknown section: %s (parse compare last-tag advice check parse-rc compare-rc next-rc)\n' "$1" >&2
     exit 2
     ;;
 esac
