@@ -197,6 +197,8 @@ summary line on stdout, such as "verify TF-001: PASS (3 checks)" or
 "verify TF-001: FAIL (1 of 3 checks failed)". The command exits 1 when any
 check fails.
 
+Next step: taskfactory integrate <ID> after a passing verify.
+
 Flags:
   --help, -h  print this help and exit successfully
 
@@ -214,6 +216,8 @@ strategy, after running the integration verification commands. On success it
 prints "integrated <ID>". A failed check or fast-forward stops integration and
 is reported on stderr.
 
+Next step: taskfactory status after a successful integrate.
+
 Flags:
   --help, -h  print this help and exit successfully
 
@@ -228,6 +232,8 @@ const checkMainHelp = `Usage: taskfactory check-main
 
 Recheck main after integration has stopped it by running the integration
 verification commands again. It prints "check-main: ok" when they pass.
+
+Next step: taskfactory integrate <ID> once main passes.
 
 Flags:
   --help, -h  print this help and exit successfully
@@ -248,6 +254,8 @@ paths are committed. Any refusal or failure restores the file to tasks/inbox.
 
 The commit runs as a plain git commit and follows your own Git signing
 configuration. TaskFactory never disables or overrides signing.
+
+Next step: taskfactory claim <ID> --owner <name> after a promote.
 
 Flags:
   --help, -h  print this help and exit successfully
@@ -270,6 +278,8 @@ The command never archives a task and never changes the evidence file.
 
 The commit runs as a plain git commit and follows your own Git signing
 configuration. TaskFactory never disables or overrides signing.
+
+Next step: taskfactory requeue <ID> --to ready after a fail.
 
 Flags:
   --outcome <FAILED|BLOCKED>  outcome that must match the last evidence record
@@ -325,6 +335,8 @@ message body name the new path.
 The commit runs as a plain git commit and follows your own Git signing
 configuration. TaskFactory never disables or overrides signing.
 
+Next step: taskfactory claim <ID> --owner <name> after a requeue to ready.
+
 Flags:
   --to <ready|inbox>  target state, ready by default
   --help, -h          print this help and exit successfully
@@ -351,6 +363,8 @@ work never commits, stages, verifies, integrates or fails a task. A worker exit
 of 0 is a claim only: run "taskfactory verify <ID>" next. A blocked or stalled
 run prints a "taskfactory fail <ID> --outcome BLOCKED --reason ..." suggestion
 that you may run yourself; work does not run it.
+
+Next step: taskfactory verify <ID> after the worker exits.
 
 Flags:
   --adapter <omp|pi|claude>  worker harness (required, exactly once)
@@ -400,6 +414,7 @@ func failTask(args []string) error {
 		return err
 	}
 	fmt.Fprintf(os.Stdout, "failed %s to %s\n", id, failed)
+	printNextOnSuccess(os.Stdout, ui.For(os.Stdout), "fail", id)
 	return nil
 }
 
@@ -421,6 +436,11 @@ func requeueTask(args []string) error {
 		return err
 	}
 	printRequeued(id, opts, res)
+	command := "requeue"
+	if target == "inbox" {
+		command = "requeue-inbox"
+	}
+	printNextOnSuccess(os.Stdout, ui.For(os.Stdout), command, id)
 	return nil
 }
 
@@ -476,6 +496,7 @@ func promoteTask(args []string) error {
 		return err
 	}
 	fmt.Fprintf(os.Stdout, "promoted %s to %s\n", args[0], ready)
+	printNextOnSuccess(os.Stdout, ui.For(os.Stdout), "promote", args[0])
 	return nil
 }
 
@@ -534,6 +555,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory init", err.Error()))
 			os.Exit(1)
 		}
+		printNextOnSuccess(os.Stdout, stdoutStyle, "init", target)
 		return
 	}
 	if len(args) >= 1 && args[0] == "validate" {
@@ -543,6 +565,7 @@ func main() {
 			if errors.As(err, &usage) {
 				os.Exit(exitUsage)
 			}
+			printNextOnFailure(os.Stderr, stderrStyle, "validate", "")
 			os.Exit(1)
 		}
 		return
@@ -550,6 +573,7 @@ func main() {
 	if len(args) == 1 && args[0] == "status" {
 		if err := statusProject(); err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory status", err.Error()))
+			printNextOnFailure(os.Stderr, stderrStyle, "status", "")
 			os.Exit(1)
 		}
 		return
@@ -557,6 +581,7 @@ func main() {
 	if len(args) > 0 && args[0] == "claim" {
 		if err := claimTask(args[1:]); err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory claim", err.Error()))
+			printNextOnFailure(os.Stderr, stderrStyle, "claim", "")
 			os.Exit(1)
 		}
 		return
@@ -580,8 +605,10 @@ func main() {
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory verify", err.Error()))
+			printNextOnFailure(os.Stderr, stderrStyle, "verify", args[1])
 			os.Exit(1)
 		}
+		printNextOnSuccess(os.Stdout, stdoutStyle, "verify", args[1])
 		return
 	}
 	if len(args) > 0 && args[0] == "integrate" {
@@ -595,9 +622,11 @@ func main() {
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory integrate", err.Error()))
+			printNextOnFailure(os.Stderr, stderrStyle, "integrate", args[1])
 			os.Exit(1)
 		}
 		fmt.Fprintf(os.Stdout, "integrated %s\n", args[1])
+		printNextOnSuccess(os.Stdout, stdoutStyle, "integrate", args[1])
 		return
 	}
 	if len(args) > 0 && args[0] == "promote" {
@@ -611,6 +640,7 @@ func main() {
 			if errors.As(err, &usage) {
 				os.Exit(exitUsage)
 			}
+			printNextOnFailure(os.Stderr, stderrStyle, "promote", args[1])
 			os.Exit(1)
 		}
 		return
@@ -622,6 +652,7 @@ func main() {
 			if errors.As(err, &usage) {
 				os.Exit(exitUsage)
 			}
+			printNextOnFailure(os.Stderr, stderrStyle, "fail", "")
 			os.Exit(1)
 		}
 		return
@@ -633,6 +664,7 @@ func main() {
 			if errors.As(err, &usage) {
 				os.Exit(exitUsage)
 			}
+			printNextOnFailure(os.Stderr, stderrStyle, "requeue", "")
 			os.Exit(1)
 		}
 		return
@@ -652,9 +684,11 @@ func main() {
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory check-main", err.Error()))
+			printNextOnFailure(os.Stderr, stderrStyle, "check-main", "")
 			os.Exit(1)
 		}
 		fmt.Fprintln(os.Stdout, "check-main: ok")
+		printNextOnSuccess(os.Stdout, stdoutStyle, "check-main", "")
 		return
 	}
 
@@ -668,6 +702,8 @@ const claimHelp = `Usage: taskfactory claim <ID> --owner <name>
 Claim the ready task <ID> for the named worker. The task file moves from
 tasks/ready to tasks/active and records the claim details, including the owner.
 The owner must be non-empty.
+
+Next step: taskfactory work <ID> --adapter <name> --model <id> after a claim.
 
 Flags:
   --owner <name>  worker identifier (required)
@@ -703,6 +739,7 @@ func claimTask(args []string) error {
 		return err
 	}
 	fmt.Fprintf(os.Stdout, "claimed %s for %s\n", id, *owner)
+	printNextOnSuccess(os.Stdout, ui.For(os.Stdout), "claim", id)
 	return nil
 }
 
@@ -721,6 +758,8 @@ are checked across the whole tree, including tasks/archive, but only diagnostics
 for the selected files are reported. Archived files are not contract-checked
 unless named, but an archived file whose task ID cannot be read, or that is
 empty or not UTF-8, is always reported as an archive read error.
+
+Next step: taskfactory promote <ID> or claim <ID> after a clean validate.
 
 Flags:
   --help, -h  print this help and exit successfully
@@ -766,6 +805,7 @@ func validateProject(args []string) error {
 			}
 		}
 	}
+	printNextOnSuccess(os.Stdout, style, "validate", "")
 	return nil
 }
 
@@ -919,6 +959,8 @@ archive. The inbox, ready, active and failed task files are validated first,
 while the archive is read for task IDs and dependencies only; any diagnostics
 are printed to stderr and no task file is changed.
 
+Next step: taskfactory validate after the counts are printed.
+
 Flags:
   --help, -h  print this help and exit successfully
 
@@ -969,6 +1011,7 @@ func statusProject() error {
 	for _, state := range taskStates {
 		fmt.Fprintf(os.Stdout, "%s: %d\n", state, counts[state])
 	}
+	printNextOnSuccess(os.Stdout, ui.For(os.Stdout), "status", "")
 	return nil
 }
 
@@ -1005,6 +1048,8 @@ creates .gitignore, or appends to it, with the TaskFactory runtime paths
 (locks, evidence, logs and worktrees) that are not already listed; other lines
 are left alone and .taskfactory/config.toml is never ignored. Commit the
 configuration and .gitignore together before the first claim.
+
+Next step: the Next steps block that init prints leads to promote and claim.
 
 Arguments:
   path        a directory inside the Git working tree to initialize

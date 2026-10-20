@@ -35,6 +35,9 @@ name is still preferred in docs and generated prompts.
 | `taskfactory requeue <ID> [--to <state>]`     | Requeue a failed task; removes its old worktree and branch if safe.                             |
 | `taskfactory work <ID> --adapter A --model M` | Launch a local worker in a claimed task's worktree; writes only its log.                        |
 
+Each command prints a `next:` hint after its output (`init` prints a `Next steps:`
+block); follow it.
+
 Any subcommand not in this table is **not implemented**. Flags that exist are
 the ones in a command's `--help` and in this skill, such as `requeue
 --discard-claim` below. Do not invent others.

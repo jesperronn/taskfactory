@@ -905,6 +905,15 @@ taskfactory work <ID> --adapter <omp|pi|claude> --model <id>
 taskfactory <command> --help
 ```
 
+Every command ends with a hint about what to do next. `init` prints a `Next
+steps:` block (review the config, commit it, write a task, promote it, claim
+it). The other commands print one `next:` line on stdout after their normal
+output, for example `next: taskfactory integrate TF-001` after a passing
+`verify`. A failure with an obvious recovery prints its `next:` line on stderr
+after the error. Usage errors print no hint, and exit codes and
+machine-readable lines are unchanged. Each command's `--help` has a `Next step:`
+line.
+
 `taskfactory fail` moves a claimed active task to `tasks/failed` and commits
 only that move. Its last attempt evidence must have the same outcome, or pass
 `--reason` when no evidence exists. `taskfactory requeue` returns an unclaimed
