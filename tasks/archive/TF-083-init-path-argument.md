@@ -110,3 +110,11 @@ Check: go run ./cmd/taskfactory validate tasks
 Run each named `go test` check, `bin/test`, `bin/lint` and
 `go run ./cmd/taskfactory validate tasks` from the repository root and report
 each exit code. Also report the README and skill grep result.
+
+## Claim
+
+Owner: sonnet-worker-083
+Branch: task/TF-083
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-083
+Base commit: 96f92a2b76614ff204ad86aa40f99e53eb7cffb0
+Started at: 2026-10-20T22:39:55Z
