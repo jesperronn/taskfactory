@@ -26,7 +26,10 @@ release"), then the owner runs it. Owner-performed steps are marked as such:
    `SHA256SUMS`, and the checksums verify.
 5. (Owner) Download one archive and run `taskfactory --version`, expecting
    `taskfactory version v1.0.0-rc.1`.
-6. (Worker) Record the outcome in the task and remove "planned" wording about
+6. (Owner) After the release exists, the first real use of
+   `taskfactory skill install` (TF-078) against it is verified; that is a
+   TF-078 human check, listed here so it is not forgotten.
+7. (Worker) Record the outcome in the task and remove "planned" wording about
    release from the README and SKILL.md.
 
 ## Constraints

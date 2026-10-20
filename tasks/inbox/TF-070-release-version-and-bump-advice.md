@@ -23,9 +23,11 @@ required, no side effects when sourced). Functions:
 4. A bump advice function that reads subjects and bodies from
    `git log <last-tag>..HEAD` (the full history when there is no tag), ignores
    merge, `fixup!`, `squash!` and `Revert` commits, and prints major, minor or
-   patch by the rules in `docs/release.md`. Subjects that do not match
-   `type(scope)?!?: text` are printed as warnings. Docs-only history gives
-   minor (nothing qualifies means minor).
+   patch by the monotone rule in `docs/release.md`: major for `!` or a
+   breaking footer, minor for `feat`, patch for everything else. Subjects that
+   do not match `type(scope)?!?: text` are printed as warnings. Docs-only
+   history gives
+   patch (nothing qualifies means patch).
 5. A check function: refuse a version not greater than the last tag,
    warn (exit 0) when the version is lower than the advised bump, and for no
    tag require the human-given version without advice-based refusal.
@@ -53,7 +55,7 @@ Check: bin/release.version.test.sh compare
 
 Check: bin/release.version.test.sh last-tag
 
-### C4: Advice follows the rules; docs-only gives minor, noise ignored
+### C4: Advice is monotone; docs-only gives patch, noise ignored
 
 Check: bin/release.version.test.sh advice
 

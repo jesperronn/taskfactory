@@ -16,10 +16,11 @@ Add `bin/package <version> <output-dir>` (bash). It produces:
 1. `taskfactory_<version>_<os>_<arch>.tar.gz` for darwin and linux on arm64
    and amd64. Each holds the `taskfactory` binary and `LICENSE`. Built with
    `CGO_ENABLED=0`, `-trimpath` and `-ldflags "-X main.version=<version>"`.
-2. `taskfactory-skill_<version>.tar.gz` holding a `taskfactory/` directory
-   with `SKILL.md`. ASSUMPTION: the owner has not answered the skill format
-   question; this is the recommended layout and the owner may override it
-   (for example zip, or extra files).
+2. `taskfactory-skill_<version>.tar.gz` (confirmed by the owner) holding a
+   single harness-neutral `taskfactory/` directory with `SKILL.md` and nothing
+   specific to `.claude` or any other harness. It follows the Agent Skills
+   layout. The script validates that the `SKILL.md` frontmatter has `name` and
+   `description`, and that the archive has no other top-level entry.
 3. `SHA256SUMS` covering all five archives, produced with `sha256sum` or
    `shasum -a 256`, whichever exists.
 
@@ -45,7 +46,7 @@ Check: bin/package.test.sh archives
 
 Check: bin/package.test.sh version
 
-### C3: The skill archive has the documented layout
+### C3: The skill archive is one neutral directory with valid SKILL.md
 
 Check: bin/package.test.sh skill
 
