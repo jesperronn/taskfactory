@@ -258,7 +258,6 @@ if want no-signing-flags; then
   pushlines=$(printf '%s\n' "${code}" | grep 'git push' | grep -v '^[[:space:]]*echo ' || true)
   # shellcheck disable=SC2016
   assert_eq "${pushlines}" 'git push origin "${version}" || {' "git push is called exactly once with the tag"
-  assert_eq "$(printf '%s\n' "${code}" | grep -c 'git push origin "\${version}" ||')" 1 "one push call site"
   before_push=$(printf '%s\n' "${code}" | sed -n '1,/^git push origin/p')
   assert_has "${before_push}" "if (( ! do_publish )); then" "the push is preceded by the no --publish exit"
   # gh is only invoked inside gh_cmd.
@@ -386,8 +385,17 @@ if want publish-failures; then
   # View failing only after the push.
   new_fixture pfail4; new_gh; sign_fixture
   # Fail the second view only: wrap via a flag file read by a dedicated fake.
-  printf '#!/usr/bin/env bash\nif [[ "$2" == view ]]; then n=$(cat "%s/n" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "%s/n"; if [[ $n -ge 2 ]]; then echo "HTTP 500" >&2; exit 1; fi; echo "release not found" >&2; exit 1; fi\nexit 3\n' "${FAKE_GH_DIR}" "${FAKE_GH_DIR}" > "${tmp}/fakebin2-gh"
-  mkdir -p "${tmp}/fakebin2"; cp "${tmp}/fakebin2-gh" "${tmp}/fakebin2/gh"; chmod +x "${tmp}/fakebin2/gh"
+  mkdir -p "${tmp}/fakebin2"
+  cat > "${tmp}/fakebin2/gh" <<'FAKE2'
+#!/usr/bin/env bash
+# Second and later views fail with HTTP 500; the first says not found.
+[[ "$2" == view ]] || exit 3
+n=$(cat "${FAKE_GH_DIR}/n" 2>/dev/null || echo 0)
+n=$((n + 1)); echo "${n}" > "${FAKE_GH_DIR}/n"
+if [[ ${n} -ge 2 ]]; then echo "HTTP 500" >&2; exit 1; fi
+echo "release not found" >&2; exit 1
+FAKE2
+  chmod +x "${tmp}/fakebin2/gh"
   PATH="${tmp}/fakebin2:${PATH}" run_release v1.0.0-rc.1 --tag --publish
   assert_eq "${status}" 1 "second view failing exits 1"
   assert_has "${out}" "WAS pushed" "second view failure says the tag was pushed"
