@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests for bin/release-publish and .github/workflows/release.yml.
-# Usage: bin/release-publish.test.sh [create|idempotent|refuse-lightweight|refuse-malformed|refuse-off-main|accept|failure|workflow]
+# Usage: bin/release-publish.test.sh [create|idempotent|refuse-lightweight|refuse-malformed|refuse-off-main|accept|failure|fallback|workflow]
 # With no argument every section runs. Zero assertions is a failure.
 # No network, no real gh, no token: a fake gh is placed first on PATH.
 set -euo pipefail
@@ -26,7 +26,7 @@ assert_eq() { # actual expected context
 
 section=${1:-all}
 case "${section}" in
-  all|create|idempotent|refuse-lightweight|refuse-malformed|refuse-off-main|accept|failure|workflow) ;;
+  all|create|idempotent|refuse-lightweight|refuse-malformed|refuse-off-main|accept|failure|fallback|workflow) ;;
   *) echo "unknown section: ${section}" >&2; exit 2 ;;
 esac
 want() { [[ "${section}" == all || "${section}" == "$1" ]]; }
@@ -191,6 +191,31 @@ if want accept; then
     verify "${tmp}/ok" "${t}"
     assert_eq "${rc}" 0 "annotated ${t} on main accepted"
   done
+fi
+
+if want fallback; then
+  make_repo "${tmp}/fb"
+  (cd "${tmp}/fb/work" && git tag -a v1.0.0 -m "Release v1.0.0" && git update-ref -d refs/remotes/origin/main)
+  verify "${tmp}/fb" v1.0.0
+  assert_eq "${rc}" 0 "missing origin/main is fetched and the tag on main accepted"
+  make_repo "${tmp}/fb2"
+  (cd "${tmp}/fb2/work" && git tag -a v1.0.0 -m "Release v1.0.0" && git update-ref -d refs/remotes/origin/main && git remote set-url origin "${tmp}/does-not-exist.git")
+  verify "${tmp}/fb2" v1.0.0
+  [[ "${rc}" -eq 1 ]] || fail "unreachable origin must exit 1, got ${rc}"
+  case "${out}" in *fetch*) pass "unreachable origin refused with a fetch message" ;; *) fail "message: ${out}" ;; esac
+  make_repo "${tmp}/fb3"
+  (
+    cd "${tmp}/fb3/work"
+    git checkout -q -b side
+    echo s > s.txt
+    git add s.txt
+    git commit -q -m "feat: side"
+    git tag -a v1.0.0 -m "Release v1.0.0"
+    git update-ref -d refs/remotes/origin/main
+  )
+  verify "${tmp}/fb3" v1.0.0
+  [[ "${rc}" -eq 1 ]] || fail "off-main tag must be refused after fallback fetch"
+  case "${out}" in *"not reachable from origin/main"*) pass "off-main tag still refused after fallback fetch" ;; *) fail "message: ${out}" ;; esac
 fi
 
 if want workflow; then

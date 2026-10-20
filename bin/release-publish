@@ -8,7 +8,8 @@
 #     Run inside a git checkout. Exits 0 only when <tag> is an ANNOTATED tag,
 #     matches v<major>.<minor>.<patch>[-rc.<N>] (release_parse_version in
 #     bin/release.lib.sh) and its commit is reachable from origin/main
-#     (refs/remotes/origin/main). Creates and publishes nothing.
+#     (refs/remotes/origin/main; if that ref is missing it is fetched once from
+#     origin, read-only). Creates and publishes nothing.
 #
 #   bin/release-publish <version> <dist-dir>
 #     Publishes the regular files of <dist-dir> (output of bin/package) as the
@@ -59,7 +60,15 @@ verify_tag() {
     die "refusing ${tag}: tag is not annotated (it is a ${kind} ref); create it with git tag -a"
   fi
   commit=$(git rev-parse "refs/tags/${tag}^{commit}") || die "refusing ${tag}: cannot resolve its commit"
-  git rev-parse --verify -q refs/remotes/origin/main >/dev/null || die "refusing ${tag}: origin/main not available (fetch full history)"
+  if ! git rev-parse --verify -q refs/remotes/origin/main >/dev/null; then
+    # Fallback (read-only): whether actions/checkout provides this ref on a
+    # tag-triggered run is unconfirmed, so try to fetch it.
+    if git remote get-url origin >/dev/null 2>&1; then
+      git fetch --quiet --no-tags origin +refs/heads/main:refs/remotes/origin/main ||
+        die "refusing ${tag}: origin/main missing and the fallback fetch from origin failed"
+    fi
+    git rev-parse --verify -q refs/remotes/origin/main >/dev/null || die "refusing ${tag}: origin/main not available (no origin or fetch did not provide it)"
+  fi
   if ! git merge-base --is-ancestor "${commit}" refs/remotes/origin/main; then
     die "refusing ${tag}: its commit ${commit} is not reachable from origin/main"
   fi
