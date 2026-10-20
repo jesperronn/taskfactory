@@ -99,7 +99,9 @@ in a Git repository with at least one commit on `main`. Every step is a command
 that exists today, including `requeue` for the failed branch.
 
 1. Install. From a TaskFactory checkout run `bin/install`, which builds
-   `taskfactory` and prints a hint if its directory is not on `PATH`.
+   `taskfactory` (and the short `tf` alias, which works anywhere `taskfactory`
+   does; the full name is still preferred in docs and prompts) and prints a
+   hint if its directory is not on `PATH`.
 2. Init. In your project run `taskfactory init`. It writes
    `.taskfactory/config.toml`, the five `tasks/` directories and a
    `.gitignore` (or appends to yours) that lists the runtime paths: the two
@@ -945,6 +947,24 @@ From a checkout, `bin/install` builds `taskfactory` with the same embedded
 version as `bin/build` and writes it to the first of PREFIX, GOBIN, or the
 GOPATH bin directory that applies. Set PREFIX to choose a directory. The script
 takes no arguments and prints a hint when the directory is not on `PATH`.
+
+It also installs `tf`, a relative symlink to `taskfactory` in the same
+directory, so `tf --version` equals `taskfactory --version`. The symlink is
+visible to scripts, non-interactive shells and the prompts that
+`taskfactory work` builds. Set `TASKFACTORY_NO_ALIAS=1` to skip it. The script
+never overwrites an existing `tf` unless it is already a symlink to
+`taskfactory` in that directory. If another file, directory or symlink named
+`tf` exists, such as Terraform, it installs `taskfactory`, warns on stderr with
+the path and still exits 0. If `command -v tf` then resolves to a different
+file because an earlier `PATH` entry shadows it, it warns with the shadowing
+path. Program output keeps saying `taskfactory` whatever name is invoked.
+
+A shell alias (`alias tf=taskfactory`) is only a fallback for people who cannot
+create the symlink, because it is invisible to scripts and non-interactive
+shells. `go install` of a remote path is not possible with the current module
+name; `bin/install` is the global install. A plain
+`go install ./cmd/taskfactory` from a checkout installs only `taskfactory`,
+without the alias. Windows is out of scope because of the symlink.
 
 ## Releases
 

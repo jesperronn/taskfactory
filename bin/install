@@ -33,6 +33,22 @@ bin/build "${target}" >/dev/null
 printf 'installed %s\n' "${target}"
 "${target}" --version
 
+# Install the short alias as a relative symlink, never replacing a foreign tf.
+if [[ "${TASKFACTORY_NO_ALIAS:-}" != 1 ]]; then
+  alias_path="${destination}/tf"
+  if [[ ! -e "${alias_path}" && ! -L "${alias_path}" ]] ||
+    [[ -L "${alias_path}" && "$(readlink "${alias_path}")" == taskfactory ]]; then
+    ln -sfn taskfactory "${alias_path}"
+    printf 'installed %s -> taskfactory\n' "${alias_path}"
+    found=$(command -v tf 2>/dev/null || true)
+    if [[ "${found}" == /* && ! "${found}" -ef "${alias_path}" ]]; then
+      printf 'warning: tf on PATH resolves to %s, which shadows %s\n' "${found}" "${alias_path}" >&2
+    fi
+  else
+    printf 'warning: %s already exists and is not the taskfactory alias; skipping tf\n' "${alias_path}" >&2
+  fi
+fi
+
 case ":${PATH}:" in
   *":${destination}:"*) ;;
   *) printf 'hint: %s is not on PATH\n' "${destination}" >&2 ;;

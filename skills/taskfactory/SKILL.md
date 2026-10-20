@@ -16,6 +16,9 @@ project policy, and the `taskfactory` CLI performs deterministic transitions.
 If the project has `docs/protocol-v1.md` and `docs/task-format-v1.md`, they are
 authoritative. This skill is self-contained and works without them.
 
+`tf` works anywhere `taskfactory` does (`bin/install` installs both); the full
+name is still preferred in docs and generated prompts.
+
 ## Commands that exist today
 
 | Command                                       | Purpose                                                                    |

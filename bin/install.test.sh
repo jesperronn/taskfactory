@@ -1,6 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+known_scenarios="default idempotent optout foreign shadow help usage"
+if (( $# > 0 )); then
+  for requested in "$@"; do
+    case " ${known_scenarios} " in
+      *" ${requested} "*) ;;
+      *) printf 'unknown scenario: %s\n' "${requested}" >&2; exit 2 ;;
+    esac
+  done
+fi
+selected() {
+  local name=$1
+  (( $# == 1 )) || true
+  if (( ${#selected_list[@]} == 0 )); then return 0; fi
+  local item
+  for item in "${selected_list[@]}"; do [[ "${item}" == "${name}" ]] && return 0; done
+  return 1
+}
+selected_list=("$@")
+
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 fixture_root=$(mktemp -d)
 # Go's module cache is read-only, so make the tree writable before removal.
@@ -53,6 +72,8 @@ run_install() {
 
 dest_root="${fixture_root}/dest"
 
+if selected default; then
+
 prefix_dir="${dest_root}/prefix/nested"
 output=$(run_install PREFIX="${prefix_dir}")
 assert_contains "${output}" "installed ${prefix_dir}/taskfactory" 'PREFIX: prints the installed path'
@@ -80,10 +101,79 @@ assert_contains "${output}" "installed ${gopath_dir}/bin/taskfactory" 'falls bac
 
 output=$(run_install PREFIX="${dest_root}/off-path")
 assert_contains "${output}" 'is not on PATH' 'hints when the destination is not on PATH'
+fi
 
+if selected default; then
+  alias_dir="${dest_root}/alias-default"
+  output=$(run_install PREFIX="${alias_dir}")
+  test -L "${alias_dir}/tf"
+  assert_status "$(readlink "${alias_dir}/tf")" taskfactory 'default: tf is a relative symlink to taskfactory'
+  assert_status "$("${alias_dir}/tf" --version)" "$("${alias_dir}/taskfactory" --version)" 'default: tf --version equals taskfactory --version'
+  printf 'default PASS\n'
+fi
+
+if selected idempotent; then
+  alias_dir="${dest_root}/alias-idem"
+  run_install PREFIX="${alias_dir}" >/dev/null
+  run_install PREFIX="${alias_dir}" >/dev/null
+  test -L "${alias_dir}/tf"
+  assert_status "$(readlink "${alias_dir}/tf")" taskfactory 'idempotent: tf still points to taskfactory'
+  printf 'idempotent PASS\n'
+fi
+
+if selected optout; then
+  alias_dir="${dest_root}/alias-optout"
+  run_install PREFIX="${alias_dir}" TASKFACTORY_NO_ALIAS=1 >/dev/null
+  test -x "${alias_dir}/taskfactory"
+  test ! -e "${alias_dir}/tf" && test ! -L "${alias_dir}/tf"
+  printf 'optout PASS\n'
+fi
+
+if selected foreign; then
+  alias_dir="${dest_root}/alias-foreign"
+  mkdir -p "${alias_dir}"
+  printf 'terraform\n' >"${alias_dir}/tf"
+  status=0
+  output=$(run_install PREFIX="${alias_dir}") || status=$?
+  assert_status "${status}" 0 'foreign: file tf exits 0'
+  assert_status "$(cat "${alias_dir}/tf")" terraform 'foreign: file tf untouched'
+  assert_contains "${output}" "${alias_dir}/tf" 'foreign: warning names the path'
+  test -x "${alias_dir}/taskfactory"
+  alias_dir="${dest_root}/alias-foreign-link"
+  mkdir -p "${alias_dir}"
+  ln -s /usr/bin/true "${alias_dir}/tf"
+  status=0
+  output=$(run_install PREFIX="${alias_dir}") || status=$?
+  assert_status "${status}" 0 'foreign: symlink tf exits 0'
+  assert_status "$(readlink "${alias_dir}/tf")" /usr/bin/true 'foreign: symlink tf untouched'
+  assert_contains "${output}" "${alias_dir}/tf" 'foreign: symlink warning names the path'
+  printf 'foreign PASS\n'
+fi
+
+if selected shadow; then
+  alias_dir="${dest_root}/alias-shadow"
+  shadow_dir="${dest_root}/shadow-bin"
+  mkdir -p "${shadow_dir}"
+  printf '#!/bin/sh\nexit 0\n' >"${shadow_dir}/tf"
+  chmod +x "${shadow_dir}/tf"
+  output=$(run_install PREFIX="${alias_dir}" PATH="${shadow_dir}:${alias_dir}:${PATH}")
+  assert_contains "${output}" "${shadow_dir}/tf" 'shadow: warning names the shadowing path'
+  printf 'shadow PASS\n'
+fi
+
+if selected help; then
+  alias_dir="${dest_root}/alias-help"
+  run_install PREFIX="${alias_dir}" >/dev/null
+  assert_status "$("${alias_dir}/tf" --help 2>&1)" "$("${alias_dir}/taskfactory" --help 2>&1)" 'help: tf --help equals taskfactory --help'
+  printf 'help PASS\n'
+fi
+
+if selected usage; then
 usage_status=0
 usage_output=$(cd / && env -u PREFIX -u GOBIN -u GOPATH PREFIX="${dest_root}/rejected" "${install_script}" extra 2>&1) || usage_status=$?
 assert_status "${usage_status}" 2 'rejects arguments with exit 2'
 assert_contains "${usage_output}" 'Usage: bin/install' 'prints usage for extra arguments'
 test ! -e "${dest_root}/rejected/taskfactory"
 printf '[PASS] rejected arguments write nothing\n'
+printf 'usage PASS\n'
+fi
