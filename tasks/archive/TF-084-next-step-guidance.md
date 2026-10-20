@@ -174,3 +174,11 @@ Run each Check command, `bin/test`, `bin/lint` and
 `go run ./cmd/taskfactory validate tasks` from the repository root and report
 each exit code. Also run `go run ./cmd/taskfactory init` in a scratch Git
 repository and paste the printed Next steps block.
+
+## Claim
+
+Owner: sonnet-worker-084
+Branch: task/TF-084
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-084
+Base commit: 3d4b5614e34eb2bc02cec58449e6f24e72b8f931
+Started at: 2026-10-20T22:56:46Z
