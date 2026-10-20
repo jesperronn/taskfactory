@@ -74,7 +74,8 @@ Use the standard `flag` package initially. Support global `--help` and
 slices toward `init`, `status`, `validate`, and `claim`, with configuration
 loading, task validation, atomic claiming, and worktree creation. Later slices
 add worker verification and serialized `integrate`. Do not build release
-infrastructure yet.
+infrastructure as part of this milestone; the release mechanism is planned
+after v1 CLI completion and specified in `docs/release.md`.
 
 `taskfactory validate` with no arguments checks the inbox and ready task files.
 Paths given as arguments are task files or folders under `tasks/`;
@@ -172,5 +173,6 @@ JSON output is optional when orchestration shows a concrete need.
 
 No web UI, agent-provider integration, model-selection engine, cloud service,
 Kubernetes integration, telemetry platform, automatic dependency installation,
-or public release mechanism in the initial implementation. The separate
+or public release mechanism in the initial implementation (a release
+mechanism is planned after v1 CLI completion, see `docs/release.md`). The separate
 `taskfactory-examples` repository can later host very small end-to-end examples.

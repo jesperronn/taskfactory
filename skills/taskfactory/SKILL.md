@@ -38,7 +38,8 @@ the ones in a command's `--help` and in this skill, such as `requeue
 
 ## Not yet implemented
 
-- **Release** (TF-032): there is no release script yet. `bin/build` exists.
+- **Release** (TF-069 to TF-077): there is no release script yet; `bin/release`
+  is planned. The policy is in `docs/release.md`. `bin/build` exists.
 
 ## Setup in a new project
 

@@ -946,6 +946,11 @@ version as `bin/build` and writes it to the first of PREFIX, GOBIN, or the
 GOPATH bin directory that applies. Set PREFIX to choose a directory. The script
 takes no arguments and prints a hint when the directory is not on `PATH`.
 
+## Releases
+
+No release has been cut and `bin/release` does not exist yet. The planned
+release policy is in [docs/release.md](docs/release.md).
+
 ## Agent skill
 
 `skills/taskfactory/SKILL.md` is a portable agent skill covering planner,
