@@ -21,19 +21,19 @@ name is still preferred in docs and generated prompts.
 
 ## Commands that exist today
 
-| Command                                       | Purpose                                                                    |
-| --------------------------------------------- | -------------------------------------------------------------------------- |
-| `taskfactory init [path]`                     | Create `.taskfactory/config.toml` and the five `tasks/` state directories; the path may be any directory inside the project. |
-| `taskfactory status`                          | Show task counts per state.                                                |
-| `taskfactory validate [path...]`              | Validate task files; with no path, the inbox and ready task files.         |
-| `taskfactory claim <ID> --owner <name>`       | Move a ready task to active, write its Claim block, create worktree.       |
-| `taskfactory verify <ID>`                     | Run the task's checks in its worktree and append attempt evidence.         |
-| `taskfactory integrate <ID>`                  | Rebase, verify, fast-forward main and archive an accepted task.            |
-| `taskfactory check-main`                      | Rerun main's verification after integration stopped it.                    |
-| `taskfactory promote <ID>`                    | Move an inbox task to ready and commit only that move.                     |
-| `taskfactory fail <ID> --outcome <O>`         | Move a claimed active task to failed and commit only that move.            |
-| `taskfactory requeue <ID> [--to <state>]`     | Requeue a failed task; removes its old worktree and branch if safe.        |
-| `taskfactory work <ID> --adapter A --model M` | Launch a local worker in a claimed task's worktree; writes only its log.   |
+| Command                                       | Purpose                                                                                         |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `taskfactory init [path]`                     | Create `.taskfactory/config.toml` and the `tasks/` directories; path is any dir in the project. |
+| `taskfactory status`                          | Show task counts per state.                                                                     |
+| `taskfactory validate [path...]`              | Validate task files; with no path, the inbox and ready task files.                              |
+| `taskfactory claim <ID> --owner <name>`       | Move a ready task to active, write its Claim block, create worktree.                            |
+| `taskfactory verify <ID>`                     | Run the task's checks in its worktree and append attempt evidence.                              |
+| `taskfactory integrate <ID>`                  | Rebase, verify, fast-forward main and archive an accepted task.                                 |
+| `taskfactory check-main`                      | Rerun main's verification after integration stopped it.                                         |
+| `taskfactory promote <ID>`                    | Move an inbox task to ready and commit only that move.                                          |
+| `taskfactory fail <ID> --outcome <O>`         | Move a claimed active task to failed and commit only that move.                                 |
+| `taskfactory requeue <ID> [--to <state>]`     | Requeue a failed task; removes its old worktree and branch if safe.                             |
+| `taskfactory work <ID> --adapter A --model M` | Launch a local worker in a claimed task's worktree; writes only its log.                        |
 
 Any subcommand not in this table is **not implemented**. Flags that exist are
 the ones in a command's `--help` and in this skill, such as `requeue
