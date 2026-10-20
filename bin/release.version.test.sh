@@ -7,7 +7,7 @@ repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 export GIT_CONFIG_GLOBAL=/dev/null
 export GIT_CONFIG_SYSTEM=/dev/null
 export LC_ALL=C
-# shellcheck source=release.lib.sh
+# shellcheck source=bin/release.lib.sh
 source "${repo_root}/bin/release.lib.sh"
 
 work=$(mktemp -d)

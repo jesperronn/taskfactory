@@ -55,20 +55,15 @@ release_compare_versions() {
   local pa pb
   pa=$(release_parse_version "${1-}") || return 2
   pb=$(release_parse_version "${2-}") || return 2
-  local a1 a2 a3 b1 b2 b3
-  read -r a1 a2 a3 <<EOP
-${pa}
-EOP
-  read -r b1 b2 b3 <<EOP
-${pb}
-EOP
-  local x y z
-  for x in 1 2 3; do
-    eval "y=\$a${x}; z=\$b${x}"
-    if ((10#${y} < 10#${z})); then
+  local -a av bv
+  read -r -a av <<<"${pa}"
+  read -r -a bv <<<"${pb}"
+  local i
+  for i in 0 1 2; do
+    if ((av[i] < bv[i])); then
       echo less
       return 0
-    elif ((10#${y} > 10#${z})); then
+    elif ((av[i] > bv[i])); then
       echo greater
       return 0
     fi
@@ -123,17 +118,16 @@ EOH
 
 # Prints the bump level of <version> relative to <last>.
 _release_bump_level() {
-  local p l
-  p=$(release_parse_version "$1")
-  l=$(release_parse_version "$2")
-  local p1 p2 p3 l1 l2 l3
-  read -r p1 p2 p3 <<EOP
-${p}
-EOP
-  read -r l1 l2 l3 <<EOP
-${l}
-EOP
-  if ((p1 > l1)); then echo major; elif ((p2 > l2)); then echo minor; else echo patch; fi
+  local -a pv lv
+  read -r -a pv <<<"$(release_parse_version "$1")"
+  read -r -a lv <<<"$(release_parse_version "$2")"
+  if ((pv[0] > lv[0])); then
+    echo major
+  elif ((pv[1] > lv[1])); then
+    echo minor
+  else
+    echo patch
+  fi
 }
 
 _release_level_rank() {
