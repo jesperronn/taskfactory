@@ -61,7 +61,7 @@ cp -R "${repo_root}/cmd" "${repo_root}/internal" "${fixture}/"
 git -C "${fixture}" init --quiet
 git -C "${fixture}" add -A
 git -C "${fixture}" -c user.name=test -c user.email=test@example.invalid commit --quiet -m fixture
-expected_version=$(git -C "${fixture}" describe --always --dirty)
+expected_version=dev-$(git -C "${fixture}" rev-parse --short HEAD)
 install_script="${fixture}/bin/install"
 
 # run_install runs bin/install from / with PREFIX, GOBIN and GOPATH cleared,
