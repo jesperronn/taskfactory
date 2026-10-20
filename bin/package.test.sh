@@ -104,6 +104,18 @@ if want refuse; then
   status=0
   "${repo_root}/bin/package" v1.0.0 >/dev/null 2>&1 || status=$?
   assert_eq "${status}" 2 "missing out-dir exits 2"
+  for bad in v1.0.0-beta.1 v01.0.0 v1.00.0; do
+    status=0
+    "${repo_root}/bin/package" "${bad}" "${tmp}/never" >/dev/null 2>&1 || status=$?
+    assert_eq "${status}" 2 "unknown label or leading zero '${bad}' exits 2"
+  done
+  mkdir "${tmp}/ok-rc" "${tmp}/ok-stable"
+  "${repo_root}/bin/package" v1.0.0-rc.1 "${tmp}/ok-rc" >/dev/null 2>&1 || fail "v1.0.0-rc.1 accepted"
+  pass "v1.0.0-rc.1 accepted"
+  "${repo_root}/bin/package" v1.0.0 "${tmp}/ok-stable" >/dev/null 2>&1 || fail "v1.0.0 accepted"
+  pass "v1.0.0 accepted"
+  src_out=$(bash -c 'before=$(set +o); source "$1"; after=$(set +o); [[ "${before}" == "${after}" ]] || echo OPTIONS-CHANGED' _ "${repo_root}/bin/release.lib.sh" 2>&1)
+  assert_eq "${src_out}" "" "sourcing release.lib.sh prints nothing and changes no shell options"
   if [[ -e "${tmp}/never" ]]; then fail "bad version creates nothing"; fi
   status=0
   "${repo_root}/bin/package" "${v}" "${out}" >/dev/null 2>&1 || status=$?

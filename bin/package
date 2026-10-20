@@ -3,6 +3,11 @@
 # Never tags, pushes or uses the network. Portable to bash 3.2 and bash 5.
 set -euo pipefail
 
+# The one version grammar lives in bin/release.lib.sh (no side effects on source).
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=bin/release.lib.sh
+source "${script_dir}/release.lib.sh"
+
 usage() {
   echo "Usage: bin/package <version> <output-dir>" >&2
 }
@@ -35,7 +40,7 @@ if (( $# != 2 )); then
 fi
 version=$1
 out_arg=$2
-if [[ ! "${version}" =~ ${PACKAGE_VERSION_REGEX} ]]; then
+if ! release_parse_version "${version}" >/dev/null; then
   echo "bin/package: invalid version: ${version}" >&2
   usage
   exit 2
