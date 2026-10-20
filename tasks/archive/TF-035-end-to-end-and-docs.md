@@ -45,3 +45,11 @@ Remaining:
   states that `taskfactory requeue TF-001` (or `--to inbox`) retries an
   unclaimed failed task and that claimed failed tasks are refused.
 - CI signal (TF-020): open, needs a push to GitHub.
+
+## Closed
+
+All items are delivered: the README quick start (TF-057), a verbatim re-run
+with zero workarounds using the real local model
+(`docs/experiments/quickstart-verbatim-rerun-2.md`), the `requeue` branch in the
+quick start (TF-049, TF-066, TF-067), and the GitHub CI run (TF-020, verified
+2026-10-20, run 39383057406 on `8a879fe`).
