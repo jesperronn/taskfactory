@@ -5,9 +5,9 @@ tasks TF-070 to TF-077 implement it.
 
 ## Status
 
-Planned, not implemented. Today only `bin/build` (builds `taskfactory`
-with an embedded version) and `bin/install` exist. `bin/release` and the
-release workflow do not exist yet. They are planned in these tasks:
+Partly implemented. `bin/build`, `bin/install`, `bin/package` and the
+`bin/release` dry run with `--tag` exist. The release workflow and
+publishing do not exist yet. They are planned in these tasks:
 
 - TF-070: version parsing and bump advice
 - TF-071: prerelease versions (`-rc.N`)
@@ -45,6 +45,23 @@ The scripts never pass `-s`, `-u` or any signing flag. Signing follows the
 user's own git configuration. `bin/release` refuses to create the tag unless
 `tag.gpgSign` is true in that configuration, or the human passes
 `--allow-unsigned`.
+
+## The `bin/release` command
+
+`bin/release <version> [--tag] [--allow-unsigned]` is a dry run by default
+and changes nothing in the repository. It collects and reports all gate
+failures together and exits 1 if any failed (usage errors exit 2). The gates
+are: the branch is `main`, the tree is clean (untracked files included),
+local `main` equals `origin/main` after a `git fetch origin`, the tag does
+not exist, and `bin/test` and `bin/lint` pass. It then prints the last tag
+and the bump advice, runs `bin/package` into a temporary directory, and
+prints the exact `git push origin <tag>` command for a human. With `--tag` it
+also creates the annotated tag locally with
+`git tag -a <version> -m "Release <version>"`. It never pushes.
+
+Tests override parts through environment variables: `RELEASE_TEST_CMD`,
+`RELEASE_LINT_CMD`, `RELEASE_PACKAGE_CMD`, `RELEASE_NO_ORIGIN_OK=1` (skip the
+fetch and origin gate when there is no origin remote) and `RELEASE_REPO_DIR`.
 
 ## Bump advice
 

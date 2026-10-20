@@ -41,8 +41,10 @@ the ones in a command's `--help` and in this skill, such as `requeue
 
 ## Not yet implemented
 
-- **Release** (TF-069 to TF-077): there is no release script yet; `bin/release`
-  is planned. The policy is in `docs/release.md`. `bin/build` exists.
+- **Release** (TF-069 to TF-077): `bin/release <version>` exists as a dry run
+  (gates, advice, packaging; `--tag` creates a local annotated tag) but the
+  release workflow and publishing do not exist yet. The policy is in
+  `docs/release.md`. `bin/build` and `bin/package` exist.
 
 ## Setup in a new project
 

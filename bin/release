@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+# bin/release <version> [--tag] [--allow-unsigned]
+#
+# Default is a DRY RUN that changes nothing in the repository: it checks the
+# gates, prints the bump advice, builds the artifacts into a temporary
+# directory with bin/package and prints what a real run would do.
+# --tag additionally creates the annotated tag locally, only when the user's
+# git config has tag.gpgSign true or --allow-unsigned is given. The script
+# never signs explicitly, never pushes, never publishes and never uses the
+# network except the optional `git fetch origin`. Signing follows the user's
+# own git configuration. Policy: docs/release.md.
+#
+# Environment overrides (meant for tests; the real checks take minutes):
+#   RELEASE_TEST_CMD       command run instead of bin/test
+#   RELEASE_LINT_CMD       command run instead of bin/lint
+#   RELEASE_PACKAGE_CMD    command run instead of bin/package
+#   RELEASE_NO_ORIGIN_OK=1 skip the origin gate (and the fetch) when there is
+#                          no origin remote, as in a test fixture
+#   RELEASE_REPO_DIR       repository to operate on (default: this script's)
+#
+# Exit codes: 0 ok, 1 a gate failed or the tag was refused, 2 usage error.
+# Portable to bash 3.2 (macOS) and bash 5.
+set -euo pipefail
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=bin/release.lib.sh
+source "${script_dir}/release.lib.sh"
+
+usage() {
+  echo "Usage: bin/release <version> [--tag] [--allow-unsigned]" >&2
+}
+
+version=""
+do_tag=0
+allow_unsigned=0
+for arg in "$@"; do
+  case "${arg}" in
+    --tag) do_tag=1 ;;
+    --allow-unsigned) allow_unsigned=1 ;;
+    -*) echo "bin/release: unknown option: ${arg}" >&2; usage; exit 2 ;;
+    *)
+      if [[ -n "${version}" ]]; then usage; exit 2; fi
+      version=${arg}
+      ;;
+  esac
+done
+if [[ -z "${version}" ]]; then usage; exit 2; fi
+if ! release_parse_version "${version}" >/dev/null; then
+  echo "bin/release: invalid version: ${version} (want vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N)" >&2
+  usage
+  exit 2
+fi
+
+cd "${RELEASE_REPO_DIR:-${script_dir}/..}"
+
+failures=()
+fail_gate() {
+  failures+=("$1")
+  printf 'GATE FAILED: %s\n' "$1"
+}
+
+echo "Release ${version}: gates"
+
+# Gate: branch is main.
+branch=$(git symbolic-ref --short -q HEAD || true)
+if [[ "${branch}" == main ]]; then
+  echo "ok: on branch main"
+else
+  fail_gate "branch: on '${branch:-detached HEAD}', not main"
+fi
+
+# Gate: clean tree, untracked non-ignored files included.
+if [[ -z "$(git status --porcelain)" ]]; then
+  echo "ok: working tree clean"
+else
+  fail_gate "clean tree: uncommitted or untracked changes"
+fi
+
+# Gate: local main equals origin/main.
+if git remote get-url origin >/dev/null 2>&1; then
+  if git fetch -q origin; then
+    local_main=$(git rev-parse -q --verify refs/heads/main || true)
+    origin_main=$(git rev-parse -q --verify refs/remotes/origin/main || true)
+    if [[ -n "${local_main}" && "${local_main}" == "${origin_main}" ]]; then
+      echo "ok: local main equals origin/main"
+    else
+      fail_gate "origin: local main is not equal to origin/main"
+    fi
+  else
+    fail_gate "origin: git fetch origin failed"
+  fi
+elif [[ "${RELEASE_NO_ORIGIN_OK:-}" == 1 ]]; then
+  echo "skipped: no origin remote, fetch and origin gate skipped (RELEASE_NO_ORIGIN_OK=1)"
+else
+  fail_gate "origin: no origin remote"
+fi
+
+# Gate: the tag does not exist.
+if git rev-parse -q --verify "refs/tags/${version}" >/dev/null; then
+  fail_gate "tag: ${version} already exists"
+else
+  echo "ok: tag ${version} does not exist"
+fi
+
+# Gates: tests and lint.
+run_check() { # name command
+  local name=$1 cmd=$2 log
+  log=$(mktemp "${TMPDIR:-/tmp}/release-check.XXXXXX")
+  if bash -c "${cmd}" >"${log}" 2>&1; then
+    echo "ok: ${name} passed (${cmd})"
+  else
+    tail -n 20 "${log}"
+    fail_gate "${name}: '${cmd}' failed"
+  fi
+}
+run_check tests "${RELEASE_TEST_CMD:-bin/test}"
+run_check lint "${RELEASE_LINT_CMD:-bin/lint}"
+
+# Gate: signing, only when tagging.
+if (( do_tag )) && (( ! allow_unsigned )); then
+  sign=$(git config --get --type=bool tag.gpgSign || true)
+  if [[ "${sign}" != true ]]; then
+    fail_gate "signing: tag.gpgSign is not true in your git config; set it or pass --allow-unsigned (nothing was tagged)"
+  else
+    echo "ok: tag.gpgSign is true"
+  fi
+fi
+
+# Advice and version check.
+echo
+if last_any=$(release_last_any_tag); then
+  echo "last release tag: ${last_any}"
+else
+  echo "last release tag: none (first release)"
+fi
+if last_stable=$(release_last_stable_tag); then
+  echo "advised bump (since ${last_stable}): $(release_bump_advice "${last_stable}")"
+else
+  echo "advised bump: none (no stable tag yet)"
+fi
+if ! release_check_version "${version}"; then
+  fail_gate "version: ${version} is refused (see message above)"
+fi
+
+if (( ${#failures[@]} )); then
+  echo
+  echo "bin/release: ${#failures[@]} gate(s) failed:"
+  for f in "${failures[@]}"; do printf '  - %s\n' "${f}"; done
+  echo "Nothing was changed."
+  exit 1
+fi
+
+# Prove the artifacts build.
+pkg_out=$(mktemp -d "${TMPDIR:-/tmp}/release-package.XXXXXX")
+pkg_dir="${pkg_out}/artifacts"
+echo
+echo "Building artifacts in ${pkg_dir}"
+if ! ${RELEASE_PACKAGE_CMD:-${script_dir}/package} "${version}" "${pkg_dir}"; then
+  echo "bin/release: bin/package failed" >&2
+  exit 1
+fi
+echo "artifacts:"
+for f in "${pkg_dir}"/*; do
+  case "${f##*/}" in SHA256SUMS) ;; *) printf '  %s\n' "${f##*/}" ;; esac
+done
+echo "checksums: ${pkg_dir}/SHA256SUMS"
+
+echo
+if (( do_tag )); then
+  git tag -a "${version}" -m "Release ${version}"
+  echo "Created annotated tag ${version} locally. Nothing was pushed."
+else
+  echo "Dry run: nothing was changed. A real run with --tag would create the"
+  echo "annotated tag ${version} locally (message: Release ${version})."
+fi
+echo "To publish, a human runs:"
+echo "  git push origin ${version}"
