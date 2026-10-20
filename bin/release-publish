@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# bin/release-publish: verify a release tag and publish a GitHub release.
+#
+# Shared by .github/workflows/release.yml and the local fallback
+# (bin/release --publish, TF-075). Interface (keep stable):
+#
+#   bin/release-publish --verify-tag <tag>
+#     Run inside a git checkout. Exits 0 only when <tag> is an ANNOTATED tag,
+#     matches v<major>.<minor>.<patch>[-rc.<N>] (release_parse_version in
+#     bin/release.lib.sh) and its commit is reachable from origin/main
+#     (refs/remotes/origin/main). Creates and publishes nothing.
+#
+#   bin/release-publish <version> <dist-dir>
+#     Publishes the regular files of <dist-dir> (output of bin/package) as the
+#     GitHub release <version>. Idempotent:
+#       - no release for <version> (gh release view): gh release create
+#         <version> --title <version> --notes "Release <version>"
+#         [--prerelease for -rc versions] <assets...>
+#       - release exists: nothing is created; the release's prerelease flag is
+#         corrected with gh release edit only when it differs; assets are
+#         uploaded with gh release upload <version> <assets...> --clobber
+#         (adds missing assets, replaces same-named ones). The release is never
+#         deleted and its title and notes are never edited.
+#     It does not verify the tag itself (run --verify-tag first) and never
+#     creates or pushes tags.
+#
+# Environment: GH_TOKEN or GITHUB_TOKEN is read by gh itself, not by this
+# script. Every gh call goes through gh_cmd, so tests put a fake gh first on
+# PATH.
+# Exit codes: 0 success; 1 verification or publish failure (including any gh
+# failure); 2 usage error or invalid version.
+# Portable to bash 3.2 and bash 5. Never passes signing flags.
+set -euo pipefail
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=bin/release.lib.sh
+source "${script_dir}/release.lib.sh"
+
+usage() {
+  echo "Usage: bin/release-publish --verify-tag <tag> | bin/release-publish <version> <dist-dir>" >&2
+}
+
+die() {
+  echo "bin/release-publish: $*" >&2
+  exit 1
+}
+
+gh_cmd() {
+  gh "$@"
+}
+
+verify_tag() {
+  local tag=$1 kind commit
+  if ! release_parse_version "${tag}" >/dev/null; then
+    die "refusing ${tag}: not v<major>.<minor>.<patch> or v<major>.<minor>.<patch>-rc.<N>"
+  fi
+  kind=$(git cat-file -t "refs/tags/${tag}" 2>/dev/null) || die "refusing ${tag}: no such tag"
+  if [[ "${kind}" != tag ]]; then
+    die "refusing ${tag}: tag is not annotated (it is a ${kind} ref); create it with git tag -a"
+  fi
+  commit=$(git rev-parse "refs/tags/${tag}^{commit}") || die "refusing ${tag}: cannot resolve its commit"
+  git rev-parse --verify -q refs/remotes/origin/main >/dev/null || die "refusing ${tag}: origin/main not available (fetch full history)"
+  if ! git merge-base --is-ancestor "${commit}" refs/remotes/origin/main; then
+    die "refusing ${tag}: its commit ${commit} is not reachable from origin/main"
+  fi
+  printf 'tag %s verified (annotated, valid version, on origin/main)\n' "${tag}"
+}
+
+publish() {
+  local version=$1 dist=$2 f out want_pre have_pre
+  local -a assets=()
+  release_parse_version "${version}" >/dev/null || {
+    echo "bin/release-publish: invalid version: ${version}" >&2
+    exit 2
+  }
+  [[ -d "${dist}" ]] || die "dist dir not found: ${dist}"
+  for f in "${dist}"/*; do
+    [[ -f "${f}" ]] && assets+=("${f}")
+  done
+  [[ ${#assets[@]} -gt 0 ]] || die "no files in ${dist}"
+  if release_is_prerelease "${version}"; then want_pre=true; else want_pre=false; fi
+
+  if out=$(gh_cmd release view "${version}" 2>&1); then
+    echo "release ${version} exists; uploading assets only"
+    have_pre=$(gh_cmd release view "${version}" --json isPrerelease --jq .isPrerelease) || die "cannot read prerelease flag"
+    if [[ "${have_pre}" != "${want_pre}" ]]; then
+      gh_cmd release edit "${version}" "--prerelease=${want_pre}" || die "cannot fix prerelease flag"
+    fi
+    gh_cmd release upload "${version}" "${assets[@]}" --clobber || die "asset upload failed"
+  elif [[ "${out}" == *"release not found"* ]]; then
+    echo "creating release ${version}"
+    if [[ "${want_pre}" == true ]]; then
+      gh_cmd release create "${version}" --title "${version}" --notes "Release ${version}" --prerelease "${assets[@]}" || die "release create failed"
+    else
+      gh_cmd release create "${version}" --title "${version}" --notes "Release ${version}" "${assets[@]}" || die "release create failed"
+    fi
+  else
+    printf '%s\n' "${out}" >&2
+    die "gh release view failed for a reason other than a missing release"
+  fi
+  echo "published ${version}"
+}
+
+case "${1-}" in
+  --verify-tag)
+    [[ $# -eq 2 ]] || { usage; exit 2; }
+    verify_tag "$2"
+    ;;
+  "" | -*)
+    usage
+    exit 2
+    ;;
+  *)
+    [[ $# -eq 2 ]] || { usage; exit 2; }
+    publish "$1" "$2"
+    ;;
+esac
