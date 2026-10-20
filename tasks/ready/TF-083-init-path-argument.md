@@ -89,15 +89,19 @@ Check: go test ./cmd/taskfactory -run TestInitPathHelp
 
 Check: go test ./cmd/taskfactory -run TestInitPathNoWritesToCwdRepo
 
-### C10: The README and skill mention init [path]
+### C10: The README mentions init [path]
 
-Check: grep -q 'init \[path\]' README.md skills/taskfactory/SKILL.md
+Check: grep -q 'init \[path\]' README.md
 
-### C11: The full test suite passes
+### C11: The skill mentions init [path]
+
+Check: grep -q 'init \[path\]' skills/taskfactory/SKILL.md
+
+### C12: The full test suite passes
 
 Check: bin/test
 
-### C12: The whole task tree validates
+### C13: The whole task tree validates
 
 Check: go run ./cmd/taskfactory validate tasks
 
