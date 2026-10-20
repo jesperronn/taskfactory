@@ -4,6 +4,7 @@ set -euo pipefail
 usage() {
   echo "Usage: bin/lint [--autofix] [PATH...]" >&2
   echo "       bin/lint --tells" >&2
+  echo "       bin/lint --readability" >&2
 }
 
 start_dir=$PWD
@@ -28,12 +29,14 @@ mdsmith_pkg=github.com/jeduden/mdsmith/cmd/mdsmith@v0.57.0
 
 mode=check
 tells=0
+readability=0
 paths=()
 path_args=0 # path arguments given, good or bad
 bad_paths=0 # bad paths are reported, the rest still lint, and the run exits 2
 for arg in "$@"; do
   case "$arg" in
     --tells) tells=1 ;;
+    --readability) readability=1 ;;
     --autofix) mode=fix ;;
     -*) usage; exit 2 ;;
     *)
@@ -56,7 +59,7 @@ done
 # the prose scope, print the findings and a stats line, and always exit 0. It
 # never changes the default lint, and it takes no other options or paths.
 if (( tells )); then
-  if [[ $mode != check ]] || (( path_args )); then
+  if (( readability )) || [[ $mode != check ]] || (( path_args )); then
     echo "bin/lint: --tells takes no other options or paths" >&2
     usage
     exit 2
@@ -72,6 +75,32 @@ if (( tells )); then
   n55=$(printf '%s\n' "$findings" | grep -c ' MDS055 ' || true)
   n56=$(printf '%s\n' "$findings" | grep -c ' MDS056 ' || true)
   echo "stats: tells MDS055=$n55 MDS056=$n56"
+  exit 0
+fi
+
+# Advisory readability mode (TF-039): run MDS023, MDS024 and MDS036 from
+# .mdsmith-readability.yml over the files workers read, print the findings and
+# a stats line, and always exit 0. It never changes the default lint.
+if (( readability )); then
+  if [[ $mode != check ]] || (( path_args )); then
+    echo "bin/lint: --readability takes no other options or paths" >&2
+    usage
+    exit 2
+  fi
+  scope=()
+  for p in "$tasks_dir/inbox" "$tasks_dir/ready" "$tasks_dir/active" "$tasks_dir/failed" \
+    docs/worker-instructions.md docs/protocol-v1.md docs/task-format-v1.md \
+    skills/taskfactory/SKILL.md README.md; do
+    if [[ -e $p ]]; then scope+=("$p"); fi
+  done
+  report=$(go run "$mdsmith_pkg" check --no-color -c .mdsmith-readability.yml \
+    "${scope[@]}" 2>&1 || true)
+  findings=$(printf '%s\n' "$report" | grep -E '^[^ ]+:[0-9]+:[0-9]+ MDS(023|024|036) ' || true)
+  [[ -z $findings ]] || printf '%s\n' "$findings"
+  n23=$(printf '%s\n' "$findings" | grep -c ' MDS023 ' || true)
+  n24=$(printf '%s\n' "$findings" | grep -c ' MDS024 ' || true)
+  n36=$(printf '%s\n' "$findings" | grep -c ' MDS036 ' || true)
+  echo "stats: readability MDS023=$n23 MDS024=$n24 MDS036=$n36"
   exit 0
 fi
 

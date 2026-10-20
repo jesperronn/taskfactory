@@ -10,8 +10,9 @@ description:
 # TaskFactory
 
 TaskFactory coordinates coding agents through explicit task contracts. Git holds
-code, task files on disk hold lifecycle state, `.taskfactory/config.toml` holds
-project policy, and the `taskfactory` CLI performs deterministic transitions.
+the code. Task files on disk hold the lifecycle state. The project policy is in
+`.taskfactory/config.toml`. The `taskfactory` CLI makes each state change the
+same way every time.
 
 If the project has `docs/protocol-v1.md` and `docs/task-format-v1.md`, they are
 authoritative. This skill is self-contained and works without them.
@@ -80,9 +81,9 @@ and `requeue --discard-claim` below. Do not invent others.
 
 ## Ready task contract
 
-A task file is `tasks/<state>/<ID>-<slug>.md`, where `<ID>` is `TF-NNN` and the
-slug is lowercase letters, digits and single hyphens. A ready task must have
-exactly these headings, in this order, and no `## Claim` block:
+A task file is `tasks/<state>/<ID>-<slug>.md`. The `<ID>` is `TF-NNN`. The slug
+is lowercase letters, digits and single hyphens. A ready task must have exactly
+these headings, in this order. It must have no `## Claim` block.
 
 ```markdown
 # TF-001: Short title

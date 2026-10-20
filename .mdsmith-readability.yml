@@ -1,0 +1,30 @@
+# Advisory config for bin/lint --readability (TF-039). Not read by the
+# default lint. Only the three readability rules are enabled. Thresholds per
+# file kind, with the rationale: docs/experiments/TF-039-readability.md.
+convention: github
+rules:
+  # Default kind: task files, protocol and task-format specs, README.
+  paragraph-readability:
+    max-index: 14.0
+    min-words: 20
+  paragraph-structure:
+    max-sentences: 6
+    max-words-per-sentence: 40
+  max-section-length:
+    max: 60
+overrides:
+  # Worker instructions: text a small model reads before every task.
+  - glob: ["docs/worker-instructions.md", "skills/taskfactory/SKILL.md"]
+    rules:
+      paragraph-readability:
+        max-index: 12.0
+        min-words: 20
+      paragraph-structure:
+        max-sentences: 5
+        max-words-per-sentence: 30
+      max-section-length:
+        max: 40
+ignore:
+  - testdata/markdown/**
+  - node_modules/**
+  - .claude/worktrees/**
