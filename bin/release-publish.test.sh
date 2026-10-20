@@ -209,9 +209,9 @@ if want workflow; then
   need "fetch-depth: 0" "full history checkout"
   ci="${repo_root}/.github/workflows/ci.yml"
   assert_eq "$(grep -o 'actions/[a-z-]*@v[0-9]*' "${wf}")" "$(grep -o 'actions/[a-z-]*@v[0-9]*' "${ci}" | sed -n 1,2p)" "action majors match ci.yml"
-  ln() { grep -n -- "$1" "${wf}" | head -1 | cut -d: -f1; }
-  v=$(ln 'release-publish --verify-tag'); t=$(ln 'run: bin/test'); l=$(ln 'run: bin/lint')
-  p=$(ln 'run: bin/package'); u=$(ln 'run: bin/release-publish "')
+  line_of() { grep -n -- "$1" "${wf}" | head -1 | cut -d: -f1; }
+  v=$(line_of 'release-publish --verify-tag'); t=$(line_of 'run: bin/test'); l=$(line_of 'run: bin/lint')
+  p=$(line_of 'run: bin/package'); u=$(line_of 'run: bin/release-publish "')
   [[ -n "${v}" && -n "${t}" && -n "${l}" && -n "${p}" && -n "${u}" ]] || fail "workflow steps not all found"
   [[ "${v}" -lt "${t}" && "${t}" -lt "${l}" && "${l}" -lt "${p}" && "${p}" -lt "${u}" ]] || fail "step order must be verify, test, lint, package, publish"
   pass "step order: verify-tag, test, lint, package, publish"
