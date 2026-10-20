@@ -121,6 +121,12 @@ Rules:
   nothing else.
 - Promotion refuses when the index already has staged paths; unstage them
   first.
+- Splitting rule: when part of a task is delivered and the rest is still
+  wanted, do not shrink the original and leave it open. Write a new inbox task
+  with exactly the remainder, then close the original: append a `Closed`
+  section listing each delivered item with its deliverer and a line
+  `Remainder: TF-NNN`, and `git mv` it to `tasks/archive/`. Use the same rule to
+  split a large task. See `docs/task-format-v1.md`.
 - TaskFactory commits follow the user's Git signing configuration. Do not add
   `--no-gpg-sign` or any signing override to TaskFactory commands or to
   commands you run for the user.

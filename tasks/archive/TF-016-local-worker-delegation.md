@@ -11,8 +11,7 @@ retains the result and evidence.
 Local worker delegation is a required capability. The operator can choose a
 worker, start one task and retain its commits, verification results, failures
 and run metadata. A stalled or failed worker must not silently complete or
-archive a task. What remains is stop, resume and hand-off of failed work, and
-live progress.
+archive a task.
 
 ## Delivered
 
@@ -39,14 +38,14 @@ live progress.
 - Real run through a local worker: TF-057
   (`docs/experiments/e2e-local-worker.md`); opt-in smoke test: TF-058.
 
-## Remaining gap
+## Closed
 
-- Stop and resume: TF-028 is closed (archived). Owner decision: a stalled or
-  stopped worker is recorded with `fail <ID> --outcome BLOCKED`; there is no
-  `stalled` evidence outcome. Resume waits on `requeue`.
-- Hand off failed work for retry: needs `requeue` (TF-049, inbox; in progress).
-- Live progress: `work` writes the log when the run ends; streaming modes
-  (`stream-json`, rpc) were deferred in the TF-056 notes.
-- Retry budgets: none exist; retries are manual `fail` then `requeue`.
-- Evidence that would justify automatic worker selection is not recorded.
-  Selection stays manual in v1.
+Delivered:
+
+- Stop and resume: TF-028 (archived). A stalled or stopped worker is recorded
+  with `fail <ID> --outcome BLOCKED`; there is no `stalled` outcome.
+- Hand-off of failed work for retry: `requeue`, TF-049, TF-066 and TF-067
+  (all archived).
+- Every item under Delivered above, by the tasks and tests named there.
+
+Remainder: TF-068

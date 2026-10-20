@@ -295,6 +295,33 @@ worker report alone does not archive a task: integration must succeed before the
 task moves to `tasks/archive/`. Evidence records worker attempts and do not
 replace integration evidence required by the protocol.
 
+## Splitting and closing tasks
+
+Splitting rule: when part of a task is delivered and the rest is still wanted,
+do not shrink the original in place and leave it open. Create a new inbox task
+(new ID, its own Goal, Scope, Dependencies and, when possible, success
+criteria) containing exactly the undelivered remainder. Then close the
+original: append a `Closed` section and `git mv` the file to `tasks/archive/`.
+The same rule splits a large task: write the new tasks for the parts, then
+close the original referencing them.
+
+The `Closed` section has this shape:
+
+```text
+## Closed
+
+Delivered:
+
+- <item>: <deliverer: archived task ID, file or test>
+
+Remainder: TF-NNN
+```
+
+List each delivered item with its deliverer. A task with no remainder says
+`Remainder: none`; a split task says `Remainder: TF-NNN, TF-MMM`. The remainder
+is always a new task. After closing, never edit the archived original to add,
+change or reopen work; archived tasks are history.
+
 ## Complete valid ready task
 
 ```markdown

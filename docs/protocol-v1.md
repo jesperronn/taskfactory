@@ -12,7 +12,8 @@ provider-specific service is required.
 
 - **Planner:** refines inbox work, splits independent tasks, defines
   dependencies, scope, success criteria, and checks. Only promotes executable
-  tasks.
+  tasks. Follows the splitting rule in `task-format-v1.md`: undelivered work
+  becomes a new inbox task and the original is closed to the archive.
 - **Orchestrator:** assigns ready tasks, enforces the worker limit, handles
   failures and remediation, and controls integration state.
 - **Worker:** owns one claimed task in an isolated branch/worktree, implements
