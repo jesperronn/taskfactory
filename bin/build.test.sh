@@ -171,7 +171,10 @@ scenario_output() {
   printf '[PASS] output PASS symlinked dist/ target is left intact (status %s)\n' "${status}"
 
   grep -qx 'dist/' "${repo_root}/.gitignore"
-  ! grep -q 'bin/out' "${repo_root}/.gitignore"
+  if grep -q 'bin/out' "${repo_root}/.gitignore"; then
+    echo '[FAIL] .gitignore still lists bin/out' >&2
+    exit 1
+  fi
   printf '[PASS] output PASS .gitignore lists dist/ and not bin/out/\n'
 }
 
