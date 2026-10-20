@@ -16,7 +16,9 @@ release workflow do not exist yet. They are planned in these tasks:
 - TF-074: GitHub Actions release workflow
 - TF-075: `bin/release --publish` local fallback
 - TF-076: first release `v1.0.0-rc.1`
-- TF-077: release notes
+- TF-077: release notes (decided before the stable `v1.0.0`)
+- TF-078: `taskfactory skill install`
+- TF-079: `npx skills add` compatibility and the install paths in the README
 
 ## Releases are human-started
 
@@ -33,8 +35,9 @@ published as GitHub prereleases. The version parser is one isolated function
 so other prerelease labels can be added later.
 
 The tag message is `Release <version>` and the GitHub release body is the
-same text. Release notes are deferred: the owner wants to discuss the format
-later (TF-077). Until then there are no generated notes.
+same text. Release notes are deferred past `v1.0.0-rc.1`: the format is
+decided before the stable `v1.0.0`, with feedback from the rc (TF-077). Until
+then there are no generated notes.
 
 ## Signing
 
@@ -50,11 +53,13 @@ Conventional commits are used only for the bump advice `bin/release` prints:
 - major: `!` after the type or scope, or a `BREAKING CHANGE` or
   `BREAKING-CHANGE` footer
 - minor: `feat`
-- patch: `fix` and `perf`
+- patch: everything else, that is `fix`, `perf`, and also a range where
+  nothing qualifies (only docs, test, ci, build, chore, refactor or style
+  commits, or subjects that do not follow the convention)
 
-When nothing qualifies, the advice is a minor. The consequence, stated
-plainly: a fix-only range suggests patch, while a docs-only range suggests
-minor. Subjects that do not follow the convention are listed as warnings.
+The advice is monotone: a range never suggests more than its largest
+qualifying commit. Subjects that do not follow the convention are listed as
+warnings.
 
 The advice never blocks. `bin/release` warns when the given version is lower
 than the advice. Only a version not greater than the last release tag is
@@ -66,8 +71,9 @@ version explicitly.
 - `taskfactory_<version>_<os>_<arch>.tar.gz` for darwin and linux on arm64
   and amd64 (four archives)
 - `taskfactory-skill_<version>.tar.gz` holding a `taskfactory/` directory
-  with `SKILL.md`. ASSUMPTION: this name and format is not confirmed by the
-  owner and may change.
+  with `SKILL.md` and nothing specific to one harness (no `.claude`
+  paths). It follows the Agent Skills layout, where `SKILL.md` has a name and
+  a description.
 - `SHA256SUMS`, one file covering all archives
 
 ## Publishing
