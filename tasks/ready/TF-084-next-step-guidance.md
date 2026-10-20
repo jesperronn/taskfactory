@@ -38,28 +38,50 @@ its normal output:
 
    - the line `Next steps:`
    - `  1. Review .taskfactory/config.toml and set the verification commands.`
-   - `  2. Commit .taskfactory/config.toml, .gitignore and tasks/ before the first claim.`
+   - `  2. Commit .taskfactory/config.toml, .gitignore and tasks/ first.`
    - `  3. Write a task in tasks/inbox, then run: taskfactory promote <ID>`
    - `  4. Run: taskfactory claim <ID> --owner <name>`
 
    Running `init` a second time on an initialized project prints the same block.
 4. Exact hints; `<ID>` is the task ID given, `<N>` the owner given.
 
-- `init`: success the Next steps block above; failure none
-- `status`: success `next: taskfactory validate, or taskfactory promote <ID> for an inbox task`; failure `next: run taskfactory init in the Git repository root`
-- `validate`: success `next: taskfactory promote <ID> for an inbox task, or taskfactory claim <ID> --owner <name>`; failure `next: fix the reported files and rerun taskfactory validate`
-- `promote`: success `next: taskfactory claim <ID> --owner <name>`; failure `next: fix the reported contract errors in tasks/inbox, then rerun taskfactory promote <ID>`
-- `claim`: success `next: taskfactory work <ID> --adapter <omp|pi|claude> --model <id>, or edit in the worktree, then taskfactory verify <ID>`; failure `next: taskfactory status shows the task state`
-- `work`: success unchanged, see Scope 1; failure unchanged
-- `verify`: success on PASS `next: taskfactory integrate <ID>`; failure on FAIL `next: fix the failing checks in the worktree and rerun taskfactory verify <ID>, or taskfactory fail <ID> --outcome <FAILED|BLOCKED>`
-- `integrate`: success `next: taskfactory status, then claim the next ready task`; failure `next: fix the cause, rerun taskfactory verify <ID> and taskfactory integrate <ID>; if main is stopped run taskfactory check-main`
-- `check-main`: success `next: main is healthy; taskfactory integrate <ID> may continue`; failure `next: fix main, then rerun taskfactory check-main`
-- `fail`: success `next: taskfactory requeue <ID> --to ready, or --to inbox to rewrite the task`; failure `next: taskfactory status shows the task state`
-- `requeue`: success `next: taskfactory claim <ID> --owner <name> for ready, or taskfactory promote <ID> for inbox`; failure `next: taskfactory status shows the task state`
+- `init`
+  success: the Next steps block above
+  failure: none
+- `status`
+  success: `next: taskfactory validate`
+  failure: `next: run taskfactory init at the repo root`
+- `validate`
+  success: `next: taskfactory promote <ID> or claim <ID>`
+  failure: `next: fix the files, rerun taskfactory validate`
+- `promote`
+  success: `next: taskfactory claim <ID> --owner <name>`
+  failure: `next: fix tasks/inbox, rerun taskfactory promote <ID>`
+- `claim`
+  success: `next: taskfactory work <ID> --adapter <name> --model <id>`
+  failure: `next: taskfactory status shows the task state`
+- `work`
+  success: unchanged, see Scope 1
+  failure: unchanged
+- `verify`
+  success: on PASS `next: taskfactory integrate <ID>`
+  failure: on FAIL `next: fix the checks, rerun taskfactory verify <ID>`
+- `integrate`
+  success: `next: taskfactory status`
+  failure: `next: rerun taskfactory verify <ID>, then integrate <ID>`
+- `check-main`
+  success: `next: taskfactory integrate <ID>`
+  failure: `next: fix main, rerun taskfactory check-main`
+- `fail`
+  success: `next: taskfactory requeue <ID> --to ready`
+  failure: `next: taskfactory status shows the task state`
+- `requeue`
+  success: `next: taskfactory claim <ID> --owner <name>`
+  failure: `next: taskfactory status shows the task state`
 
-   Where the table shows `<ID>` the real ID is substituted and `<name>`,
-`<omp|pi|claude>` and `<id>` stay literal placeholders. A `requeue --to inbox`
-success prints the `promote` form and `--to ready` the `claim` form.
+   Placeholders stay literal and `<ID>` is the real task ID. A success of
+   `requeue --to inbox` prints `next: taskfactory promote <ID>` instead.
+
 5. Help. Each command's help constant gets one line after the description and
 before `Flags:` that begins `Next step:` and names the success hint in prose,
 for example `Next step: taskfactory integrate <ID> after a passing verify.`
@@ -120,7 +142,7 @@ Check: go test ./cmd/taskfactory -run 'TestNextStepUsageErrorsHaveNoHint$'
 
 ### C10: Machine-readable lines and exit codes are unchanged
 
-Check: go test ./cmd/taskfactory -run 'TestNextStepKeepsMachineOutputAndExitCodes$'
+Check: go test ./cmd/taskfactory -run 'TestNextStepMachineOutputUnchanged$'
 
 ### C11: Every command's help has a Next step line
 
