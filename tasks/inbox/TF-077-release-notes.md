@@ -28,8 +28,8 @@ remembered options, not decided:
 
 Open questions to bring: where the text lives, who writes it, whether
 conventional commits feed it, and how it stays consistent between the tag
-message and the GitHub release body. The skill install tasks (TF-078,
-TF-079) are separate additional release tasks and do not depend on this.
+message and the GitHub release body. The skill install tasks (TF-079,
+TF-080) are separate additional release tasks and do not depend on this.
 
 ## Notes
 

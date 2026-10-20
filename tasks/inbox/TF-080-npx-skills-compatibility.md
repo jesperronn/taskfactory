@@ -1,4 +1,4 @@
-# TF-079: npx skills add compatibility and install docs
+# TF-080: npx skills add compatibility and install docs
 
 ## Goal
 
@@ -9,7 +9,7 @@ document the three ways to install the skill.
 ## Dependencies
 
 - TF-072
-- TF-078
+- TF-079
 
 ## Scope
 
