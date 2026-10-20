@@ -173,17 +173,20 @@ that a worker's self-reported pass cannot substitute for.
 
 ## Split of TF-016
 
-TF-016 is split into small implementation tasks that each implement this
-contract for one concern. They stay in `tasks/inbox/` until a harness can launch
-a model and verify them; none is promoted to `ready` yet. Each depends on the
-archived TF-010 (worktree isolation) and TF-011 (worker evidence); TF-026 also
-depends on the TF-015 experiment.
+TF-016 was split into small implementation tasks that each implement this
+contract for one concern. The contract itself is archived TF-023, and TF-024,
+TF-025 and TF-026 are archived too. Each depended on the archived TF-010
+(worktree isolation) and TF-011 (worker evidence); TF-026 also depended on the
+TF-015 experiment. TF-016 is archived with `Remainder: TF-068`: live progress,
+retry budgets and evidence-based automatic worker selection are the open inbox
+task TF-068.
 
-- **TF-024** (inbox): OMP adapter launch with explicit `ornith1.5-35B`, no
+- **TF-024** (archived): OMP adapter launch with explicit `ornith1.5-35B`, no
   fallback, local endpoint, permissions, timeout, and running
   `bin/test`/`bin/lint`.
-- **TF-025** (inbox): Pi adapter launch under the same contract via Pi flags.
-- **TF-026** (inbox): Claude Code adapter through the oMLX local endpoint,
+- **TF-025** (archived): Pi adapter launch under the same contract via Pi
+  flags.
+- **TF-026** (archived): Claude Code adapter through the oMLX local endpoint,
   resolving the TF-015 "model not in catalog" warning.
 - **TF-027** (removed): result/evidence recording and the independent `verify`
   call were already delivered by archived TF-011 and TF-022, so the proposal
