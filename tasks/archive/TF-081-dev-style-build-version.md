@@ -36,7 +36,8 @@ description.
 
 ## Constraints
 
-Touch only `bin/build`, `bin/build.test.sh` and `README.md`. No Go changes; the
+Touch only `bin/build`, `bin/build.test.sh`, `bin/install.test.sh` (its
+expected-version line only) and `README.md`. No Go changes; the
 `-X main.version` mechanism stays. Tests use temporary directories, no network
 and no global Git config changes. Do not create tags in the real repository.
 
@@ -75,3 +76,11 @@ Check: bin/test
 Run `bin/build.test.sh` with no argument and with each scenario name,
 `bin/test`, `bin/lint` and `go run ./cmd/taskfactory validate tasks` from the
 repository root and report each exit code.
+
+## Claim
+
+Owner: sonnet-worker-081
+Branch: task/TF-081
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-081
+Base commit: 96f92a2b76614ff204ad86aa40f99e53eb7cffb0
+Started at: 2026-10-20T22:39:54Z
