@@ -1,0 +1,35 @@
+# TF-902: Add the function Clamp
+
+## Goal
+
+`clamp_test.go` calls `Clamp`, which does not exist. The package does not
+compile. Add `Clamp` so the test compiles and passes.
+
+## Dependencies
+
+None
+
+## Scope
+
+Create `clamp.go` in package `main` with `func Clamp(v, lo, hi int) int`.
+Return `lo` if `v` is below `lo`. Return `hi` if `v` is above `hi`. Otherwise
+return `v`. Do not edit `clamp_test.go`.
+
+## Constraints
+
+Do not edit or delete the test. Add no dependencies. Touch only the new
+`clamp.go`. Commit the change on the task branch.
+
+## Success criteria
+
+### C1: The unit tests pass
+
+Check: go test ./...
+
+### C2: The test file is unchanged
+
+Check: git diff --quiet main -- clamp_test.go
+
+## Verification
+
+Run each check from the repository root and report its exit code.

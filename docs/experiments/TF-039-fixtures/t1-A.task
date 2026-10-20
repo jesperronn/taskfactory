@@ -1,0 +1,41 @@
+# TF-901: Fix the return value of Double
+
+## Goal
+
+The function Double in the file math.go of this Go module is intended to return
+twice the value of its integer argument, but at the moment it returns a value
+that makes the existing unit test in math_test.go fail, so the goal of this task
+is to correct the implementation so that the test passes without the test
+itself being altered in any way.
+
+## Dependencies
+
+None
+
+## Scope
+
+Edit only the body of the function Double in math.go so that it returns the
+argument multiplied by two. Do not rename the function, do not change its
+signature and do not modify math_test.go, because the test describes the
+required behaviour and has to be treated as the specification.
+
+## Constraints
+
+Do not weaken, delete or edit the test, do not add new dependencies to the
+module and do not touch any file other than math.go, and make sure that the
+change is committed to the task branch once the checks pass.
+
+## Success criteria
+
+### C1: The unit tests pass
+
+Check: go test ./...
+
+### C2: The test file is unchanged
+
+Check: git diff --quiet main -- math_test.go
+
+## Verification
+
+Run each check from the repository root and report its exit code, and also run
+the project wrappers when they exist, reporting the exit code of each.

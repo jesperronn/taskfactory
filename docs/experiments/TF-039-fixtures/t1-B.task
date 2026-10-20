@@ -1,0 +1,34 @@
+# TF-901: Fix the return value of Double
+
+## Goal
+
+`Double` in `math.go` must return twice its argument. Today the test in
+`math_test.go` fails. Fix `Double` so the test passes.
+
+## Dependencies
+
+None
+
+## Scope
+
+Edit only the body of `Double` in `math.go`. Do not rename it or change its
+signature. Do not edit `math_test.go`. The test is the specification.
+
+## Constraints
+
+Do not edit or delete the test. Add no new dependencies. Touch only `math.go`.
+Commit the change on the task branch.
+
+## Success criteria
+
+### C1: The unit tests pass
+
+Check: go test ./...
+
+### C2: The test file is unchanged
+
+Check: git diff --quiet main -- math_test.go
+
+## Verification
+
+Run each check from the repository root and report its exit code.

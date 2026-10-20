@@ -1,0 +1,41 @@
+# TF-902: Add the function Clamp
+
+## Goal
+
+The unit test in the file clamp_test.go already calls a function named Clamp
+that does not exist yet, which means that the package currently fails to
+compile, so the goal of this task is to add that function to the package in a
+new file named clamp.go in such a way that the existing test compiles and
+passes.
+
+## Dependencies
+
+None
+
+## Scope
+
+Create the file clamp.go in package main with the function whose signature is
+`func Clamp(v, lo, hi int) int`, which has to return lo when v is smaller than
+lo, return hi when v is larger than hi and return v in every other case. Do
+not modify clamp_test.go, because the test describes the required behaviour.
+
+## Constraints
+
+Do not edit, weaken or delete the test, do not add dependencies to the module,
+do not touch any file other than the new clamp.go, and make sure the change is
+committed to the task branch once the checks have passed.
+
+## Success criteria
+
+### C1: The unit tests pass
+
+Check: go test ./...
+
+### C2: The test file is unchanged
+
+Check: git diff --quiet main -- clamp_test.go
+
+## Verification
+
+Run each check from the repository root and report its exit code, and also run
+the project wrappers when they exist, reporting the exit code of each.

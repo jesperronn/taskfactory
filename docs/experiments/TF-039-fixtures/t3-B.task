@@ -1,0 +1,38 @@
+# TF-903: Fix the formatting and vet complaints in report.go
+
+## Goal
+
+`report.go` is not gofmt formatted and `go vet` complains about it. Fix both.
+The program must behave the same.
+
+## Dependencies
+
+None
+
+## Scope
+
+Edit only `report.go`. Run gofmt on it. Fix the `Printf` call that has the
+wrong number of arguments for its format string.
+
+## Constraints
+
+Do not edit any test. Add no dependencies. Touch only `report.go`. Commit the
+change on the task branch.
+
+## Success criteria
+
+### C1: gofmt lists no files
+
+Check: test -z "$(gofmt -l .)"
+
+### C2: go vet is clean
+
+Check: go vet ./...
+
+### C3: The unit tests pass
+
+Check: go test ./...
+
+## Verification
+
+Run each check from the repository root and report its exit code.
