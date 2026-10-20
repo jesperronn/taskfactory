@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# bin/package <version> <output-dir>: build the release archives and SHA256SUMS.
+# Never tags, pushes or uses the network. Portable to bash 3.2 and bash 5.
+set -euo pipefail
+
+usage() {
+  echo "Usage: bin/package <version> <output-dir>" >&2
+}
+
+# One place to change the accepted version grammar. TF-070's library accepts
+# stable versions only until TF-071 adds -rc.N, so this is a local copy.
+PACKAGE_VERSION_REGEX='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$'
+
+die() {
+  echo "bin/package: $*" >&2
+  exit 1
+}
+
+# frontmatter_ok FILE: same check as bin/skill.test.sh.
+frontmatter_ok() {
+  awk '
+    NR == 1 { if ($0 != "---") exit 1; next }
+    /^---$/ { closed = 1; exit }
+    /^name:[[:space:]]*[^[:space:]]/ { has_name = 1 }
+    /^description:/ { in_desc = 1; if ($0 ~ /^description:[[:space:]]*[^[:space:]]/) has_desc = 1; next }
+    in_desc && /^[[:space:]]+[^[:space:]]/ { has_desc = 1; next }
+    /^[^[:space:]]/ { in_desc = 0 }
+    END { exit (closed && has_name && has_desc) ? 0 : 1 }
+  ' "$1"
+}
+
+if (( $# != 2 )); then
+  usage
+  exit 2
+fi
+version=$1
+out_arg=$2
+if [[ ! "${version}" =~ ${PACKAGE_VERSION_REGEX} ]]; then
+  echo "bin/package: invalid version: ${version}" >&2
+  usage
+  exit 2
+fi
+if [[ -z "${out_arg}" ]]; then
+  usage
+  exit 2
+fi
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# TF_PACKAGE_SKILL_DIR exists so tests can point at a fixture skill.
+skill_dir=${TF_PACKAGE_SKILL_DIR:-${repo_root}/skills/taskfactory}
+
+skill_md="${skill_dir}/SKILL.md"
+[[ -f "${skill_md}" ]] || die "missing ${skill_md}"
+frontmatter_ok "${skill_md}" || die "SKILL.md frontmatter needs name and description"
+
+if [[ -e "${out_arg}" ]]; then
+  [[ -d "${out_arg}" ]] || die "output path exists and is not a directory: ${out_arg}"
+  if [[ -n "$(ls -A "${out_arg}")" ]]; then
+    die "output directory is not empty: ${out_arg}"
+  fi
+fi
+mkdir -p "${out_arg}"
+out=$(cd "${out_arg}" && pwd)
+
+if command -v sha256sum >/dev/null 2>&1; then
+  sums_cmd=(sha256sum)
+elif command -v shasum >/dev/null 2>&1; then
+  sums_cmd=(shasum -a 256)
+else
+  die "neither sha256sum nor shasum found"
+fi
+
+# Tar flavour: GNU and BSD spell the owner options differently.
+if tar --version 2>/dev/null | grep -q 'GNU tar'; then
+  tar_owner=(--owner=0 --group=0 --numeric-owner)
+else
+  tar_owner=(--uid 0 --gid 0 --uname '' --gname '' --numeric-owner)
+fi
+
+work=$(mktemp -d "${TMPDIR:-/tmp}/taskfactory-package.XXXXXX")
+trap 'rm -rf -- "${work}"' EXIT
+export COPYFILE_DISABLE=1
+
+# make_archive <archive> <dir-in-work> <entry>...: entries are listed in the
+# given (sorted) order, with a fixed mtime and owner, and gzip without a name
+# or timestamp. Reproducible-ish only; reproducible builds are not claimed.
+make_archive() {
+  local archive=$1 base=$2
+  shift 2
+  (
+    cd "${work}/${base}"
+    find . -exec env TZ=UTC touch -t 198001010000 {} +
+    tar -cf - ${tar_owner[@]+"${tar_owner[@]}"} "$@" | gzip -n > "${out}/${archive}"
+  )
+}
+
+for target in darwin/arm64 darwin/amd64 linux/arm64 linux/amd64; do
+  os=${target%/*}
+  arch=${target#*/}
+  stage="bin-${os}-${arch}"
+  mkdir -p "${work}/${stage}"
+  (
+    cd "${repo_root}"
+    CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -trimpath \
+      -ldflags "-s -w -X main.version=${version}" \
+      -o "${work}/${stage}/taskfactory" ./cmd/taskfactory
+  )
+  cp "${repo_root}/LICENSE" "${work}/${stage}/LICENSE"
+  make_archive "taskfactory_${version}_${os}_${arch}.tar.gz" "${stage}" LICENSE taskfactory
+done
+
+mkdir -p "${work}/skill/taskfactory"
+cp "${skill_md}" "${work}/skill/taskfactory/SKILL.md"
+make_archive "taskfactory-skill_${version}.tar.gz" skill taskfactory
+
+# The skill archive must have exactly one top-level entry.
+top=$(tar -tzf "${out}/taskfactory-skill_${version}.tar.gz" | awk -F/ '{print $1}' | sort -u)
+[[ "${top}" == "taskfactory" ]] || die "skill archive has unexpected top-level entries: ${top}"
+
+(
+  cd "${out}"
+  "${sums_cmd[@]}" \
+    "taskfactory-skill_${version}.tar.gz" \
+    "taskfactory_${version}_darwin_amd64.tar.gz" \
+    "taskfactory_${version}_darwin_arm64.tar.gz" \
+    "taskfactory_${version}_linux_amd64.tar.gz" \
+    "taskfactory_${version}_linux_arm64.tar.gz" > SHA256SUMS
+)
+printf 'packaged %s into %s\n' "${version}" "${out}"
