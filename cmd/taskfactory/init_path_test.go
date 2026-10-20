@@ -17,7 +17,7 @@ func TestInitPathDefaultCwd(t *testing.T) {
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	out, err := runCLI(t, binary, root, "init")
-	if processExitCode(err) != 0 || len(out) != 0 {
+	if processExitCode(err) != 0 || !strings.HasPrefix(string(out), "Next steps:\n") {
 		t.Fatalf("exit=%d output=%q", processExitCode(err), out)
 	}
 	if !initPathExists(t, root) {
@@ -30,7 +30,7 @@ func TestInitPathRepoRoot(t *testing.T) {
 	root := initGitProject(t)
 	elsewhere := t.TempDir()
 	out, err := runCLI(t, binary, elsewhere, "init", root)
-	if processExitCode(err) != 0 || len(out) != 0 {
+	if processExitCode(err) != 0 || !strings.HasPrefix(string(out), "Next steps:\n") {
 		t.Fatalf("exit=%d output=%q", processExitCode(err), out)
 	}
 	if !initPathExists(t, root) || initPathExists(t, elsewhere) {
@@ -46,7 +46,7 @@ func TestInitPathSubdirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := runCLI(t, binary, t.TempDir(), "init", sub)
-	if processExitCode(err) != 0 || len(out) != 0 {
+	if processExitCode(err) != 0 || !strings.HasPrefix(string(out), "Next steps:\n") {
 		t.Fatalf("exit=%d output=%q", processExitCode(err), out)
 	}
 	if !initPathExists(t, root) || initPathExists(t, sub) {
@@ -79,7 +79,7 @@ func TestInitPathRelativeAndSymlink(t *testing.T) {
 			t.Fatal(err)
 		}
 		out, err := runCLI(t, binary, base, "init", arg)
-		if processExitCode(err) != 0 || len(out) != 0 {
+		if processExitCode(err) != 0 || !strings.HasPrefix(string(out), "Next steps:\n") {
 			t.Fatalf("%s: exit=%d output=%q", arg, processExitCode(err), out)
 		}
 		if !initPathExists(t, root) || initPathExists(t, sub) {
@@ -169,7 +169,7 @@ func TestInitPathNoWritesToCwdRepo(t *testing.T) {
 	cwd := initGitProject(t)
 	target := initGitProject(t)
 	out, err := runCLI(t, binary, cwd, "init", target)
-	if processExitCode(err) != 0 || len(out) != 0 {
+	if processExitCode(err) != 0 || !strings.HasPrefix(string(out), "Next steps:\n") {
 		t.Fatalf("exit=%d output=%q", processExitCode(err), out)
 	}
 	entries, err := os.ReadDir(cwd)

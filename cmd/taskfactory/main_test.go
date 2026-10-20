@@ -508,7 +508,7 @@ func TestStatusReportsStableReadOnlyTaskCounts(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if output, err := runCLI(t, binary, root, "status"); err != nil || string(output) != "inbox: 0\nready: 0\nactive: 0\nfailed: 0\narchive: 0\n" {
+	if output, err := runCLI(t, binary, root, "status"); err != nil || string(output) != "inbox: 0\nready: 0\nactive: 0\nfailed: 0\narchive: 0\nnext: taskfactory validate\n" {
 		t.Fatalf("empty status = %q, err=%v", output, err)
 	}
 
@@ -524,7 +524,7 @@ func TestStatusReportsStableReadOnlyTaskCounts(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	want := "inbox: 1\nready: 1\nactive: 1\nfailed: 1\narchive: 1\n"
+	want := "inbox: 1\nready: 1\nactive: 1\nfailed: 1\narchive: 1\nnext: taskfactory validate\n"
 	before := taskTreeHashes(t, root)
 	first, err := runCLI(t, binary, root, "status")
 	if err != nil || string(first) != want {
@@ -776,7 +776,7 @@ func TestSummaryPass(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("verify exit = %d, want 0; stdout: %s", code, stdout)
 	}
-	if want := "verify TF-111: PASS (2 checks)\n"; stdout != want {
+	if want := "verify TF-111: PASS (2 checks)\nnext: taskfactory integrate TF-111\n"; stdout != want {
 		t.Fatalf("stdout = %q, want %q", stdout, want)
 	}
 }
