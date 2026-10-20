@@ -26,7 +26,8 @@ Add `bin/package <version> <output-dir>` (bash). It produces:
 
 The version argument is validated by the same rule as the library from
 TF-070 when it exists, and by a local copy of the rule otherwise; keep one
-place to change. The output directory must be empty or absent. The script
+place to change. The output directory must be empty or absent; when it is
+`dist/`, the script empties it first (TF-082). The script
 never tags, never pushes and never needs the network (the Go module cache
 must already hold the dependencies).
 

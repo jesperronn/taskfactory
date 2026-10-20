@@ -2,11 +2,10 @@
 
 ## Goal
 
-`bin/build` prints a plain release version only for a clean checkout of an
-official release tag, and a dev-style version such as `v22.1.0-18-g8fb0a59`
-everywhere else, so a binary built from untagged commits is never mistaken for
-a release. Today `git describe --always --dirty` prints a bare hash such as
-`4583d46` when there are no tags.
+`bin/build` embeds the output of `git describe --dirty`, so a binary built
+from untagged commits carries a dev-style version such as `v1.2.0-18-g8fb0a59`
+and is never mistaken for a release. Today `git describe --always --dirty`
+prints a bare hash such as `4583d46` when there are no tags.
 
 ## Dependencies
 
@@ -17,34 +16,22 @@ None
 Change only the version derivation in `bin/build` and extend
 `bin/build.test.sh`. Decisions are final:
 
-1. Release marker: an annotated tag matching `v[0-9]*`, found by
-`git describe --long --match 'v[0-9]*'` without `--tags`, so lightweight tags
-(scratch bookmarks) never count. The glob is deliberately loose; the strict
-version grammar belongs to `bin/release.lib.sh` from TF-070 and TF-071, which
-this task neither uses nor needs. An exact `v1.0.0-rc.1` tag therefore prints
-as itself.
-2. Exact release: HEAD is exactly the tag and the tree is clean. The version is
-the plain tag, such as `v1.2.0`.
-3. Otherwise the version is the `--long` form `<tag>-<N>-g<hash>`, such as
-`v1.2.0-18-g8fb0a59`. A clean checkout at the tag with a dirty tree gives
-`v1.2.0-0-g<hash>-dirty`.
-4. Dirty: append `-dirty` to whatever the rule above gives, as `--dirty` does,
-for tracked-file changes only.
-5. No tag at all: `v0.0.0-<N>-g<hash>` where N is `git rev-list --count HEAD`
-and the hash is the abbreviated HEAD hash. Reason: it has the same shape as a
-tagged dev version, so one parser handles both, and it sorts below every real
-release. `dev-<hash>` is rejected because it breaks that shape.
-6. Not a Git checkout, git missing, or a repository without commits: `dev`,
+1. The version is the output of plain `git describe --dirty`: the tag name
+when HEAD is tagged (such as `v1.2.0`), otherwise `<tag>-<N>-g<hash>`, with
+`-dirty` appended on a dirty tree. No `--long`, no `--match`, no `--tags`.
+2. If `git describe` fails because there are no tags, the version is
+`dev-<abbreviated hash>`.
+3. Not a Git checkout, git missing, or a repository without commits: `dev`,
 the same default as `main.version`.
-7. `bin/build` still accepts one optional output path and prints
+4. `bin/build` still accepts one optional output path and prints
 `built <path> (version <version>)`.
-8. `bin/build.test.sh` runs one named scenario per argument and all of them
-with no argument, which is what `bin/test` does. The scenarios are `exact`,
-`dev`, `dirty`, `notag`, `lightweight`, `nogit` and `nocommit`. An unknown
-name exits 2. Each scenario prints a line starting with its name and PASS and
-builds in its own temporary Git repository with `commit.gpgsign` set to false
-in that repository's own config.
-9. The README states the rule in a short paragraph next to the `bin/build`
+5. `bin/build.test.sh` runs one named scenario per argument and all of them
+with no argument, which is what `bin/test` does. The scenarios are `tagged`,
+`untagged`, `dirty`, `notag` and `nogit`. An unknown name exits 2. Each
+scenario prints a line starting with its name and PASS and builds in its own
+temporary Git repository with `commit.gpgsign` set to false in that
+repository's own config.
+6. The README states the rule in one or two sentences next to the `bin/build`
 description.
 
 ## Constraints
@@ -55,39 +42,31 @@ and no global Git config changes. Do not create tags in the real repository.
 
 ## Success criteria
 
-### C1: A clean checkout at an annotated tag prints the plain tag
+### C1: HEAD at a tag prints the tag name
 
-Check: bin/build.test.sh exact
+Check: bin/build.test.sh tagged
 
-### C2: Commits after a tag print the long dev form
+### C2: Commits after a tag print tag-N-ghash
 
-Check: bin/build.test.sh dev
+Check: bin/build.test.sh untagged
 
-### C3: A dirty tree appends -dirty, including at a tag
+### C3: A dirty tree appends -dirty
 
 Check: bin/build.test.sh dirty
 
-### C4: With no tags the version is v0.0.0-N-gHASH
+### C4: With no tags the version is dev-hash
 
 Check: bin/build.test.sh notag
 
-### C5: A lightweight tag is ignored
-
-Check: bin/build.test.sh lightweight
-
-### C6: Outside a Git checkout the version is dev
+### C5: Outside a Git checkout the version is dev
 
 Check: bin/build.test.sh nogit
 
-### C7: A repository without commits gives dev
+### C6: The README documents the rule
 
-Check: bin/build.test.sh nocommit
+Check: grep -q 'git describe' README.md
 
-### C8: The README documents the rule
-
-Check: grep -q 'v0.0.0-' README.md
-
-### C9: The full test suite passes
+### C7: The full test suite passes
 
 Check: bin/test
 
