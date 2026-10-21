@@ -29,18 +29,21 @@ mdsmith_pkg=github.com/jeduden/mdsmith/cmd/mdsmith@v0.57.0
 mode=check
 tells=0
 paths=()
+path_args=0 # path arguments given, good or bad
+bad_paths=0 # bad paths are reported, the rest still lint, and the run exits 2
 for arg in "$@"; do
   case "$arg" in
     --tells) tells=1 ;;
     --autofix) mode=fix ;;
     -*) usage; exit 2 ;;
     *)
+      path_args=$((path_args + 1))
       abs=$arg
       [[ $abs == /* ]] || abs="$start_dir/$abs"
       if [[ ! -e $abs ]]; then
         echo "bin/lint: no such path: $arg" >&2
-        usage
-        exit 2
+        bad_paths=1
+        continue
       fi
       # Lint paths are relative to the repository root, where we run.
       if [[ $abs == "$repo_root"/* ]]; then abs=${abs#"$repo_root"/}; fi
@@ -53,7 +56,7 @@ done
 # the prose scope, print the findings and a stats line, and always exit 0. It
 # never changes the default lint, and it takes no other options or paths.
 if (( tells )); then
-  if [[ $mode != check ]] || (( ${#paths[@]} )); then
+  if [[ $mode != check ]] || (( path_args )); then
     echo "bin/lint: --tells takes no other options or paths" >&2
     usage
     exit 2
@@ -98,7 +101,7 @@ task_files=()
 vet_pkgs=()
 whole_project=0
 
-if (( ${#paths[@]} == 0 )); then
+if (( path_args == 0 )); then
   whole_project=1
   while IFS= read -r f; do go_files+=("${f#./}"); done < <(
     find . \( -name .git -o -name .claude -o -name .taskfactory -o -name node_modules \) -prune -o -name '*.go' -type f -print)
@@ -132,8 +135,7 @@ else
             sh_files+=("$p")
           else
             echo "bin/lint: no linter for path: $p" >&2
-            usage
-            exit 2
+            bad_paths=1
           fi
           ;;
       esac
@@ -203,12 +205,14 @@ done
 # Bash: shellcheck, only when installed.
 if (( ${#sh_files[@]} )); then
   if command -v shellcheck >/dev/null 2>&1; then
-    shellcheck ${sh_files[@]+"${sh_files[@]}"} || failed=1
+    # -x follows sourced helpers, found next to the script that sources them.
+    shellcheck -x -P SCRIPTDIR ${sh_files[@]+"${sh_files[@]}"} || failed=1
   else
     echo "SKIP: shellcheck not installed; Bash files were not linted" >&2
   fi
 fi
 
+if (( bad_paths )); then usage; exit 2; fi
 if (( md_status != 0 )); then exit "$md_status"; fi
 if (( failed )); then exit 1; fi
 exit 0

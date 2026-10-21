@@ -31,14 +31,14 @@ for arg in "$@"; do
 done
 
 # normalize PATH: relative to the repository root, no leading ./ or trailing /.
+# Prints nothing and fails for a path outside the repository.
 normalize() {
   local p=${1#./}
   p=${p%/}
   case "${p}" in
     /*|../*|*/../*|..)
       printf 'bin/test: path must be inside the repository: %s\n' "$1" >&2
-      usage
-      exit 2
+      return 1
       ;;
   esac
   printf '%s\n' "${p:-.}"
@@ -50,25 +50,54 @@ now_ms() {
 
 shell_tests=()
 go_packages=()
+bad_paths=0
 
-# select_path PATH adds a shell test file, a folder of shell tests, or a Go
-# package folder or pattern to the lists. Anything else exits 2.
+# add_shell_test FILE and add_go_package PKG add to the lists once, so a test
+# selected twice (a file and its folder) runs once.
+add_shell_test() {
+  local t
+  for t in ${shell_tests[@]+"${shell_tests[@]}"}; do
+    [[ "${t}" == "$1" ]] && return 0
+  done
+  shell_tests+=("$1")
+}
+
+add_go_package() {
+  local t
+  for t in ${go_packages[@]+"${go_packages[@]}"}; do
+    [[ "${t}" == "$1" ]] && return 0
+  done
+  go_packages+=("$1")
+}
+
+# bad_path MESSAGE ARG: reports one bad path and goes on; the run exits 2 at
+# the end, after every valid path has run.
+bad_path() {
+  printf 'bin/test: %s: %s\n' "$1" "$2" >&2
+  bad_paths=1
+}
+
+# select_path PATH adds a shell test file, a folder of shell tests, a Go
+# package folder or pattern, or the test of a source file to the lists. Any
+# other path is reported as bad.
 select_path() {
-  local p file found=0
-  p=$(normalize "$1")
+  local p file found=0 name
+  if ! p=$(normalize "$1"); then
+    bad_paths=1
+    return 0
+  fi
   if [[ "${p}" == *...* ]]; then
-    go_packages+=("./${p}")
+    add_go_package "./${p}"
   elif [[ "${p}" == *.test.sh ]]; then
     if [[ ! -f "${p}" ]]; then
-      printf 'bin/test: no such shell test file: %s\n' "$1" >&2
-      usage
-      exit 2
+      bad_path 'no such shell test file' "$1"
+      return 0
     fi
-    shell_tests+=("${p}")
+    add_shell_test "${p}"
   elif [[ -d "${p}" ]]; then
     for file in "${p}"/*.test.sh; do
       [[ -f "${file}" ]] || continue
-      shell_tests+=("${file}")
+      add_shell_test "${file}"
       found=1
     done
     if (( ! found )); then
@@ -78,17 +107,24 @@ select_path() {
         break
       done
       if (( found == 2 )); then
-        go_packages+=("./${p}")
+        add_go_package "./${p}"
       else
-        printf 'bin/test: no shell tests or Go package in: %s\n' "$1" >&2
-        usage
-        exit 2
+        bad_path 'no shell tests or Go package in' "$1"
       fi
     fi
+  elif [[ -f "${p}" && "${p}" == *.go ]]; then
+    add_go_package "./$(dirname "${p}")"
+  elif [[ -f "${p}" && "${p}" == bin/* && "${p}" != */*/* ]]; then
+    name=${p##*/}
+    if [[ -f "bin/${name}.test.sh" ]]; then
+      add_shell_test "bin/${name}.test.sh"
+    elif [[ -f "bin/${name%.sh}.test.sh" ]]; then
+      add_shell_test "bin/${name%.sh}.test.sh"
+    else
+      bad_path 'no test covers source file' "$1"
+    fi
   else
-    printf 'bin/test: not a shell test, folder or Go package: %s\n' "$1" >&2
-    usage
-    exit 2
+    bad_path 'not a shell test, folder, Go package or source file with a test' "$1"
   fi
 }
 
@@ -107,6 +143,7 @@ else
   for p in "${paths[@]}"; do
     select_path "${p}"
   done
+  if (( bad_paths )); then usage; fi
 fi
 
 failed=0
@@ -241,6 +278,10 @@ if (( full_run )) && [[ -f go.mod ]]; then
     printf 'FAIL: task validation: .taskfactory/config.toml is missing; run taskfactory init\n' >&2
     failed=1
   fi
+fi
+
+if (( bad_paths )); then
+  exit 2
 fi
 
 if (( failed )); then

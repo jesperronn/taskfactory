@@ -426,6 +426,11 @@ return evidence
 If a test fails, the worker should inspect the failure, fix the implementation,
 and run verification again.
 
+`bin/lint` and `bin/test` take any mix of files and folders. They run every
+valid path, report every bad one, and exit 2 at the end if any path was bad.
+`bin/test` maps a source file to its test (`bin/build` runs `bin/build.test.sh`,
+a Go file runs its package) and runs each test once.
+
 It keeps working until either:
 
 ```text id="wsf8d7"

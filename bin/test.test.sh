@@ -243,6 +243,86 @@ paths_run /etc
 assert_status "${path_status}" 2 'an absolute path is refused'
 assert_contains "${path_output}" 'path must be inside the repository' 'an absolute path explains the limit'
 
+# paths: bad paths accumulate, source files map to tests, duplicates run once,
+# and a failing test does not stop the later ones.
+new_fixture accum
+mkdir -p "${fixture_root}/accum/pkg" "${fixture_root}/accum/cmd/tool"
+: > "${fixture_root}/accum/pkg/pkg.go"
+: > "${fixture_root}/accum/cmd/tool/main.go"
+printf '#!/usr/bin/env bash\n' > "${fixture_root}/accum/bin/build"
+printf '#!/usr/bin/env bash\n' > "${fixture_root}/accum/bin/lonely"
+cat > "${fixture_root}/accum/bin/build.test.sh" <<'EOF2'
+#!/usr/bin/env bash
+printf 'build\n' >> "${ARGS_FILE}"
+EOF2
+cat > "${fixture_root}/accum/bin/fail.test.sh" <<'EOF2'
+#!/usr/bin/env bash
+printf 'fail\n' >> "${ARGS_FILE}"
+exit 3
+EOF2
+cat > "${fixture_root}/accum/bin/last.test.sh" <<'EOF2'
+#!/usr/bin/env bash
+printf 'last\n' >> "${ARGS_FILE}"
+EOF2
+chmod +x "${fixture_root}/accum/bin/"*.test.sh
+# shellcheck disable=SC2016
+install_go_stub "${fixture_root}/accum" 'test\ ./pkg|test\ ./cmd/tool' 'exit 0'
+accum_args=${fixture_root}/accum-args
+accum_go=${fixture_root}/accum-go
+
+# accum_run ARGS...: runs bin/test in the accum fixture, sets path_status and path_output.
+accum_run() {
+  rm -f "${accum_args}" "${accum_go}"
+  path_status=0
+  path_output=$(cd / && PATH="${fixture_root}/accum/stubs:${PATH}" ARGS_FILE="${accum_args}" GO_LOG="${accum_go}" GO_STATUS=0 "${fixture_root}/accum/bin/test" "$@" 2>&1) || path_status=$?
+}
+
+accum_run missing bin/lonely bin/build.test.sh nope.txt pkg
+assert_status "${path_status}" 2 'paths: every bad path is reported, then the exit is 2'
+for bad in 'missing' 'bin/lonely' 'nope.txt'; do
+  assert_contains "${path_output}" ": ${bad}"$'\n' "paths: every bad path is reported: ${bad} is named"
+done
+usage_count=$(grep -c '^Usage:' <<< "${path_output}")
+if [[ "${usage_count}" != 1 ]]; then
+  printf '[FAIL] paths: usage printed %s times, want once\n' "${usage_count}" >&2
+  exit 1
+fi
+printf '[PASS] paths: every bad path is reported with the usage text once\n'
+if [[ "$(cat "${accum_args}")" != 'build' ]] || ! grep -Fqx "${fixture_root}/accum|test ./pkg" "${accum_go}"; then
+  printf '[FAIL] paths: valid paths were not run before exit 2\n' >&2
+  exit 1
+fi
+printf '[PASS] paths: valid paths run before the exit 2\n'
+
+accum_run bin/build cmd/tool/main.go
+assert_status "${path_status}" 0 'paths: source files select their tests: exit 0'
+if [[ "$(cat "${accum_args}")" != 'build' ]] || ! grep -Fqx "${fixture_root}/accum|test ./cmd/tool" "${accum_go}"; then
+  printf '[FAIL] source files did not select their tests: %q %q\n' "$(cat "${accum_args}")" "$(cat "${accum_go}")" >&2
+  exit 1
+fi
+printf '[PASS] paths: source files select their tests\n'
+
+accum_run bin/build.test.sh bin/build bin pkg ./pkg/pkg.go pkg/
+assert_status "${path_status}" 1 'paths: duplicates run once: exit reflects fail.test.sh'
+if [[ "$(cat "${accum_args}")" != $'build\nfail\nlast' ]]; then
+  printf '[FAIL] duplicates ran more than once: %q\n' "$(cat "${accum_args}")" >&2
+  exit 1
+fi
+if [[ "$(grep -c '|test ./pkg$' "${accum_go}")" != 1 ]]; then
+  printf '[FAIL] Go package ran more than once: %q\n' "$(cat "${accum_go}")" >&2
+  exit 1
+fi
+printf '[PASS] paths: duplicates run once\n'
+
+accum_run bin/fail.test.sh bin/last.test.sh pkg
+assert_status "${path_status}" 1 'paths: a failing shell test exits 1 at the end'
+if [[ "$(cat "${accum_args}")" != $'fail\nlast' ]] || ! grep -Fqx "${fixture_root}/accum|test ./pkg" "${accum_go}"; then
+  printf '[FAIL] a failure stopped later tests: %q %q\n' "$(cat "${accum_args}")" "$(cat "${accum_go}")" >&2
+  exit 1
+fi
+assert_contains "${path_output}" 'FAIL: shell test: bin/fail.test.sh' 'paths: the failing test is named'
+printf '[PASS] paths: failures accumulate to one exit\n'
+
 new_fixture budget
 cat > "${fixture_root}/budget/bin/fast.test.sh" <<'EOF2'
 #!/usr/bin/env bash

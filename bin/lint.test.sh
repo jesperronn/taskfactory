@@ -167,8 +167,8 @@ for mode in check autofix; do
     actual_args=$(cat "$args_file")
     actual_vet=$(cat "$vet_file")
     actual_tf=$(cat "$tf_file")
-    if [[ $(cat "$shellcheck_file") != "bin/lint" ]]; then
-      printf '[FAIL] %s: shellcheck args=%q, want bin/lint\n' "$mode" "$(cat "$shellcheck_file")" >&2
+    if [[ $(cat "$shellcheck_file") != "-x -P SCRIPTDIR bin/lint" ]]; then
+      printf '[FAIL] %s: shellcheck args=%q, want -x -P SCRIPTDIR bin/lint\n' "$mode" "$(cat "$shellcheck_file")" >&2
       exit 1
     fi
     if [[ $actual_tf != "run ./cmd/taskfactory validate .taskfactory/tasks" ]]; then
@@ -243,5 +243,35 @@ printf '[PASS] unknown option exits 2\n'
 run_lint missing.md
 if (( status != 2 )); then fail "missing path"; fi
 printf '[PASS] missing path exits 2\n'
+
+printf 'plain text\n' > "$fixture/project/docs/notes.txt"
+run_lint missing.md docs/notes.txt also-missing.go
+if (( status != 2 )) || [[ $output != *"no such path: missing.md"* ]] \
+  || [[ $output != *"no such path: also-missing.go"* ]] \
+  || [[ $output != *"no linter for path: docs/notes.txt"* ]] \
+  || [[ $(grep -c '^Usage:' <<< "$output") != 1 ]]; then
+  fail "every bad path is reported"
+fi
+printf '[PASS] paths: every bad path is reported, with the usage text once\n'
+
+rm -f "$stub_dir/args"
+run_lint missing.md bad.go docs/good.md docs/notes.txt
+if (( status != 2 )) || [[ $output != *"gofmt needs formatting"* || $output != *bad.go* ]] \
+  || [[ $(cat "$stub_dir/args") != "$mdsmith check docs/good.md" ]]; then
+  fail "valid paths are linted before exit 2"
+fi
+printf '[PASS] paths: valid paths are linted before exit 2\n'
+
+rm -f "$stub_dir/args" "$stub_dir/vet"
+run_lint missing.md
+if (( status != 2 )) || [[ -e $stub_dir/args || -e $stub_dir/vet ]]; then
+  fail "only bad paths lints nothing else"
+fi
+printf '[PASS] paths: only bad paths lint nothing and still exit 2\n'
+
+# A lint failure alone still exits 1; mdsmith's own code wins over it.
+run_lint bad.go good.go
+if (( status != 1 )); then fail "lint failure exits 1"; fi
+printf '[PASS] paths: lint failures without bad paths exit 1\n'
 
 run_tasksdir_scenario
