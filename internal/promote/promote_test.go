@@ -31,8 +31,6 @@ func invalidTask(id string) string {
 // system Git configuration are disabled so only the fixture identity applies.
 func newRepo(t *testing.T) string {
 	t.Helper()
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
 	root := t.TempDir()
 	runGit(t, root, "init", "-q", "-b", "main")
 	runGit(t, root, "config", "user.name", "Test Worker")
@@ -131,10 +129,12 @@ func lines(s string) []string {
 }
 
 func TestPromotesValidInboxTask(t *testing.T) {
+	t.Parallel()
 	const name = "TF-010-valid-example.md"
 	content := validTask("TF-010", "valid-example")
 
 	t.Run("tracked proposal", func(t *testing.T) {
+		t.Parallel()
 		root := newRepo(t)
 		writeTask(t, root, "inbox", name, content)
 		commitAll(t, root, "add proposal")
@@ -168,6 +168,7 @@ func TestPromotesValidInboxTask(t *testing.T) {
 	})
 
 	t.Run("untracked proposal", func(t *testing.T) {
+		t.Parallel()
 		root := newRepo(t)
 		writeTask(t, root, "inbox", name, content)
 
@@ -182,6 +183,7 @@ func TestPromotesValidInboxTask(t *testing.T) {
 }
 
 func TestRefusesInvalidContractWrongStateAndUnknownID(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		id    string
@@ -212,6 +214,7 @@ func TestRefusesInvalidContractWrongStateAndUnknownID(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			root := newRepo(t)
 			tt.setup(t, root)
 			commitAll(t, root, "setup")
@@ -235,6 +238,7 @@ func TestRefusesInvalidContractWrongStateAndUnknownID(t *testing.T) {
 }
 
 func TestRefusesMalformedIDAsUsageError(t *testing.T) {
+	t.Parallel()
 	root := newRepo(t)
 	_, err := Promote(root, "TF-1")
 	var usage UsageError
@@ -244,6 +248,7 @@ func TestRefusesMalformedIDAsUsageError(t *testing.T) {
 }
 
 func TestRefusesCommitFailureAndRestoresFile(t *testing.T) {
+	t.Parallel()
 	root := newRepo(t)
 	name := "TF-030-hook.md"
 	content := validTask("TF-030", "hook")
@@ -274,7 +279,9 @@ func TestRefusesCommitFailureAndRestoresFile(t *testing.T) {
 }
 
 func TestIsolationRefusesStagedIndexAndCommitsOnlyTaskPaths(t *testing.T) {
+	t.Parallel()
 	t.Run("staged unrelated path refused", func(t *testing.T) {
+		t.Parallel()
 		root := newRepo(t)
 		writeTask(t, root, "inbox", "TF-030-staged.md", validTask("TF-030", "staged"))
 		commitAll(t, root, "add proposal")
@@ -295,6 +302,7 @@ func TestIsolationRefusesStagedIndexAndCommitsOnlyTaskPaths(t *testing.T) {
 	})
 
 	t.Run("dirty unrelated files are left alone", func(t *testing.T) {
+		t.Parallel()
 		root := newRepo(t)
 		writeTask(t, root, "inbox", "TF-031-dirty.md", validTask("TF-031", "dirty"))
 		commitAll(t, root, "add proposal")
@@ -321,6 +329,7 @@ func TestIsolationRefusesStagedIndexAndCommitsOnlyTaskPaths(t *testing.T) {
 // restored. A TaskFactory override such as --no-gpg-sign would skip the signer
 // and commit successfully.
 func TestSigningFailureIsNotOverriddenByPromote(t *testing.T) {
+	t.Parallel()
 	root := newRepo(t)
 	const name = "TF-040-signing.md"
 	content := validTask("TF-040", "signing")
@@ -355,6 +364,7 @@ func TestSigningFailureIsNotOverriddenByPromote(t *testing.T) {
 // TestSigningOverrideAbsentFromProductionSources fails when any non-test Go
 // file in the module reintroduces a commit signing override.
 func TestSigningOverrideAbsentFromProductionSources(t *testing.T) {
+	t.Parallel()
 	forbidden := []string{"no-gpg-sign", "commit.gpgsign", "gpgsign"}
 	repo, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -391,6 +401,7 @@ func TestSigningOverrideAbsentFromProductionSources(t *testing.T) {
 }
 
 func TestPromoteRefusesTodo(t *testing.T) {
+	t.Parallel()
 	root := newRepo(t)
 	task := strings.Replace(validTask("TF-030", "todo"), "Make the example change.", "TODO: state the outcome.", 1)
 	writeTask(t, root, "inbox", "TF-030-todo.md", task)

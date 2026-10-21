@@ -44,6 +44,7 @@ func claimedAndVerified(t *testing.T, project, state string) {
 	}
 }
 
+// Serial: registers into the process-global paths registry (paths.Register).
 func TestStateRepoTrackedGuard(t *testing.T) {
 	// Tracked in the state repository: the archive commit lands there and the
 	// project gets no commit beyond the feature.
@@ -82,6 +83,7 @@ func TestStateRepoTrackedGuard(t *testing.T) {
 	}
 }
 
+// Serial: registers into the process-global paths registry (paths.Register).
 func TestStateCommitCrashWindow(t *testing.T) {
 	project, state := stateRepoProject(t, true)
 	claimedAndVerified(t, project, state)

@@ -9,6 +9,7 @@ import (
 	"taskfactory/internal/paths"
 )
 
+// Serial: registers into the process-global paths registry (paths.Register).
 func TestTasksDirIntegrateArchivesUnderConfiguredDirectory(t *testing.T) {
 	f := newFixtureAt(t, "", ".taskfactory/tasks")
 	root, _ := filepath.EvalSymlinks(f.root)

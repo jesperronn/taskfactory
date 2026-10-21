@@ -8,6 +8,7 @@ import (
 )
 
 func TestRequeueUsageErrorsExitTwoAndHelpExitsZero(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	outside := t.TempDir()
 
@@ -28,6 +29,7 @@ func TestRequeueUsageErrorsExitTwoAndHelpExitsZero(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			out, err := runCLI(t, binary, outside, tt.args...)
 			if got := processExitCode(err); got != tt.exitCode {
 				t.Fatalf("exit = %d, want %d; output: %s", got, tt.exitCode, out)
@@ -47,6 +49,7 @@ func TestRequeueUsageErrorsExitTwoAndHelpExitsZero(t *testing.T) {
 }
 
 func TestRequeueHelpListsClaimedFailedTasksInsideProject(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	project := initGitProject(t)
 	failedDir := filepath.Join(project, "tasks", "failed")
@@ -75,6 +78,7 @@ func TestRequeueHelpListsClaimedFailedTasksInsideProject(t *testing.T) {
 }
 
 func TestRequeueDiscardClaimFlagUsageAndHelp(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	outside := t.TempDir()
 	tests := []struct {
@@ -93,6 +97,7 @@ func TestRequeueDiscardClaimFlagUsageAndHelp(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			out, err := runCLI(t, binary, outside, tt.args...)
 			if got := processExitCode(err); got != tt.exitCode {
 				t.Fatalf("exit = %d, want %d; output: %s", got, tt.exitCode, out)
@@ -105,6 +110,7 @@ func TestRequeueDiscardClaimFlagUsageAndHelp(t *testing.T) {
 }
 
 func TestRequeueCleanupHelp(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	out, err := runCLI(t, binary, t.TempDir(), "requeue", "--help")
 	if got := processExitCode(err); got != 0 {

@@ -21,6 +21,7 @@ func skillEnv(t *testing.T) (binary, root string, env []string) {
 }
 
 func TestSkillInstallDryRun(t *testing.T) {
+	t.Parallel()
 	binary, root, env := skillEnv(t)
 	res := runWithEnv(t, binary, root, env, "skill", "install", "--dry-run")
 	if res.code != 0 {
@@ -40,6 +41,7 @@ func TestSkillInstallDryRun(t *testing.T) {
 }
 
 func TestSkillStatus(t *testing.T) {
+	t.Parallel()
 	binary, root, env := skillEnv(t)
 	res := runWithEnv(t, binary, root, env, "skill", "status")
 	dir := filepath.Join(root, ".agents", "skills", "taskfactory")
@@ -81,6 +83,7 @@ func TestSkillStatus(t *testing.T) {
 }
 
 func TestSkillGlobalAndOutsideProject(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	home := t.TempDir()
 	env := []string{"HOME=" + home}
@@ -104,6 +107,7 @@ func TestSkillGlobalAndOutsideProject(t *testing.T) {
 }
 
 func TestSkillUsageErrors(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	dir := t.TempDir()
 	env := []string{"HOME=" + t.TempDir()}
@@ -125,6 +129,7 @@ func TestSkillUsageErrors(t *testing.T) {
 }
 
 func TestSkillHelpAndHints(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	dir := t.TempDir()
 	env := []string{"HOME=" + t.TempDir()}

@@ -10,6 +10,7 @@ import (
 	"taskfactory/internal/paths"
 )
 
+// Serial: registers into the process-global paths registry (paths.Register).
 func TestTasksDirLifecyclePromote(t *testing.T) {
 	const name = "TF-010-valid-example.md"
 	root := newRepo(t)

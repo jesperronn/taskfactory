@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"taskfactory/internal/config"
@@ -77,11 +78,20 @@ type Options struct {
 }
 
 // trace is the verbose sink of the running call; it is nil unless Options.Verbose is set.
-var trace func(format string, args ...any)
+var trace atomic.Pointer[func(format string, args ...any)]
+
+// setTrace installs or clears the sink; it is safe for concurrent calls.
+func setTrace(f func(format string, args ...any)) {
+	if f == nil {
+		trace.Store(nil)
+		return
+	}
+	trace.Store(&f)
+}
 
 func tracef(format string, args ...any) {
-	if trace != nil {
-		trace(format, args...)
+	if f := trace.Load(); f != nil {
+		(*f)(format, args...)
 	}
 }
 
@@ -94,8 +104,8 @@ func Run(root, id string) (retErr error) {
 // RunWith is Run with options. A dry run applies every eligibility check of the
 // real command, without taking the lock, and stops before the rebase.
 func RunWith(root, id string, opts Options) (retErr error) {
-	trace = opts.Verbose
-	defer func() { trace = nil }()
+	setTrace(opts.Verbose)
+	defer setTrace(nil)
 	if !idPattern.MatchString(id) {
 		return fmt.Errorf("task %q is not a valid task ID (expected TF-NNN)", id)
 	}

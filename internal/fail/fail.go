@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
 
 	"taskfactory/internal/paths"
 	"taskfactory/internal/statecommit"
@@ -53,11 +54,20 @@ type CommonOptions struct {
 }
 
 // trace is the verbose sink of the running call; it is nil unless Verbose is set.
-var trace func(format string, args ...any)
+var trace atomic.Pointer[func(format string, args ...any)]
+
+// setTrace installs or clears the sink; it is safe for concurrent calls.
+func setTrace(f func(format string, args ...any)) {
+	if f == nil {
+		trace.Store(nil)
+		return
+	}
+	trace.Store(&f)
+}
 
 func tracef(format string, args ...any) {
-	if trace != nil {
-		trace(format, args...)
+	if f := trace.Load(); f != nil {
+		(*f)(format, args...)
 	}
 }
 
@@ -153,8 +163,8 @@ func Fail(projectRoot, id string, opts Options) (string, error) {
 // file in tasks/failed, and the Claim block is checked against the project
 // root, so a scratch copy cannot stand in for it.
 func FailWith(projectRoot, id string, opts Options, common CommonOptions) (string, error) {
-	trace = common.Verbose
-	defer func() { trace = nil }()
+	setTrace(common.Verbose)
+	defer setTrace(nil)
 	if !idPattern.MatchString(id) {
 		return "", usagef("task %q is not a valid task ID (expected TF-NNN)", id)
 	}

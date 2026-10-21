@@ -33,8 +33,14 @@ func runWithEnv(t *testing.T, binary, dir string, env []string, args ...string) 
 }
 
 // sharedFixtureDir holds fixtures shared across tests; TestMain removes it.
-// sharedFixtureBase, while set, redirects initGitProject into it.
-var sharedFixtureDir, sharedFixtureBase string
+// sharedFixtureBases maps a test that is building a shared scenario fixture to
+// the directory initGitProject must use for that test only, so parallel tests
+// building their own projects are never redirected.
+var (
+	sharedFixtureDir   string
+	sharedBasesMu      sync.Mutex
+	sharedFixtureBases = map[*testing.T]string{}
+)
 
 // fixtureConfig is the project configuration the dry-run fixtures commit.
 const fixtureConfig = "protocol_version = 1\n\n[workers]\nmax_parallel = 4\n\n[git]\nuse_worktrees = true\nworktree_root = \".taskfactory/worktrees\"\nintegration_strategy = \"ff-only\"\n\n[integration]\nstop_on_main_failure = true\n\n[verification]\nworker = [\"true\"]\nintegration = [\"true\"]\nmain = [\"touch main.ran\"]\n"
@@ -134,34 +140,54 @@ func gitOutput(t *testing.T, root string, args ...string) string {
 
 // Dry-run scenarios only read their fixture (every test asserts a dry run
 // changes nothing), so each scenario's fixture is built once per test binary.
+// Each scenario has its own sync.Once, so different scenarios build
+// concurrently while tests of one scenario wait for its single build.
+type scenarioEntry struct {
+	once sync.Once
+	root string
+}
+
 var (
-	scenarioMu    sync.Mutex
-	scenarioRoots = map[string]string{}
+	scenarioMu      sync.Mutex
+	scenarioEntries = map[string]*scenarioEntry{}
+	sharedDirOnce   sync.Once
 )
 
 func scenarioRoot(t *testing.T, binary string, sc dryScenario) string {
 	t.Helper()
 	scenarioMu.Lock()
-	defer scenarioMu.Unlock()
-	if root, ok := scenarioRoots[sc.name]; ok {
-		return root
+	entry, ok := scenarioEntries[sc.name]
+	if !ok {
+		entry = &scenarioEntry{}
+		scenarioEntries[sc.name] = entry
 	}
-	if sharedFixtureDir == "" {
-		dir, err := os.MkdirTemp("", "taskfactory-dry")
+	scenarioMu.Unlock()
+	entry.once.Do(func() {
+		sharedDirOnce.Do(func() {
+			dir, err := os.MkdirTemp("", "taskfactory-dry")
+			if err != nil {
+				t.Fatal(err)
+			}
+			sharedFixtureDir = dir
+		})
+		base, err := os.MkdirTemp(sharedFixtureDir, "s")
 		if err != nil {
 			t.Fatal(err)
 		}
-		sharedFixtureDir = dir
+		sharedBasesMu.Lock()
+		sharedFixtureBases[t] = base
+		sharedBasesMu.Unlock()
+		defer func() {
+			sharedBasesMu.Lock()
+			delete(sharedFixtureBases, t)
+			sharedBasesMu.Unlock()
+		}()
+		entry.root = sc.setup(t, binary)
+	})
+	if entry.root == "" {
+		t.Fatalf("shared fixture for scenario %q failed to build", sc.name)
 	}
-	base, err := os.MkdirTemp(sharedFixtureDir, "s")
-	if err != nil {
-		t.Fatal(err)
-	}
-	sharedFixtureBase = base
-	defer func() { sharedFixtureBase = "" }()
-	root := sc.setup(t, binary)
-	scenarioRoots[sc.name] = root
-	return root
+	return entry.root
 }
 
 // dryScenario is one mutating command run with --dry-run on a fixture.
@@ -263,6 +289,7 @@ func assertWould(t *testing.T, sc dryScenario, res cliResult) {
 }
 
 func TestCommonFlagsPlacement(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		args []string
 		rest []string
@@ -301,6 +328,7 @@ func TestCommonFlagsPlacement(t *testing.T) {
 }
 
 func TestCommonFlagsRepeatAndValueForm(t *testing.T) {
+	t.Parallel()
 	rest, got, err := extractCommonFlags([]string{"--dry-run", "TF-1", "--dry-run", "--verbose", "--verbose"})
 	if err != nil || !reflect.DeepEqual(rest, []string{"TF-1"}) || !got.DryRun || !got.Verbose {
 		t.Errorf("repeated flags: %q %+v %v", rest, got, err)
@@ -325,6 +353,7 @@ func TestCommonFlagsRepeatAndValueForm(t *testing.T) {
 }
 
 func TestHelpListsVerboseAndDryRun(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	scratch := t.TempDir()
 	for _, command := range commandSummaries {
@@ -357,6 +386,7 @@ func TestHelpListsVerboseAndDryRun(t *testing.T) {
 }
 
 func TestDryRunInfoCommandsNoOp(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := stateFixture(t, binary, "ready", "923", "true")
 	before := snapshot(t, root)
@@ -390,6 +420,7 @@ func withoutNext(in []string) []string {
 }
 
 func TestDryRunInitPromoteClaimChangeNothing(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	for _, name := range []string{"init", "promote", "claim"} {
 		sc := scenarioNamed(t, name)
@@ -413,6 +444,7 @@ func TestDryRunInitPromoteClaimChangeNothing(t *testing.T) {
 }
 
 func TestDryRunFailRequeueChangeNothing(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	for _, name := range []string{"fail", "requeue"} {
 		sc := scenarioNamed(t, name)
@@ -421,6 +453,7 @@ func TestDryRunFailRequeueChangeNothing(t *testing.T) {
 }
 
 func TestDryRunVerifyWritesNoEvidence(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	sc := scenarioNamed(t, "verify")
 	root := scenarioRoot(t, binary, sc)
@@ -442,6 +475,7 @@ func TestDryRunVerifyWritesNoEvidence(t *testing.T) {
 }
 
 func TestDryRunIntegrateCheckMainChangeNothing(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	sc := scenarioNamed(t, "integrate")
 	root := scenarioRoot(t, binary, sc)
@@ -476,6 +510,7 @@ func TestDryRunIntegrateCheckMainChangeNothing(t *testing.T) {
 }
 
 func TestDryRunWorkNeverLaunchesAdapter(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	sc := scenarioNamed(t, "work")
 	res := runDryScenario(t, binary, sc) // fails if the fake adapter ran
@@ -488,9 +523,11 @@ func TestDryRunWorkNeverLaunchesAdapter(t *testing.T) {
 }
 
 func TestDryRunLeavesGitStatusAndWorktreesUnchanged(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	for _, sc := range dryScenarios() {
 		t.Run(sc.name, func(t *testing.T) {
+			t.Parallel()
 			root := scenarioRoot(t, binary, sc)
 			status := gitOutput(t, root, "status", "--short", "--untracked-files=all")
 			worktrees := gitOutput(t, root, "worktree", "list")
@@ -509,9 +546,11 @@ func TestDryRunLeavesGitStatusAndWorktreesUnchanged(t *testing.T) {
 }
 
 func TestDryRunOutputFormat(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	for _, sc := range dryScenarios() {
 		t.Run(sc.name, func(t *testing.T) {
+			t.Parallel()
 			root := scenarioRoot(t, binary, sc)
 			res := runSplit(t, binary, root, append(append([]string(nil), sc.args...), "--dry-run")...)
 			if res.code != 0 || res.stderr != "" {
@@ -534,6 +573,7 @@ func TestDryRunOutputFormat(t *testing.T) {
 }
 
 func TestDryRunRefusesLikeRealCommand(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := stateFixture(t, binary, "inbox", "924", "true")
 	cases := [][]string{
@@ -571,6 +611,7 @@ func TestDryRunRefusesLikeRealCommand(t *testing.T) {
 }
 
 func TestVerboseStderrOnly(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := stateFixture(t, binary, "ready", "925", "true")
 	for _, args := range [][]string{{"status"}, {"validate"}} {
@@ -613,6 +654,7 @@ func TestVerboseStderrOnly(t *testing.T) {
 }
 
 func TestVerboseRedactsSecrets(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	const secret = "s3cretvalue-0042"
@@ -638,6 +680,7 @@ func TestVerboseRedactsSecrets(t *testing.T) {
 }
 
 func TestFlagsKeepExistingUsageErrors(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	scratch := t.TempDir()
 	cases := [][]string{

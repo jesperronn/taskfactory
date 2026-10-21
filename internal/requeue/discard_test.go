@@ -9,6 +9,7 @@ import (
 )
 
 func TestDiscardClaimToReady(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	res, err := RequeueWith(root, "TF-001", "ready", Options{DiscardClaim: true})
 	if err != nil {
@@ -35,6 +36,7 @@ func TestDiscardClaimToReady(t *testing.T) {
 }
 
 func TestDiscardClaimToInbox(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	// An inbox task needs no contract check, so a broken contract is accepted.
 	writeFile(t, filepath.Join(root, "tasks", "failed", taskFile), "# TF-001: Rough idea\n\nNotes.\n"+claimBlock("TF-001", root))
@@ -54,6 +56,7 @@ func TestDiscardClaimToInbox(t *testing.T) {
 }
 
 func TestDiscardClaimBodyRecordsClaim(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	if _, err := RequeueWith(root, "TF-001", "ready", Options{DiscardClaim: true}); err != nil {
 		t.Fatal(err)
@@ -77,6 +80,7 @@ func TestDiscardClaimBodyRecordsClaim(t *testing.T) {
 }
 
 func TestDiscardClaimNeededWithoutFlagIsRefusedAndNamesFlag(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	writeEvidence(t, root, 1)
 	original := readFile(t, filepath.Join(root, "tasks", "failed", taskFile))
@@ -99,6 +103,7 @@ func TestDiscardClaimNeededWithoutFlagIsRefusedAndNamesFlag(t *testing.T) {
 }
 
 func TestDiscardClaimKeepsRestOfFileAndRenamesEvidence(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	evidence := writeEvidence(t, root, 3)
 	if _, err := RequeueWith(root, "TF-001", "ready", Options{DiscardClaim: true}); err != nil {
@@ -122,6 +127,7 @@ func TestDiscardClaimKeepsRestOfFileAndRenamesEvidence(t *testing.T) {
 }
 
 func TestDiscardClaimKeepsTextAfterClaimBlock(t *testing.T) {
+	t.Parallel()
 	data := []byte(contract("TF-001") + "\n## Claim\n\nOwner: a\nBranch: b\n\n## Outcome\n\nKept.\n")
 	got, removed := stripClaim(data)
 	if string(got) != contract("TF-001")+"\n## Outcome\n\nKept.\n" {
@@ -133,6 +139,7 @@ func TestDiscardClaimKeepsTextAfterClaimBlock(t *testing.T) {
 }
 
 func TestDiscardClaimUnclaimedTaskIsANoOpNote(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	original := readFile(t, filepath.Join(root, "tasks", "failed", taskFile))
 	res, err := RequeueWith(root, "TF-001", "ready", Options{DiscardClaim: true})
@@ -152,6 +159,7 @@ func TestDiscardClaimUnclaimedTaskIsANoOpNote(t *testing.T) {
 }
 
 func TestDiscardClaimRestoresWhenCommitFails(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	evidence := writeEvidence(t, root, 2)
 	original := readFile(t, filepath.Join(root, "tasks", "failed", taskFile))
@@ -175,6 +183,7 @@ func TestDiscardClaimRestoresWhenCommitFails(t *testing.T) {
 }
 
 func TestDiscardClaimRestoresWhenValidationFails(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	writeFile(t, filepath.Join(root, "tasks", "failed", taskFile), strings.Replace(contract("TF-001"), "Check: false", "No check here", 1)+claimBlock("TF-001", root))
 	runGit(t, root, "add", "--all")
@@ -193,6 +202,7 @@ func TestDiscardClaimRestoresWhenValidationFails(t *testing.T) {
 }
 
 func TestDiscardClaimRestoresUntrackedFailedFile(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	runGit(t, root, "rm", "-q", "--cached", "tasks/failed/"+taskFile)
 	runGit(t, root, "commit", "-q", "-m", "untrack")
@@ -210,6 +220,7 @@ func TestDiscardClaimRestoresUntrackedFailedFile(t *testing.T) {
 }
 
 func TestDiscardClaimParseOptions(t *testing.T) {
+	t.Parallel()
 	id, to, opts, err := ParseOptions([]string{"--discard-claim", "TF-001", "--to=inbox"})
 	if err != nil || id != "TF-001" || to != "inbox" || !opts.DiscardClaim {
 		t.Fatalf("ParseOptions = %q %q %+v %v", id, to, opts, err)

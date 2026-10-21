@@ -14,8 +14,6 @@ import (
 // directory is its own git repository that tracks the ready task.
 func externalState(t *testing.T, asRepo bool) (project, state string) {
 	t.Helper()
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
 	project, _ = filepath.EvalSymlinks(t.TempDir())
 	state, _ = filepath.EvalSymlinks(t.TempDir())
 	runGit(t, project, "init", "-q", "-b", "main")
@@ -50,6 +48,7 @@ func externalState(t *testing.T, asRepo bool) (project, state string) {
 	return project, state
 }
 
+// Serial: registers into the process-global paths registry (paths.Register).
 func TestPlainStateRename(t *testing.T) {
 	project, state := externalState(t, false)
 	before := commitCount(t, project)
@@ -74,6 +73,7 @@ func TestPlainStateRename(t *testing.T) {
 	}
 }
 
+// Serial: registers into the process-global paths registry (paths.Register).
 func TestStateRepoFailCommits(t *testing.T) {
 	project, state := externalState(t, true)
 	before := commitCount(t, project)

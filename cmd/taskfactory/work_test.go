@@ -7,6 +7,7 @@ import (
 )
 
 func TestWorkUsageErrorsExitTwoAndHelpExitsZero(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	outsideCheckout := t.TempDir()
 
@@ -31,6 +32,7 @@ func TestWorkUsageErrorsExitTwoAndHelpExitsZero(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			cmd := exec.Command(binary, tt.args...)
 			cmd.Dir = outsideCheckout
 			output, err := cmd.CombinedOutput()
@@ -47,6 +49,7 @@ func TestWorkUsageErrorsExitTwoAndHelpExitsZero(t *testing.T) {
 }
 
 func TestWorkRefusesWithoutActiveTaskBeforeLaunchExitsOne(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	cmd := exec.Command(binary, "work", "TF-001", "--adapter", "omp", "--model", "m")
@@ -58,6 +61,7 @@ func TestWorkRefusesWithoutActiveTaskBeforeLaunchExitsOne(t *testing.T) {
 }
 
 func TestWorkIsListedInUsageAndHasHelp(t *testing.T) {
+	t.Parallel()
 	if _, ok := commandHelps["work"]; !ok {
 		t.Fatal("work missing from commandHelps")
 	}

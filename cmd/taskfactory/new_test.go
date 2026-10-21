@@ -10,6 +10,7 @@ import (
 )
 
 func TestNewWritesValidSkeletonWithNextFreeID(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	mustGit(t, root, "config", "user.name", "Test")
@@ -84,6 +85,7 @@ func TestNewWritesValidSkeletonWithNextFreeID(t *testing.T) {
 }
 
 func TestNewRefusesBadTitles(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := nextStepProject(t, binary, "001", "true")
 	before := snapshot(t, root)
@@ -101,6 +103,7 @@ func TestNewRefusesBadTitles(t *testing.T) {
 }
 
 func TestNewDryRunAndVerbose(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := nextStepProject(t, binary, "005", "true")
 	before := snapshot(t, root)
@@ -124,6 +127,7 @@ func TestNewDryRunAndVerbose(t *testing.T) {
 }
 
 func TestNewHonorsTasksDir(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	mustGit(t, root, "config", "user.name", "Test")

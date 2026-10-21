@@ -51,8 +51,8 @@ func CheckMain(root string) (retErr error) {
 // applies the same guards without taking the lock, then reports the checks it
 // would run; it runs none and changes no stop state.
 func CheckMainWith(root string, opts Options) (retErr error) {
-	trace = opts.Verbose
-	defer func() { trace = nil }()
+	setTrace(opts.Verbose)
+	defer setTrace(nil)
 	root, retErr = filepath.EvalSymlinks(root)
 	if retErr != nil {
 		return retErr

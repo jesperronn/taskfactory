@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"taskfactory/internal/config"
@@ -116,11 +117,20 @@ type Options struct {
 }
 
 // trace is the verbose sink of the running call; it is nil unless Options.Verbose is set.
-var trace func(format string, args ...any)
+var trace atomic.Pointer[func(format string, args ...any)]
+
+// setTrace installs or clears the sink; it is safe for concurrent calls.
+func setTrace(f func(format string, args ...any)) {
+	if f == nil {
+		trace.Store(nil)
+		return
+	}
+	trace.Store(&f)
+}
 
 func tracef(format string, args ...any) {
-	if trace != nil {
-		trace(format, args...)
+	if f := trace.Load(); f != nil {
+		(*f)(format, args...)
 	}
 }
 
@@ -133,8 +143,8 @@ func Claim(projectRoot, id, owner string) error {
 // ClaimWith is Claim with options. A dry run runs the same eligibility and
 // state checks and stops before the first write.
 func ClaimWith(projectRoot, id, owner string, opts Options) error {
-	trace = opts.Verbose
-	defer func() { trace = nil }()
+	setTrace(opts.Verbose)
+	defer setTrace(nil)
 	if strings.TrimSpace(owner) == "" {
 		return errors.New("claim owner must be non-empty")
 	}

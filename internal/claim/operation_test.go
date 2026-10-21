@@ -12,6 +12,7 @@ import (
 )
 
 func TestClaimCreatesBranchWorktreeAndValidatedActiveTask(t *testing.T) {
+	t.Parallel()
 	root := newGitProject(t, 4, "TF-001")
 	if err := Claim(root, "TF-001", "worker-a"); err != nil {
 		t.Fatal(err)
@@ -38,6 +39,7 @@ func TestClaimCreatesBranchWorktreeAndValidatedActiveTask(t *testing.T) {
 }
 
 func TestClaimRejectsEmptyOwnerWithoutChangingTask(t *testing.T) {
+	t.Parallel()
 	root := newGitProject(t, 4, "TF-001")
 	if err := Claim(root, "TF-001", " \t"); err == nil || !strings.Contains(err.Error(), "owner") {
 		t.Fatalf("empty owner error = %v", err)
@@ -48,6 +50,7 @@ func TestClaimRejectsEmptyOwnerWithoutChangingTask(t *testing.T) {
 }
 
 func TestClaimRespectsCapacityAndPreservesExistingBranch(t *testing.T) {
+	t.Parallel()
 	root := newGitProject(t, 1, "TF-001")
 	writeReady(t, root, "TF-002")
 	if err := Claim(root, "TF-001", "first"); err != nil {
@@ -70,6 +73,7 @@ func TestClaimRespectsCapacityAndPreservesExistingBranch(t *testing.T) {
 }
 
 func TestClaimCreatesIndependentWorktreesForDifferentTasks(t *testing.T) {
+	t.Parallel()
 	root := newGitProject(t, 2, "TF-001", "TF-002")
 	if err := Claim(root, "TF-001", "one"); err != nil {
 		t.Fatal(err)
@@ -88,6 +92,7 @@ func TestClaimCreatesIndependentWorktreesForDifferentTasks(t *testing.T) {
 }
 
 func TestClaimRejectsSymlinkedActiveDirectoryWithoutWritingOutsideProject(t *testing.T) {
+	t.Parallel()
 	root := newGitProject(t, 4, "TF-001")
 	external := t.TempDir()
 	activeDir := filepath.Join(root, "tasks", "active")
@@ -113,6 +118,7 @@ func TestClaimRejectsSymlinkedActiveDirectoryWithoutWritingOutsideProject(t *tes
 }
 
 func TestClaimUsesLocalMainCommitWhenInvokedFromAnotherBranch(t *testing.T) {
+	t.Parallel()
 	root := newGitProject(t, 4, "TF-001")
 	mainCommit := gitOutput(t, root, "rev-parse", "refs/heads/main^{commit}")
 	gitRun(t, root, "switch", "-c", "feature/unrelated")
@@ -133,6 +139,7 @@ func TestClaimUsesLocalMainCommitWhenInvokedFromAnotherBranch(t *testing.T) {
 	}
 }
 
+// Serial: sets process-global environment or working directory, which is unsafe in a parallel test.
 func TestClaimGitFailureLeavesReadyTaskAndUnownedResourcesUntouched(t *testing.T) {
 	root := newGitProject(t, 4, "TF-001")
 	realGit, err := exec.LookPath("git")
@@ -160,6 +167,7 @@ func TestClaimGitFailureLeavesReadyTaskAndUnownedResourcesUntouched(t *testing.T
 }
 
 func TestClaimFileFailureRollsBackCreatedGitResources(t *testing.T) {
+	t.Parallel()
 	root := newGitProject(t, 4, "TF-001")
 	activeDir := filepath.Join(root, "tasks", "active")
 	if err := os.Chmod(activeDir, 0o500); err != nil {
@@ -191,6 +199,7 @@ func realPath(t *testing.T, path string) string {
 }
 
 func TestClaimRejectsOccupiedPathAndGitFailureWithoutUnownedCleanup(t *testing.T) {
+	t.Parallel()
 	root := newGitProject(t, 4, "TF-001")
 	path := filepath.Join(root, ".taskfactory", "worktrees", "TF-001")
 	if err := os.MkdirAll(path, 0o755); err != nil {
@@ -212,6 +221,7 @@ func TestClaimRejectsOccupiedPathAndGitFailureWithoutUnownedCleanup(t *testing.T
 }
 
 func TestClaimSerializesSameTaskClaims(t *testing.T) {
+	t.Parallel()
 	root := newGitProject(t, 4, "TF-001")
 	results := make(chan error, 2)
 	for _, owner := range []string{"one", "two"} {

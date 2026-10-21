@@ -12,6 +12,7 @@ import (
 )
 
 func TestPreflightRefusalExitsOneAndChangesNothing(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, true)
 	statusBefore := git(t, f.root, "status", "--short")
 	var out strings.Builder
@@ -54,6 +55,7 @@ func TestPreflightRefusalExitsOneAndChangesNothing(t *testing.T) {
 }
 
 func TestRefusesTaskThatIsNotActiveAndClaimed(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		setup func(t *testing.T, f fixture)
@@ -73,6 +75,7 @@ func TestRefusesTaskThatIsNotActiveAndClaimed(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			f := newFixture(t, true)
 			tt.setup(t, f)
 			var out strings.Builder
@@ -87,6 +90,7 @@ func TestRefusesTaskThatIsNotActiveAndClaimed(t *testing.T) {
 		})
 	}
 	t.Run("unclaimed active task", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t, false)
 		var out strings.Builder
 		rec := &recorder{}
@@ -101,6 +105,7 @@ func TestRefusesTaskThatIsNotActiveAndClaimed(t *testing.T) {
 }
 
 func TestExitZeroPrintsVerifyStepAndRunsNothingElse(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, true)
 	headBefore := git(t, f.root, "rev-parse", "HEAD")
 	statusBefore := statusWithoutLogs(t, f.root)
@@ -132,6 +137,7 @@ func TestExitZeroPrintsVerifyStepAndRunsNothingElse(t *testing.T) {
 }
 
 func TestExitZeroReportsWorkerCommitOnlyWhenHeadMoved(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, true)
 	var out strings.Builder
 	rec := &recorder{result: common.Result{State: common.StateExit, ExitCode: intp(0)}}
@@ -149,6 +155,7 @@ func TestExitZeroReportsWorkerCommitOnlyWhenHeadMoved(t *testing.T) {
 }
 
 func TestNonzeroExitPrintsLogPathAndExitsOne(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, true)
 	var out strings.Builder
 	rec := &recorder{result: common.Result{State: common.StateExit, ExitCode: intp(3), Output: "oops"}}
@@ -163,8 +170,10 @@ func TestNonzeroExitPrintsLogPathAndExitsOne(t *testing.T) {
 }
 
 func TestSuggestsFailForBlockedAndStalledWithoutRunningIt(t *testing.T) {
+	t.Parallel()
 	for _, state := range []common.State{common.StateBlocked, common.StateStalled} {
 		t.Run(string(state), func(t *testing.T) {
+			t.Parallel()
 			f := newFixture(t, true)
 			headBefore := git(t, f.root, "rev-parse", "HEAD")
 			statusBefore := statusWithoutLogs(t, f.root)
@@ -191,6 +200,7 @@ func TestSuggestsFailForBlockedAndStalledWithoutRunningIt(t *testing.T) {
 }
 
 func TestLogIsWrittenUnderTaskfactoryLogsAndNothingIsStaged(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, true)
 	headBefore := git(t, f.root, "rev-parse", "HEAD")
 	statusBefore := statusWithoutLogs(t, f.root)
@@ -219,6 +229,7 @@ func TestLogIsWrittenUnderTaskfactoryLogsAndNothingIsStaged(t *testing.T) {
 }
 
 func TestLogSuffixesWhenBaseNameExists(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, true)
 	old := filepath.Join(f.root, ".taskfactory", "logs", testID, "omp-20261009T120000Z.log")
 	write(t, old, "old")
@@ -238,6 +249,7 @@ func TestLogSuffixesWhenBaseNameExists(t *testing.T) {
 }
 
 func TestNoCredentialReachesLogOrOutput(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, true)
 	const secret = "sk-live-0123456789abcdef"
 	var out strings.Builder
@@ -270,6 +282,7 @@ func TestNoCredentialReachesLogOrOutput(t *testing.T) {
 }
 
 func TestWorkNeverRunsLifecycleCommands(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, true)
 	var out strings.Builder
 	rec := &recorder{result: common.Result{State: common.StateExit, ExitCode: intp(0)}}

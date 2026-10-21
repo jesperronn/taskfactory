@@ -100,6 +100,7 @@ func failingMainRun(t *testing.T, f fixture) {
 
 // C1: a failed main check persists the exact stop record and blocks later integration.
 func TestCheckMainFailurePersistsExactStopAndBlocksIntegration(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	setMainChecks(t, f.root, "echo boom; exit 3")
 	main := mainHead(t, f.root)
@@ -124,6 +125,7 @@ func TestCheckMainFailurePersistsExactStopAndBlocksIntegration(t *testing.T) {
 
 // C2: a failed recheck updates the existing stop record and keeps it present.
 func TestCheckMainFailedRecheckUpdatesAndRetainsStop(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	failingMainRun(t, f)
 	setMainChecks(t, f.root, "echo second >&2; exit 4")
@@ -139,6 +141,7 @@ func TestCheckMainFailedRecheckUpdatesAndRetainsStop(t *testing.T) {
 
 // C3: passing checks on current main clear valid stop state and allow integration.
 func TestCheckMainPassingRecheckClearsStopAndAllowsIntegration(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	failingMainRun(t, f)
 	setMainChecks(t, f.root, "true")
@@ -158,6 +161,7 @@ func TestCheckMainPassingRecheckClearsStopAndAllowsIntegration(t *testing.T) {
 
 // Checks run in configured order and stop at the first failure.
 func TestCheckMainRunsChecksInOrderAndStopsAtFirstFailure(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	log := filepath.Join(t.TempDir(), "log")
 	setMainChecks(t, f.root, "echo a >> "+log, "echo b >> "+log+"; exit 1", "echo c >> "+log)
@@ -177,6 +181,7 @@ func TestCheckMainRunsChecksInOrderAndStopsAtFirstFailure(t *testing.T) {
 }
 
 func TestCheckMainPassingChecksRunInOrder(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	log := filepath.Join(t.TempDir(), "log")
 	setMainChecks(t, f.root, "echo a >> "+log, "echo b >> "+log)
@@ -190,6 +195,7 @@ func TestCheckMainPassingChecksRunInOrder(t *testing.T) {
 
 // C2/C4: a valid lone temp sibling is treated as the stop and replaced on failure.
 func TestCheckMainLoneValidTempIsReplacedOnFailure(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	tempRec := expectedStop(t, stopRecord{Main: strings.Repeat("a", 40), Command: "old", Exit: exitPtr(9), Output: "old\n"})
 	if err := os.WriteFile(stopPath(f.root)+".tmp", tempRec, 0600); err != nil {
@@ -211,6 +217,7 @@ func TestCheckMainLoneValidTempIsReplacedOnFailure(t *testing.T) {
 
 // C4: a lone valid temp sibling is cleared by passing checks.
 func TestCheckMainLoneValidTempIsClearedOnPass(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	tempRec := expectedStop(t, stopRecord{Main: strings.Repeat("b", 40), Command: "old", Exit: exitPtr(9)})
 	if err := os.WriteFile(stopPath(f.root)+".tmp", tempRec, 0600); err != nil {
@@ -228,6 +235,7 @@ func TestCheckMainLoneValidTempIsClearedOnPass(t *testing.T) {
 // C4: malformed canonical and temp records fail closed, stay byte-identical, and
 // do not run any main check.
 func TestCheckMainMalformedStopFailsClosedUnchanged(t *testing.T) {
+	t.Parallel()
 	cases := map[string][]byte{
 		"not json":       []byte("partial"),
 		"missing key":    []byte(`{"main_commit":"` + strings.Repeat("c", 40) + `","command":"x","exit_code":1,"output":""}`),
@@ -239,6 +247,7 @@ func TestCheckMainMalformedStopFailsClosedUnchanged(t *testing.T) {
 	for name, content := range cases {
 		for _, place := range []string{"canonical", "temp"} {
 			t.Run(name+"/"+place, func(t *testing.T) {
+				t.Parallel()
 				f := newFixture(t)
 				marker := filepath.Join(t.TempDir(), "ran")
 				path := stopPath(f.root)
@@ -264,6 +273,7 @@ func TestCheckMainMalformedStopFailsClosedUnchanged(t *testing.T) {
 }
 
 func TestCheckMainAmbiguousCanonicalAndTempFailsClosed(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	failingMainRun(t, f)
 	canonical := mustStop(t, f.root)
@@ -285,6 +295,7 @@ func TestCheckMainAmbiguousCanonicalAndTempFailsClosed(t *testing.T) {
 
 // Stop present but no main checks configured fails closed with an actionable error.
 func TestCheckMainStopWithoutMainChecksFailsClosed(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	failingMainRun(t, f)
 	before := mustStop(t, f.root)
@@ -300,6 +311,7 @@ func TestCheckMainStopWithoutMainChecksFailsClosed(t *testing.T) {
 
 // Without a stop and without main checks there is nothing to verify or clear.
 func TestCheckMainNoStopNoChecksSucceeds(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	setMainChecks(t, f.root)
 	if err := CheckMain(f.root); err != nil {
@@ -312,7 +324,9 @@ func TestCheckMainNoStopNoChecksSucceeds(t *testing.T) {
 
 // Main moving during checks changes no stop state and records nothing.
 func TestCheckMainMainMovingDuringChecksChangesNoStopState(t *testing.T) {
+	t.Parallel()
 	t.Run("no prior stop", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		setMainChecks(t, f.root, moveAndFailCommand(t, f.root))
 		if err := CheckMain(f.root); err == nil || !strings.Contains(err.Error(), "moved") {
@@ -323,6 +337,7 @@ func TestCheckMainMainMovingDuringChecksChangesNoStopState(t *testing.T) {
 		}
 	})
 	t.Run("prior stop bytes preserved", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		failingMainRun(t, f)
 		before := mustStop(t, f.root)
@@ -338,6 +353,7 @@ func TestCheckMainMainMovingDuringChecksChangesNoStopState(t *testing.T) {
 
 // Main moving alone never clears the stop; a failing recheck records the new main.
 func TestCheckMainRecordsCurrentMainAfterMainMoves(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	failingMainRun(t, f)
 	before := mustStop(t, f.root)
@@ -353,6 +369,7 @@ func TestCheckMainRecordsCurrentMainAfterMainMoves(t *testing.T) {
 
 // The check-main run waits for the integration lock like integrate does.
 func TestCheckMainWaitsForIntegrationLock(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	setMainChecks(t, f.root)
 	unlock, err := acquireIntegrationLock(f.root)

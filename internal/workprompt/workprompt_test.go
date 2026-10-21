@@ -84,8 +84,6 @@ type fixture struct {
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -125,6 +123,7 @@ func write(t *testing.T, path, content string) {
 }
 
 func TestBuildReturnsClaimFieldsAndVerbatimTask(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	p, err := Build(f.root, testID)
 	if err != nil {
@@ -149,6 +148,7 @@ func TestBuildReturnsClaimFieldsAndVerbatimTask(t *testing.T) {
 }
 
 func TestBuildDeterministicReadsFilesOnly(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	before := snapshot(t, f.root)
 	first, err := Build(f.root, testID)
@@ -193,13 +193,16 @@ func snapshot(t *testing.T, root string) string {
 }
 
 func TestBuildRefusesMissingUnclaimedOrIncompleteTask(t *testing.T) {
+	t.Parallel()
 	t.Run("missing", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		if _, err := Build(f.root, "TF-099"); err == nil {
 			t.Fatal("Build accepted a task that is not in tasks/active")
 		}
 	})
 	t.Run("not active", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		write(t, filepath.Join(f.root, "tasks", "inbox", "TF-077-other.md"), taskContract("TF-077", "", "", false, false))
 		if _, err := Build(f.root, "TF-077"); err == nil {
@@ -207,6 +210,7 @@ func TestBuildRefusesMissingUnclaimedOrIncompleteTask(t *testing.T) {
 		}
 	})
 	t.Run("unclaimed", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		write(t, f.taskFile, taskContract(testID, "", "", false, false))
 		if _, err := Build(f.root, testID); err == nil {
@@ -214,6 +218,7 @@ func TestBuildRefusesMissingUnclaimedOrIncompleteTask(t *testing.T) {
 		}
 	})
 	t.Run("incomplete claim", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		write(t, f.taskFile, taskContract(testID, f.worktree, f.base, true, true))
 		if _, err := Build(f.root, testID); err == nil {
@@ -223,6 +228,7 @@ func TestBuildRefusesMissingUnclaimedOrIncompleteTask(t *testing.T) {
 }
 
 func TestRulesForbidIntegrateFailPushAndSigning(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	p, err := Build(f.root, testID)
 	if err != nil {
@@ -249,6 +255,7 @@ func TestRulesForbidIntegrateFailPushAndSigning(t *testing.T) {
 }
 
 func TestLogPathLayoutAndOpenLogNeverOverwrites(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	at := time.Date(2026, 10, 9, 12, 34, 56, 0, time.FixedZone("CEST", 2*60*60))
 	want := filepath.Join(root, ".taskfactory", "logs", testID, "claude-20261009T103456Z.log")
@@ -309,6 +316,7 @@ func TestLogPathLayoutAndOpenLogNeverOverwrites(t *testing.T) {
 	}
 }
 
+// Serial: sets process-global environment or working directory, which is unsafe in a parallel test.
 func TestNoSecretsInPromptOrLogHeader(t *testing.T) {
 	const secret = "sk-test-SENTINEL-do-not-print"
 	t.Setenv("ANTHROPIC_AUTH_TOKEN", secret)
@@ -346,6 +354,7 @@ func removeInstructions(t *testing.T, f fixture) string {
 	return path
 }
 
+// Serial: sets process-global environment or working directory, which is unsafe in a parallel test.
 func TestBuildFallback(t *testing.T) {
 	f := newFixture(t)
 	removeInstructions(t, f)
@@ -374,6 +383,7 @@ func TestBuildFallback(t *testing.T) {
 }
 
 func TestBuildVerbatim(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	p, err := Build(f.root, testID)
 	if err != nil {
@@ -388,7 +398,9 @@ func TestBuildVerbatim(t *testing.T) {
 }
 
 func TestBuildInstructionsReadError(t *testing.T) {
+	t.Parallel()
 	t.Run("directory", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		path := removeInstructions(t, f)
 		if err := os.Mkdir(path, 0o755); err != nil {
@@ -399,6 +411,7 @@ func TestBuildInstructionsReadError(t *testing.T) {
 		}
 	})
 	t.Run("unreadable", func(t *testing.T) {
+		t.Parallel()
 		f := newFixture(t)
 		path := filepath.Join(f.worktree, "docs", "worker-instructions.md")
 		if err := os.Chmod(path, 0); err != nil {

@@ -9,6 +9,7 @@ import (
 // CheckNoCommit fails when a non-test Go file in this package overrides signing
 // or names a Git command that writes: work must never stage or commit.
 func TestCheckNoCommitOrSigningOverride(t *testing.T) {
+	t.Parallel()
 	banned := []string{"no-gpg-sign", "gpgsign", `"commit"`, `"add"`, `"push"`, `"reset"`, `"checkout"`, `"stash"`, `"merge"`, `"rebase"`, `"mv"`, `"rm"`, `"restore"`}
 	entries, err := os.ReadDir(".")
 	if err != nil {

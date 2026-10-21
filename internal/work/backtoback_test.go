@@ -14,6 +14,7 @@ import (
 // injected clock, so both runs start in the same second. Both must exit 0,
 // both logs must exist, and the printed log paths must be the files used.
 func TestBackToBackRunsInOneSecondBothSucceed(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, true)
 	rec := &recorder{result: common.Result{State: common.StateExit, ExitCode: intp(0), Output: "ok"}}
 	var printed []string

@@ -70,6 +70,7 @@ func externalLifecycle(t *testing.T) (project, state string) {
 	return project, state
 }
 
+// Serial: registers into the process-global paths registry (paths.Register).
 func TestExternalStateDir(t *testing.T) {
 	project, state := externalLifecycle(t)
 	if _, err := os.Stat(filepath.Join(state, "tasks/archive/TF-901-example.md")); err != nil {
@@ -98,6 +99,7 @@ func TestExternalStateDir(t *testing.T) {
 	}
 }
 
+// Serial: registers into the process-global paths registry (paths.Register).
 func TestExternalStateCleanProject(t *testing.T) {
 	project, _ := externalLifecycle(t)
 	status, err := git(project, "status", "--porcelain", "--untracked-files=all")
@@ -114,6 +116,7 @@ func TestExternalStateCleanProject(t *testing.T) {
 	}
 }
 
+// Serial: registers into the process-global paths registry (paths.Register).
 func TestExternalStateRequiresProjectRoot(t *testing.T) {
 	project, state := externalProject(t)
 	write(t, state, ".taskfactory/config.toml", "protocol_version = 1\n")

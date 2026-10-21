@@ -44,6 +44,7 @@ func completionFixture(t *testing.T) string {
 }
 
 func TestCompletionScriptsListEveryCommand(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	for _, shell := range []string{"bash", "zsh"} {
 		res := runSplit(t, binary, t.TempDir(), "completion", shell)
@@ -62,6 +63,7 @@ func TestCompletionScriptsListEveryCommand(t *testing.T) {
 }
 
 func TestCompletionTableMatchesCommands(t *testing.T) {
+	t.Parallel()
 	if len(completionSpecs) != len(commandSummaries) {
 		t.Errorf("completionSpecs has %d entries, commandSummaries %d", len(completionSpecs), len(commandSummaries))
 	}
@@ -106,6 +108,7 @@ func TestCompletionTableMatchesCommands(t *testing.T) {
 }
 
 func TestCompleteHelperIDsPerCommand(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := completionFixture(t)
 	want := map[string]string{
@@ -144,6 +147,7 @@ func TestCompleteHelperIDsPerCommand(t *testing.T) {
 }
 
 func TestCompleteHelperOutsideRepo(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	dir := t.TempDir()
 	for _, command := range []string{"claim", "integrate", "promote"} {
@@ -155,6 +159,7 @@ func TestCompleteHelperOutsideRepo(t *testing.T) {
 }
 
 func TestCompleteHelperSubdirAndPrefix(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := completionFixture(t)
 	sub := filepath.Join(root, "tasks", "ready")
@@ -173,6 +178,7 @@ func TestCompleteHelperSubdirAndPrefix(t *testing.T) {
 }
 
 func TestCompletionUsageErrors(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	for _, args := range [][]string{{"completion"}, {"completion", "fish"}, {"completion", "bash", "extra"}, {"completion", "bash", "--verbose"}} {
 		res := runSplit(t, binary, t.TempDir(), args...)
@@ -220,6 +226,7 @@ func bashComplete(t *testing.T, binary, dir string, words ...string) []string {
 }
 
 func TestBashCompletion(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash not available")
 	}
@@ -267,6 +274,7 @@ func TestBashCompletion(t *testing.T) {
 }
 
 func TestZshCompletionSyntax(t *testing.T) {
+	t.Parallel()
 	zsh, err := exec.LookPath("zsh")
 	if err != nil {
 		t.Skip("zsh not available; skipping the zsh syntax check")
@@ -287,6 +295,7 @@ func TestZshCompletionSyntax(t *testing.T) {
 }
 
 func TestCompletionRegistersTfAlias(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	for shell, line := range map[string]string{
 		"bash": "complete -F _taskfactory taskfactory tf",
@@ -300,6 +309,7 @@ func TestCompletionRegistersTfAlias(t *testing.T) {
 }
 
 func TestCompletionHelpAndHint(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	scratch := t.TempDir()
 	res := runSplit(t, binary, scratch, "completion", "--help")
@@ -405,6 +415,7 @@ func completionDrift(command, help string, spec completionSpec, hidden []string)
 }
 
 func TestCompletionFlagsCoverHelp(t *testing.T) {
+	t.Parallel()
 	for _, c := range commandSummaries {
 		spec, ok := findCompletionSpec(c.name)
 		if !ok {
@@ -419,6 +430,7 @@ func TestCompletionFlagsCoverHelp(t *testing.T) {
 }
 
 func TestCompletionTableFlagsInHelp(t *testing.T) {
+	t.Parallel()
 	for _, c := range commandSummaries {
 		spec, ok := findCompletionSpec(c.name)
 		if !ok {
@@ -432,6 +444,7 @@ func TestCompletionTableFlagsInHelp(t *testing.T) {
 }
 
 func TestCompletionDriftDetectsMissingFlag(t *testing.T) {
+	t.Parallel()
 	spec, _ := findCompletionSpec("work")
 	var trimmed []completionFlag
 	for _, f := range spec.Flags {
@@ -459,6 +472,7 @@ func TestCompletionDriftDetectsMissingFlag(t *testing.T) {
 }
 
 func TestCompletionHiddenFlagsExempt(t *testing.T) {
+	t.Parallel()
 	for command, flags := range completionHiddenFlags {
 		spec, ok := findCompletionSpec(command)
 		if !ok {
@@ -493,6 +507,7 @@ func TestCompletionHiddenFlagsExempt(t *testing.T) {
 }
 
 func TestBashCompletionAddedFlags(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash not available")
 	}
@@ -521,6 +536,7 @@ func TestBashCompletionAddedFlags(t *testing.T) {
 // TestCompletionStateDir pins that --state-dir is in the completion table for
 // every command that takes it, with a free value, and for no other command.
 func TestCompletionStateDir(t *testing.T) {
+	t.Parallel()
 	for _, c := range commandSummaries {
 		spec, ok := findCompletionSpec(c.name)
 		if !ok {

@@ -14,6 +14,7 @@ func initPathExists(t *testing.T, dir string) bool {
 }
 
 func TestInitPathDefaultCwd(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	out, err := runCLI(t, binary, root, "init")
@@ -26,6 +27,7 @@ func TestInitPathDefaultCwd(t *testing.T) {
 }
 
 func TestInitPathRepoRoot(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	elsewhere := t.TempDir()
@@ -39,6 +41,7 @@ func TestInitPathRepoRoot(t *testing.T) {
 }
 
 func TestInitPathSubdirectory(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	sub := filepath.Join(root, "a", "b")
@@ -55,6 +58,7 @@ func TestInitPathSubdirectory(t *testing.T) {
 }
 
 func TestInitPathRelativeAndSymlink(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	sub := filepath.Join(root, "sub")
@@ -89,6 +93,7 @@ func TestInitPathRelativeAndSymlink(t *testing.T) {
 }
 
 func TestInitPathNotADirectory(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	cwd := initGitProject(t)
 	file := filepath.Join(cwd, "plain.txt")
@@ -111,6 +116,7 @@ func TestInitPathNotADirectory(t *testing.T) {
 }
 
 func TestInitPathNotInRepo(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	outside := t.TempDir()
 	out, err := runCLI(t, binary, initGitProject(t), "init", outside)
@@ -123,6 +129,7 @@ func TestInitPathNotInRepo(t *testing.T) {
 }
 
 func TestInitPathTwoPositionals(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	out, err := runCLI(t, binary, root, "init", root, "extra-arg")
@@ -135,6 +142,7 @@ func TestInitPathTwoPositionals(t *testing.T) {
 }
 
 func TestInitPathHelp(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	for _, args := range [][]string{{"init", "--help"}, {"init", "-h"}, {"init", root, "--help"}, {"init", root, "-h"}, {"init", "--help", root}} {
@@ -165,6 +173,7 @@ func TestInitPathHelp(t *testing.T) {
 }
 
 func TestInitPathNoWritesToCwdRepo(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	cwd := initGitProject(t)
 	target := initGitProject(t)

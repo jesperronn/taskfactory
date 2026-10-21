@@ -18,6 +18,7 @@ func sameSecondHeader() Header {
 }
 
 func TestOpenLogSuffixSecondAndThirdOpenDoNotOverwrite(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	base := LogPath(root, testID, "pi", sameSecond)
 	var files []*os.File
@@ -57,6 +58,7 @@ func TestOpenLogSuffixSecondAndThirdOpenDoNotOverwrite(t *testing.T) {
 }
 
 func TestOpenLogConcurrentOpensAllSucceedWithDistinctFiles(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	base := LogPath(root, testID, "pi", sameSecond)
 	const n = 20
@@ -106,6 +108,7 @@ func TestOpenLogConcurrentOpensAllSucceedWithDistinctFiles(t *testing.T) {
 }
 
 func TestOpenLogExhaustedReturnsErrorAndCreatesNothing(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	base := LogPath(root, testID, "pi", sameSecond)
 	dir := filepath.Dir(base)

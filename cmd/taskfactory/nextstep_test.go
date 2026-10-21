@@ -87,6 +87,7 @@ const wantInitBlock = "Next steps:\n" +
 	"  5. Optional: install the agent skill with taskfactory skill install (check with taskfactory skill status)\n"
 
 func TestNextStepInitBlock(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	res := runSplit(t, binary, root, "init")
@@ -101,6 +102,7 @@ func TestNextStepInitBlock(t *testing.T) {
 }
 
 func TestNextStepInitRerun(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	runSplit(t, binary, root, "init")
@@ -111,6 +113,7 @@ func TestNextStepInitRerun(t *testing.T) {
 }
 
 func TestNextStepInitWithPathNamesTarget(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	res := runSplit(t, binary, t.TempDir(), "init", root)
@@ -120,6 +123,7 @@ func TestNextStepInitWithPathNamesTarget(t *testing.T) {
 }
 
 func TestNextStepInfoCommandsOneLine(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := nextStepProject(t, binary, "901", "true")
 	for _, tt := range []struct{ name, want string }{
@@ -134,6 +138,7 @@ func TestNextStepInfoCommandsOneLine(t *testing.T) {
 }
 
 func TestNextStepLifecycleSuccess(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := nextStepProject(t, binary, "901", "true")
 	steps := []struct {
@@ -178,6 +183,7 @@ func passingLifecycle(t *testing.T, binary string) (root string, verify, integra
 }
 
 func TestNextStepVerifyPass(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	_, verify, _ := passingLifecycle(t, binary)
 	want := "verify TF-902: PASS (2 checks)\nnext: taskfactory integrate TF-902\n"
@@ -187,6 +193,7 @@ func TestNextStepVerifyPass(t *testing.T) {
 }
 
 func TestNextStepVerifyFail(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := nextStepProject(t, binary, "903", "false")
 	runSplit(t, binary, root, "promote", "TF-903")
@@ -202,6 +209,7 @@ func TestNextStepVerifyFail(t *testing.T) {
 }
 
 func TestNextStepIntegrateAndCheckMain(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root, _, integrate := passingLifecycle(t, binary)
 	if integrate.code != 0 || integrate.stdout != "integrated TF-902\nnext: taskfactory status\n" {
@@ -222,6 +230,7 @@ func TestNextStepIntegrateAndCheckMain(t *testing.T) {
 }
 
 func TestNextStepFailureHintsOnStderr(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := nextStepProject(t, binary, "904", "true")
 	status := "\nnext: taskfactory status shows the task state\n"
@@ -250,6 +259,7 @@ func TestNextStepFailureHintsOnStderr(t *testing.T) {
 }
 
 func TestNextStepUsageErrorsHaveNoHint(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := nextStepProject(t, binary, "905", "true")
 	for _, args := range [][]string{
@@ -275,6 +285,7 @@ func TestNextStepUsageErrorsHaveNoHint(t *testing.T) {
 }
 
 func TestNextStepMachineOutputUnchanged(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := nextStepProject(t, binary, "906", "true")
 	status := runSplit(t, binary, root, "status")
@@ -304,6 +315,7 @@ func TestNextStepMachineOutputUnchanged(t *testing.T) {
 }
 
 func TestNextStepHelpLinePerCommand(t *testing.T) {
+	t.Parallel()
 	for name, help := range commandHelps {
 		head, _, ok := strings.Cut(help, "\nFlags:\n")
 		if !ok {
@@ -326,6 +338,7 @@ func TestNextStepHelpLinePerCommand(t *testing.T) {
 }
 
 func TestNextStepTableIsSingleSource(t *testing.T) {
+	t.Parallel()
 	for _, command := range commandSummaries {
 		if command.name == "init" {
 			continue
@@ -358,6 +371,7 @@ func TestNextStepTableIsSingleSource(t *testing.T) {
 	}
 }
 
+// Serial: sets process-global environment or working directory, which is unsafe in a parallel test.
 func TestNextStepPlainWithoutColor(t *testing.T) {
 	plain := ui.Painter{}
 	if got := nextOnSuccess(plain, "verify", "TF-7"); got != "next: taskfactory integrate TF-7" {

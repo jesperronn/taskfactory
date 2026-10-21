@@ -8,6 +8,7 @@ import (
 )
 
 func TestParseArgsAcceptsValidForms(t *testing.T) {
+	t.Parallel()
 	id, o, err := ParseArgs([]string{"TF-056", "--adapter=pi", "--model", "m", "--timeout", "30s", "--endpoint", "127.0.0.1:9"})
 	if err != nil || id != "TF-056" || o.Adapter != "pi" || o.Model != "m" || o.Timeout != 30*time.Second || o.Endpoint != "127.0.0.1:9" {
 		t.Fatalf("id=%s o=%+v err=%v", id, o, err)
@@ -19,6 +20,7 @@ func TestParseArgsAcceptsValidForms(t *testing.T) {
 }
 
 func TestParseArgsUsageErrors(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		args []string
@@ -42,6 +44,7 @@ func TestParseArgsUsageErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			_, _, err := ParseArgs(tt.args)
 			var usage UsageError
 			if !errors.As(err, &usage) || !strings.Contains(err.Error(), tt.want) {

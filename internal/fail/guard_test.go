@@ -10,6 +10,7 @@ import (
 // CheckNoSigningOverride fails when any non-test Go file in this package
 // contains a signing override. The fail command must run a plain git commit.
 func TestCheckNoSigningOverride(t *testing.T) {
+	t.Parallel()
 	banned := []string{"no-gpg-sign", "gpgsign"}
 	entries, err := os.ReadDir(".")
 	if err != nil {

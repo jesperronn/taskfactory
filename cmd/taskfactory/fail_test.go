@@ -7,6 +7,7 @@ import (
 )
 
 func TestFailUsageErrorsExitTwoAndHelpExitsZero(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	outsideCheckout := t.TempDir()
 
@@ -28,6 +29,7 @@ func TestFailUsageErrorsExitTwoAndHelpExitsZero(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			cmd := exec.Command(binary, tt.args...)
 			cmd.Dir = outsideCheckout
 			output, err := cmd.CombinedOutput()

@@ -114,6 +114,7 @@ func requireCleaned(t *testing.T, root, worktree string) {
 }
 
 func TestCleanupSafeRemovesAndReclaims(t *testing.T) {
+	t.Parallel()
 	root, worktree := newClaimedFailed(t)
 	writeEvidence(t, root, 1)
 	// Before this change the re-claim below failed: the branch already exists.
@@ -134,6 +135,7 @@ func TestCleanupSafeRemovesAndReclaims(t *testing.T) {
 }
 
 func TestCleanupSafeRemovesAndReclaimsConventionalWithoutClaim(t *testing.T) {
+	t.Parallel()
 	root, worktree := newClaimedFailed(t)
 	data := readFile(t, filepath.Join(root, "tasks", "failed", taskFile))
 	stripped, _ := stripClaim(data)
@@ -154,11 +156,13 @@ func TestCleanupSafeRemovesAndReclaimsConventionalWithoutClaim(t *testing.T) {
 }
 
 func TestCleanupDirtyRefuses(t *testing.T) {
+	t.Parallel()
 	for name, dirty := range map[string]func(t *testing.T, worktree string){
 		"untracked": func(t *testing.T, w string) { writeFile(t, filepath.Join(w, "scratch.txt"), "x\n") },
 		"modified":  func(t *testing.T, w string) { writeFile(t, filepath.Join(w, "tasks", "failed", ".gitkeep"), "x\n") },
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			root, worktree := newClaimedFailed(t)
 			writeEvidence(t, root, 2)
 			dirty(t, worktree)
@@ -173,8 +177,10 @@ func TestCleanupDirtyRefuses(t *testing.T) {
 }
 
 func TestCleanupUnmergedRefuses(t *testing.T) {
+	t.Parallel()
 	for _, count := range []string{"1", "2"} {
 		t.Run(count, func(t *testing.T) {
+			t.Parallel()
 			root, worktree := newClaimedFailed(t)
 			writeEvidence(t, root, 1)
 			commitInWorktree(t, worktree, "a.txt")
@@ -192,6 +198,7 @@ func TestCleanupUnmergedRefuses(t *testing.T) {
 }
 
 func TestCleanupMergedBranch(t *testing.T) {
+	t.Parallel()
 	root, worktree := newClaimedFailed(t)
 	commitInWorktree(t, worktree, "merged.txt")
 	runGit(t, root, "merge", "-q", "--no-edit", "task/TF-001")
@@ -205,6 +212,7 @@ func TestCleanupMergedBranch(t *testing.T) {
 }
 
 func TestCleanupBaseCommitBranch(t *testing.T) {
+	t.Parallel()
 	root, worktree := newClaimedFailed(t)
 	// Main moves on; the task branch stays at its Claim base commit.
 	writeFile(t, filepath.Join(root, "other.txt"), "other\n")
@@ -221,6 +229,7 @@ func TestCleanupBaseCommitBranch(t *testing.T) {
 }
 
 func TestCleanupOutsideRoot(t *testing.T) {
+	t.Parallel()
 	outsideDir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -232,6 +241,7 @@ func TestCleanupOutsideRoot(t *testing.T) {
 		"dotdot":        func(root, original string) string { return filepath.Join(original, "..", "..", "..") },
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			root, worktree := newClaimedFailed(t)
 			outside := mutate(root, worktree)
 			if name == "elsewhere" {
@@ -251,7 +261,9 @@ func TestCleanupOutsideRoot(t *testing.T) {
 }
 
 func TestCleanupMissing(t *testing.T) {
+	t.Parallel()
 	t.Run("both missing", func(t *testing.T) {
+		t.Parallel()
 		root, worktree := newClaimedFailed(t)
 		runGit(t, root, "worktree", "remove", worktree)
 		runGit(t, root, "branch", "-d", "task/TF-001")
@@ -265,6 +277,7 @@ func TestCleanupMissing(t *testing.T) {
 		assertTaskOnlyIn(t, root, "ready")
 	})
 	t.Run("worktree missing, branch present", func(t *testing.T) {
+		t.Parallel()
 		root, worktree := newClaimedFailed(t)
 		runGit(t, root, "worktree", "remove", worktree)
 		res, err := RequeueWith(root, "TF-001", "ready", Options{DiscardClaim: true})
@@ -277,6 +290,7 @@ func TestCleanupMissing(t *testing.T) {
 		requireCleaned(t, root, worktree)
 	})
 	t.Run("directory deleted by hand", func(t *testing.T) {
+		t.Parallel()
 		root, worktree := newClaimedFailed(t)
 		if err := os.RemoveAll(worktree); err != nil {
 			t.Fatal(err)
@@ -287,6 +301,7 @@ func TestCleanupMissing(t *testing.T) {
 		requireCleaned(t, root, worktree)
 	})
 	t.Run("branch missing, worktree on a detached HEAD", func(t *testing.T) {
+		t.Parallel()
 		root, worktree := newClaimedFailed(t)
 		runGit(t, worktree, "checkout", "-q", "--detach")
 		runGit(t, root, "branch", "-d", "task/TF-001")
@@ -302,6 +317,7 @@ func TestCleanupMissing(t *testing.T) {
 }
 
 func TestCleanupFailureAfterCommit(t *testing.T) {
+	t.Parallel()
 	root, worktree := newClaimedFailed(t)
 	writeEvidence(t, root, 1)
 	// A locked worktree passes the safety checks but git worktree remove,
@@ -330,6 +346,7 @@ func TestCleanupFailureAfterCommit(t *testing.T) {
 }
 
 func TestCleanupKeptWhenRefusedElsewhere(t *testing.T) {
+	t.Parallel()
 	root, worktree := newClaimedFailed(t)
 	// Without --discard-claim the claimed task is refused: nothing is removed.
 	requireRefusal(t, root, Options{}, "flagged for a human decision")

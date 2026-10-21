@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"taskfactory/internal/config"
@@ -84,11 +85,20 @@ type Options struct {
 }
 
 // trace is the verbose sink of the running call; it is nil unless Options.Verbose is set.
-var trace func(format string, args ...any)
+var trace atomic.Pointer[func(format string, args ...any)]
+
+// setTrace installs or clears the sink; it is safe for concurrent calls.
+func setTrace(f func(format string, args ...any)) {
+	if f == nil {
+		trace.Store(nil)
+		return
+	}
+	trace.Store(&f)
+}
 
 func tracef(format string, args ...any) {
-	if trace != nil {
-		trace(format, args...)
+	if f := trace.Load(); f != nil {
+		(*f)(format, args...)
 	}
 }
 
@@ -108,8 +118,8 @@ func Verify(root, id string) (result Result, runErr error) {
 // the real command, including the existing evidence file's validity, and stops
 // before the first check runs.
 func VerifyWith(root, id string, opts Options) (result Result, runErr error) {
-	trace = opts.Verbose
-	defer func() { trace = nil }()
+	setTrace(opts.Verbose)
+	defer setTrace(nil)
 	if !taskID.MatchString(id) {
 		return Result{}, fmt.Errorf("%q is not a valid task ID (expected TF-NNN)", id)
 	}

@@ -11,6 +11,7 @@ import (
 )
 
 func TestResolveStateDirOrder(t *testing.T) {
+	t.Parallel()
 	env := func(v string) func(string) string {
 		return func(k string) string {
 			if k == "TF_STATE_DIR" {
@@ -35,6 +36,7 @@ func TestResolveStateDirOrder(t *testing.T) {
 }
 
 func TestExtractStateDirFlag(t *testing.T) {
+	t.Parallel()
 	for _, args := range [][]string{
 		{"--state-dir", "/x", "TF-001"},
 		{"TF-001", "--state-dir=/x"},
@@ -94,6 +96,7 @@ func runStateEnv(t *testing.T, binary, dir string, env []string, args ...string)
 }
 
 func TestStateDirDiscovery(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	byFlag := externalStateDir(t, 1, true)
 	byEnv := externalStateDir(t, 2, true)
@@ -140,6 +143,7 @@ func TestStateDirDiscovery(t *testing.T) {
 	}
 }
 
+// Serial: sets process-global environment or working directory, which is unsafe in a parallel test.
 func TestInitStateDir(t *testing.T) {
 	binary := buildCLI(t)
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)

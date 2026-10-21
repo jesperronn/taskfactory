@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"taskfactory/internal/adapter/claude"
@@ -73,8 +74,8 @@ func Execute(ctx context.Context, root, id string, opts Options, deps Deps) (int
 		run = realRun
 	}
 
-	trace = opts.Verbose
-	defer func() { trace = nil }()
+	setTrace(opts.Verbose)
+	defer setTrace(nil)
 	tracef("read task %s and worker instructions under %s", id, root)
 	prompt, err := workprompt.Build(root, id)
 	if err != nil {
@@ -155,11 +156,20 @@ func Execute(ctx context.Context, root, id string, opts Options, deps Deps) (int
 }
 
 // trace is the verbose sink of the running call; it is nil unless Options.Verbose is set.
-var trace func(format string, args ...any)
+var trace atomic.Pointer[func(format string, args ...any)]
+
+// setTrace installs or clears the sink; it is safe for concurrent calls.
+func setTrace(f func(format string, args ...any)) {
+	if f == nil {
+		trace.Store(nil)
+		return
+	}
+	trace.Store(&f)
+}
 
 func tracef(format string, args ...any) {
-	if trace != nil {
-		trace(format, args...)
+	if f := trace.Load(); f != nil {
+		(*f)(format, args...)
 	}
 }
 

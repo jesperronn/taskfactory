@@ -15,6 +15,7 @@ import (
 )
 
 func TestCLIHelpVersionAndInvalidFlag(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	outsideCheckout := t.TempDir()
 
@@ -32,6 +33,7 @@ func TestCLIHelpVersionAndInvalidFlag(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			cmd := exec.Command(binary, tt.args...)
 			cmd.Dir = outsideCheckout
 			output, err := cmd.CombinedOutput()
@@ -53,6 +55,7 @@ func TestCLIHelpVersionAndInvalidFlag(t *testing.T) {
 }
 
 func TestHelpListsAndDocumentsEveryTopLevelCommand(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	outsideCheckout := t.TempDir()
 	top, err := runCLI(t, binary, outsideCheckout, "--help")
@@ -78,11 +81,13 @@ func TestHelpListsAndDocumentsEveryTopLevelCommand(t *testing.T) {
 }
 
 func TestHelpPrintsCommandUsageToStdout(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	outsideCheckout := t.TempDir()
 	for _, command := range commandSummaries {
 		for _, helpFlag := range []string{"--help", "-h"} {
 			t.Run(command.name+" "+helpFlag, func(t *testing.T) {
+				t.Parallel()
 				cmd := exec.Command(binary, command.name, helpFlag)
 				cmd.Dir = outsideCheckout
 				var stdout, stderr bytes.Buffer
@@ -107,6 +112,7 @@ func TestHelpPrintsCommandUsageToStdout(t *testing.T) {
 }
 
 func TestHelpColorFollowsFORCEAndNOCOLOR(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	outsideCheckout := t.TempDir()
 	run := func(extraEnv ...string) string {
@@ -181,6 +187,7 @@ func stripSGR(s string) string {
 }
 
 func TestHelpWorksOutsideProjectAndChangesNothing(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	outside := t.TempDir()
 	project := initGitProject(t)
@@ -244,6 +251,7 @@ func TestHelpWorksOutsideProjectAndChangesNothing(t *testing.T) {
 }
 
 func TestInitCreatesLoadableDefaultProject(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 
@@ -272,6 +280,7 @@ func TestInitCreatesLoadableDefaultProject(t *testing.T) {
 }
 
 func TestInitIsIdempotentAndCreatesMissingStateDirectory(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	if output, err := runCLI(t, binary, root, "init"); err != nil {
@@ -330,6 +339,7 @@ func TestInitIsIdempotentAndCreatesMissingStateDirectory(t *testing.T) {
 }
 
 func TestInitUsesGitTopLevelFromNestedDirectory(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	nested := filepath.Join(root, "nested", "deeper")
@@ -348,6 +358,7 @@ func TestInitUsesGitTopLevelFromNestedDirectory(t *testing.T) {
 }
 
 func TestInitFailsOutsideGitProject(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	outside := t.TempDir()
 	output, err := runCLI(t, binary, outside, "init")
@@ -360,6 +371,7 @@ func TestInitFailsOutsideGitProject(t *testing.T) {
 }
 
 func TestInitReportsExistingConflictingConfigWithoutOverwriting(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	configPath := filepath.Join(root, ".taskfactory", "config.toml")
@@ -384,6 +396,7 @@ func TestInitReportsExistingConflictingConfigWithoutOverwriting(t *testing.T) {
 }
 
 func TestInitDoesNotFollowProjectDirectorySymlinkOutsideGitRoot(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	external := t.TempDir()
@@ -400,6 +413,7 @@ func TestInitDoesNotFollowProjectDirectorySymlinkOutsideGitRoot(t *testing.T) {
 }
 
 func TestValidateSupportsWholeTreeAndSingleFile(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	if output, err := runCLI(t, binary, root, "init"); err != nil {
@@ -435,6 +449,7 @@ func TestValidateSupportsWholeTreeAndSingleFile(t *testing.T) {
 }
 
 func TestClaimCLIRequiresOwnerAndActivatesTask(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	if output, err := runCLI(t, binary, root, "init"); err != nil {
@@ -464,6 +479,7 @@ func TestClaimCLIRequiresOwnerAndActivatesTask(t *testing.T) {
 }
 
 func TestVerifyCLIReturnsFailureAfterRecordingEvidence(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	if output, err := runCLI(t, binary, root, "init"); err != nil {
@@ -499,6 +515,7 @@ func TestVerifyCLIReturnsFailureAfterRecordingEvidence(t *testing.T) {
 }
 
 func TestStatusReportsStableReadOnlyTaskCounts(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	if output, err := runCLI(t, binary, root, "init"); err != nil {
@@ -542,6 +559,7 @@ func TestStatusReportsStableReadOnlyTaskCounts(t *testing.T) {
 }
 
 func TestStatusRejectsMissingStateDirectoryAndInvalidTask(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	if output, err := runCLI(t, binary, root, "init"); err != nil {
@@ -657,7 +675,9 @@ func buildCLI(t *testing.T) string {
 
 func initGitProject(t *testing.T) string {
 	t.Helper()
-	base := sharedFixtureBase
+	sharedBasesMu.Lock()
+	base := sharedFixtureBases[t]
+	sharedBasesMu.Unlock()
 	if base == "" {
 		base = t.TempDir()
 	}
@@ -693,6 +713,7 @@ func processExitCode(err error) int {
 }
 
 func TestValidatePathsSelectsFilesAndExitCodes(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	if output, err := runCLI(t, binary, root, "init"); err != nil {
@@ -753,6 +774,7 @@ func TestValidatePathsSelectsFilesAndExitCodes(t *testing.T) {
 }
 
 func TestVerifyPathArgumentSuggestsValidate(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	output, err := runCLI(t, binary, root, "verify", "tasks/inbox/x.md")
@@ -806,6 +828,7 @@ func runVerifySummary(t *testing.T, binary, root, id string) (string, int) {
 }
 
 func TestSummaryPass(t *testing.T) {
+	t.Parallel()
 	root, binary := verifySummaryProject(t, "TF-111", "true")
 	stdout, code := runVerifySummary(t, binary, root, "TF-111")
 	if code != 0 {
@@ -817,6 +840,7 @@ func TestSummaryPass(t *testing.T) {
 }
 
 func TestSummaryFail(t *testing.T) {
+	t.Parallel()
 	root, binary := verifySummaryProject(t, "TF-112", "false")
 	stdout, code := runVerifySummary(t, binary, root, "TF-112")
 	if code != 1 {
@@ -828,6 +852,7 @@ func TestSummaryFail(t *testing.T) {
 }
 
 func TestTreeArchiveCLI(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	if output, err := runCLI(t, binary, root, "init"); err != nil {
@@ -858,6 +883,7 @@ func TestTreeArchiveCLI(t *testing.T) {
 }
 
 func TestValidateInboxNote(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	if output, err := runCLI(t, binary, root, "init"); err != nil {
@@ -888,6 +914,7 @@ func TestValidateInboxNote(t *testing.T) {
 }
 
 func TestReadmeQuickStartDependencies(t *testing.T) {
+	t.Parallel()
 	data, err := os.ReadFile(filepath.Join("..", "..", "README.md"))
 	if err != nil {
 		t.Fatal(err)
@@ -903,6 +930,7 @@ func TestReadmeQuickStartDependencies(t *testing.T) {
 const wantGitignoreBlock = "# TaskFactory runtime files\n.taskfactory/claim.lock\n.taskfactory/integration.lock\n.taskfactory/evidence/\n.taskfactory/integration-evidence/\n.taskfactory/logs/\n.taskfactory/worktrees/\n"
 
 func TestInitGitignoreCreatedAndIdempotent(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	for i := 1; i <= 2; i++ {
@@ -926,6 +954,7 @@ func TestInitGitignoreCreatedAndIdempotent(t *testing.T) {
 }
 
 func TestInitGitignoreKeepsExistingLines(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := initGitProject(t)
 	existing := "build/\n*.log\n.taskfactory/logs/"
@@ -948,6 +977,7 @@ func TestInitGitignoreKeepsExistingLines(t *testing.T) {
 }
 
 func TestReadmeQuickStartGitignore(t *testing.T) {
+	t.Parallel()
 	data, err := os.ReadFile(filepath.Join("..", "..", "README.md"))
 	if err != nil {
 		t.Fatal(err)

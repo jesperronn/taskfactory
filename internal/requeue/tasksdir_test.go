@@ -9,6 +9,7 @@ import (
 	"taskfactory/internal/paths"
 )
 
+// Serial: registers into the process-global paths registry (paths.Register).
 func TestTasksDirLifecycleRequeue(t *testing.T) {
 	root := newProject(t, false)
 	runGit(t, root, "mv", "tasks", ".taskfactory/tasks")

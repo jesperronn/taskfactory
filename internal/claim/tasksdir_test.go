@@ -10,6 +10,7 @@ import (
 	"taskfactory/internal/taskvalidate"
 )
 
+// Serial: registers into the process-global paths registry (paths.Register).
 func TestTasksDirClaimUsesConfiguredDirectory(t *testing.T) {
 	root := newGitProject(t, 4, "TF-001")
 	root = realPath(t, root)

@@ -32,6 +32,7 @@ func stateRepo(t *testing.T) (project, state string) {
 	return project, state
 }
 
+// Serial: registers into the process-global paths registry (paths.Register).
 func TestStateRepoCommit(t *testing.T) {
 	project, state := stateRepo(t)
 	projectHead := head(t, project)

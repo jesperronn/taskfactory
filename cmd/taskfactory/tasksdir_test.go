@@ -41,6 +41,7 @@ func gitOut(t *testing.T, dir string, args ...string) string {
 }
 
 func TestTasksDirInitKeepsKeyAndCreatesFoldersThere(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := tasksDirProject(t)
 	for i := 1; i <= 2; i++ {
@@ -72,6 +73,7 @@ func TestTasksDirInitKeepsKeyAndCreatesFoldersThere(t *testing.T) {
 }
 
 func TestTasksDirIgnoreLeavesTaskFoldersTrackable(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := tasksDirProject(t)
 	if res := runWithEnv(t, binary, root, tasksDirEnv, "init"); res.code != 0 {
@@ -109,6 +111,7 @@ func TestTasksDirIgnoreLeavesTaskFoldersTrackable(t *testing.T) {
 }
 
 func TestTasksDirCompleteListsIDsUnderConfiguredDirectory(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := tasksDirProject(t)
 	files := map[string][]string{
@@ -136,6 +139,7 @@ func TestTasksDirCompleteListsIDsUnderConfiguredDirectory(t *testing.T) {
 }
 
 func TestTasksDirValidateArguments(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := tasksDirProject(t)
 	if res := runWithEnv(t, binary, root, tasksDirEnv, "init"); res.code != 0 {
@@ -173,6 +177,7 @@ func TestTasksDirValidateArguments(t *testing.T) {
 }
 
 func TestTasksDirEndToEnd(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	root := tasksDirProject(t)
 	run := func(args ...string) cliResult {

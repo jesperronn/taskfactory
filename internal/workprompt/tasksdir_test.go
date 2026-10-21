@@ -9,6 +9,7 @@ import (
 	"taskfactory/internal/paths"
 )
 
+// Serial: registers into the process-global paths registry (paths.Register).
 func TestTasksDirClaimBuildsPromptFromConfiguredDirectory(t *testing.T) {
 	f := newFixture(t)
 	if err := os.Remove(f.taskFile); err != nil {

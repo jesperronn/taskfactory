@@ -11,6 +11,7 @@ import (
 )
 
 func TestRunOrdersChecksStopsOnFailureAndRecordsOutput(t *testing.T) {
+	t.Parallel()
 	root, worktree, base := fixture(t, []string{"echo task-one >> order; printf task-output", "echo task-two >> order; exit 7"}, []string{"echo worker >> order"})
 	if err := os.WriteFile(filepath.Join(worktree, "changed.txt"), []byte("new"), 0o644); err != nil {
 		t.Fatal(err)
@@ -42,6 +43,7 @@ func TestRunOrdersChecksStopsOnFailureAndRecordsOutput(t *testing.T) {
 }
 
 func TestRunExecutesWorkerCommandsAfterAllCriteria(t *testing.T) {
+	t.Parallel()
 	root, worktree, _ := fixture(t, []string{"echo task >> sequence", "echo criterion >> sequence"}, []string{"echo worker >> sequence"})
 	if err := Run(root, "TF-099"); err != nil {
 		t.Fatal(err)
@@ -67,7 +69,9 @@ func TestRunExecutesWorkerCommandsAfterAllCriteria(t *testing.T) {
 }
 
 func TestRunResultCommitTracksCommittedWorktreeHead(t *testing.T) {
+	t.Parallel()
 	t.Run("unchanged", func(t *testing.T) {
+		t.Parallel()
 		root, _, base := fixture(t, []string{"true"}, []string{"true"})
 		if err := Run(root, "TF-099"); err != nil {
 			t.Fatal(err)
@@ -78,6 +82,7 @@ func TestRunResultCommitTracksCommittedWorktreeHead(t *testing.T) {
 		}
 	})
 	t.Run("dirty uncommitted", func(t *testing.T) {
+		t.Parallel()
 		root, worktree, _ := fixture(t, []string{"true"}, []string{"true"})
 		if err := os.WriteFile(filepath.Join(worktree, "dirty.txt"), []byte("uncommitted\n"), 0o644); err != nil {
 			t.Fatal(err)
@@ -91,6 +96,7 @@ func TestRunResultCommitTracksCommittedWorktreeHead(t *testing.T) {
 		}
 	})
 	t.Run("committed", func(t *testing.T) {
+		t.Parallel()
 		root, worktree, base := fixture(t, []string{"true"}, []string{"true"})
 		if err := os.WriteFile(filepath.Join(worktree, "committed.txt"), []byte("committed\n"), 0o644); err != nil {
 			t.Fatal(err)
@@ -140,6 +146,7 @@ func contains(values []string, want string) bool {
 }
 
 func TestRunAppendsConcurrentAttemptsAndRejectsCorruption(t *testing.T) {
+	t.Parallel()
 	root, _, _ := fixture(t, []string{"true"}, []string{"true"})
 	if err := Run(root, "TF-099"); err != nil {
 		t.Fatal(err)
@@ -188,11 +195,13 @@ func TestRunAppendsConcurrentAttemptsAndRejectsCorruption(t *testing.T) {
 }
 
 func TestRunRejectsDuplicateEvidenceKeysWithoutChangingBytes(t *testing.T) {
+	t.Parallel()
 	for name, duplicate := range map[string]string{
 		"top-level":    strings.Replace(validRecordJSON(), `"task_id":"TF-099",`, `"task_id":"TF-099","task_id":"TF-099",`, 1),
 		"nested-check": strings.Replace(validRecordJSON(), `"source":"worker",`, `"source":"worker","source":"worker",`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			root, worktree, _ := fixture(t, []string{"echo ran > ran"}, []string{"true"})
 			path := filepath.Join(root, ".taskfactory", "evidence", "TF-099.jsonl")
 			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -220,6 +229,7 @@ func TestRunRejectsDuplicateEvidenceKeysWithoutChangingBytes(t *testing.T) {
 }
 
 func TestValidateEvidenceRejectsWrongIdentityAndUnknownKeys(t *testing.T) {
+	t.Parallel()
 	base := validRecordJSON()
 	invalid := []string{
 		"{bad json",
@@ -248,6 +258,7 @@ func validRecordJSON() string {
 }
 
 func TestRunRepairCreatesNextAttempt(t *testing.T) {
+	t.Parallel()
 	root, _, _ := fixture(t, []string{"false"}, []string{"true"})
 	if err := Run(root, "TF-099"); err == nil || !strings.Contains(err.Error(), "FAILED") {
 		t.Fatalf("first failed verification error = %v", err)
@@ -281,6 +292,7 @@ func TestRunRepairCreatesNextAttempt(t *testing.T) {
 }
 
 func TestRunRejectsMissingWorktreeAndMalformedClaim(t *testing.T) {
+	t.Parallel()
 	root, worktree, _ := fixture(t, []string{"true"}, []string{"true"})
 	if err := os.RemoveAll(worktree); err != nil {
 		t.Fatal(err)
@@ -303,6 +315,7 @@ func TestRunRejectsMissingWorktreeAndMalformedClaim(t *testing.T) {
 	}
 }
 
+// Serial: sets process-global environment or working directory, which is unsafe in a parallel test.
 func TestRunRecordsBlockedShellStartError(t *testing.T) {
 	root, _, _ := fixture(t, []string{"true"}, []string{"true"})
 	oldPath := os.Getenv("PATH")

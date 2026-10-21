@@ -28,6 +28,7 @@ const smokeTask = "# TF-901: Smoke\n\n## Goal\n\nCreate smoke.txt with one line.
 // no defaults, and asserts only that work returned a result state and wrote a
 // log, not that the model succeeded.
 func TestWorkSmokeAgainstLocalOMLX(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("TASKFACTORY_SMOKE") != "1" {
 		t.Skip("smoke test skipped: set TASKFACTORY_SMOKE=1 to run it")
 	}

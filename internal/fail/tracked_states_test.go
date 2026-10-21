@@ -45,6 +45,7 @@ func makeReadyTracked(t *testing.T, root string) {
 }
 
 func TestTrackedStatesReadyTrackedActiveUntrackedStagesReadyDeletion(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	makeReadyTracked(t, root)
 	writeEvidence(t, root, "FAILED")
@@ -60,6 +61,7 @@ func TestTrackedStatesReadyTrackedActiveUntrackedStagesReadyDeletion(t *testing.
 }
 
 func TestTrackedStatesActiveTrackedStagesActiveDeletion(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	writeEvidence(t, root, "BLOCKED")
 
@@ -70,6 +72,7 @@ func TestTrackedStatesActiveTrackedStagesActiveDeletion(t *testing.T) {
 }
 
 func TestTrackedStatesRefusesWhenNeitherTracked(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	runGit(t, root, "rm", "-q", "--cached", "tasks/active/TF-001-example.md")
 	runGit(t, root, "commit", "-q", "-m", "untrack active")

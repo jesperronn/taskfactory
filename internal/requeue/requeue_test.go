@@ -56,8 +56,6 @@ func claimBlock(id, root string) string {
 // fixture repository sets commit.gpgsign to false in its own configuration.
 func newProject(t *testing.T, claimed bool) string {
 	t.Helper()
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -202,6 +200,7 @@ func assertUnchanged(t *testing.T, root string, original []byte, before string) 
 }
 
 func TestRequeuesUnclaimedFailedTaskToReadyAndCommits(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	original := readFile(t, filepath.Join(root, "tasks", "failed", taskFile))
 
@@ -229,6 +228,7 @@ func TestRequeuesUnclaimedFailedTaskToReadyAndCommits(t *testing.T) {
 }
 
 func TestRequeuesStagesOnlyTaskPathsWithUnrelatedWorkingTreeChanges(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	writeFile(t, filepath.Join(root, "notes.txt"), "untracked\n")
 
@@ -246,6 +246,7 @@ func TestRequeuesStagesOnlyTaskPathsWithUnrelatedWorkingTreeChanges(t *testing.T
 }
 
 func TestRequeuesUntrackedFailedFileStagesOnlyTarget(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	runGit(t, root, "rm", "-q", "--cached", "tasks/failed/"+taskFile)
 	runGit(t, root, "commit", "-q", "-m", "untrack failed")
@@ -261,6 +262,7 @@ func TestRequeuesUntrackedFailedFileStagesOnlyTarget(t *testing.T) {
 }
 
 func TestRequeuesRefusesStagedIndex(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	original := readFile(t, filepath.Join(root, "tasks", "failed", taskFile))
 	writeFile(t, filepath.Join(root, "README.md"), "staged\n")
@@ -280,6 +282,7 @@ func TestRequeuesRefusesStagedIndex(t *testing.T) {
 }
 
 func TestRequeuesRefusesTaskOutsideFailedAndMissingTask(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	runGit(t, root, "mv", "tasks/failed/"+taskFile, "tasks/active/"+taskFile)
 	runGit(t, root, "commit", "-q", "-m", "move to active")
@@ -292,6 +295,7 @@ func TestRequeuesRefusesTaskOutsideFailedAndMissingTask(t *testing.T) {
 }
 
 func TestRequeuesRestoresEverythingWhenCommitFails(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	evidence := writeEvidence(t, root, 2)
 	original := readFile(t, filepath.Join(root, "tasks", "failed", taskFile))
@@ -316,6 +320,7 @@ func TestRequeuesRestoresEverythingWhenCommitFails(t *testing.T) {
 }
 
 func TestRequeuesRestoresEverythingWhenTreeValidationFails(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	writeEvidence(t, root, 1)
 	original := readFile(t, filepath.Join(root, "tasks", "failed", taskFile))
@@ -334,6 +339,7 @@ func TestRequeuesRestoresEverythingWhenTreeValidationFails(t *testing.T) {
 }
 
 func TestRefusesClaimedFailedTaskAndListsClaimedIDs(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	evidence := writeEvidence(t, root, 2)
 	// A second claimed failed task and an unclaimed one: only claimed IDs are listed.
@@ -369,6 +375,7 @@ func TestRefusesClaimedFailedTaskAndListsClaimedIDs(t *testing.T) {
 }
 
 func TestRefusesUnsafeReadyContractAndLeavesTaskFailed(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	writeEvidence(t, root, 1)
 	bad := strings.Replace(contract("TF-001"), "## Verification\n\nRun the check from the repository root.\n", "", 1)
@@ -388,6 +395,7 @@ func TestRefusesUnsafeReadyContractAndLeavesTaskFailed(t *testing.T) {
 }
 
 func TestRefusesUnsafeExistingAsidePath(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	evidence := writeEvidence(t, root, 2)
 	aside := filepath.Join(root, ".taskfactory", "evidence", "TF-001.attempts-2.jsonl")
@@ -409,6 +417,7 @@ func TestRefusesUnsafeExistingAsidePath(t *testing.T) {
 }
 
 func TestRefusesUnsafeTargetAlreadyExists(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	writeFile(t, filepath.Join(root, "tasks", "ready", taskFile), "occupied\n")
 	original := readFile(t, filepath.Join(root, "tasks", "failed", taskFile))
@@ -423,6 +432,7 @@ func TestRefusesUnsafeTargetAlreadyExists(t *testing.T) {
 }
 
 func TestResetsAttemptsByRenamingEvidenceAsideWithBytesKept(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	evidence := writeEvidence(t, root, 3)
 
@@ -451,6 +461,7 @@ func TestResetsAttemptsByRenamingEvidenceAsideWithBytesKept(t *testing.T) {
 }
 
 func TestResetsAttemptsLeavesEmptyOrMissingEvidenceAlone(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	writeFile(t, filepath.Join(root, ".taskfactory", "evidence", "TF-001.jsonl"), "")
 	res, err := Requeue(root, "TF-001", "ready")
@@ -466,6 +477,7 @@ func TestResetsAttemptsLeavesEmptyOrMissingEvidenceAlone(t *testing.T) {
 }
 
 func TestResetsAttemptsRefusesInvalidEvidence(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	writeFile(t, filepath.Join(root, ".taskfactory", "evidence", "TF-001.jsonl"), "not json\n")
 	original := readFile(t, filepath.Join(root, "tasks", "failed", taskFile))
@@ -478,6 +490,7 @@ func TestResetsAttemptsRefusesInvalidEvidence(t *testing.T) {
 }
 
 func TestInboxTargetMovesUnclaimedTaskAndSkipsContractCheck(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	// An incomplete contract is allowed in the inbox.
 	loose := "# TF-001: Example task\n\n## Goal\n\nOnly a goal.\n"
@@ -505,6 +518,7 @@ func TestInboxTargetMovesUnclaimedTaskAndSkipsContractCheck(t *testing.T) {
 }
 
 func TestParseArgsUsageErrors(t *testing.T) {
+	t.Parallel()
 	good := []struct {
 		args   []string
 		id, to string

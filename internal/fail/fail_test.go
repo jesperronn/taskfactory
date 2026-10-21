@@ -57,8 +57,6 @@ func taskContract(id, root string, claimed bool) string {
 // the fixture repository sets commit.gpgsign to false in its own configuration.
 func newProject(t *testing.T, claimed bool) string {
 	t.Helper()
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -171,6 +169,7 @@ func commitCount(t *testing.T, root string) string {
 }
 
 func TestMovesClaimedTaskWithFailedEvidence(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	writeEvidence(t, root, "FAILED")
 
@@ -200,6 +199,7 @@ func TestMovesClaimedTaskWithFailedEvidence(t *testing.T) {
 }
 
 func TestMovesBlockedTaskWithBlockedEvidence(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	writeEvidence(t, root, "BLOCKED")
 
@@ -212,6 +212,7 @@ func TestMovesBlockedTaskWithBlockedEvidence(t *testing.T) {
 }
 
 func TestRefusesOutcomeMismatch(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	writeEvidence(t, root, "FAILED")
 	before := commitCount(t, root)
@@ -229,6 +230,7 @@ func TestRefusesOutcomeMismatch(t *testing.T) {
 }
 
 func TestRefusesReasonWhenEvidenceExists(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	writeEvidence(t, root, "FAILED")
 
@@ -239,6 +241,7 @@ func TestRefusesReasonWhenEvidenceExists(t *testing.T) {
 }
 
 func TestRefusesMissingEvidenceWithoutReason(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 
 	_, err := Fail(root, "TF-001", Options{Outcome: "BLOCKED"})
@@ -252,6 +255,7 @@ func TestRefusesMissingEvidenceWithoutReason(t *testing.T) {
 }
 
 func TestRefusesUnclaimedTask(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, false)
 	writeEvidence(t, root, "FAILED")
 
@@ -264,6 +268,7 @@ func TestRefusesUnclaimedTask(t *testing.T) {
 }
 
 func TestRefusesTaskOutsideActive(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	runGit(t, root, "mv", "tasks/active/TF-001-example.md", "tasks/failed/TF-001-example.md")
 	runGit(t, root, "commit", "-q", "-m", "move")
@@ -276,6 +281,7 @@ func TestRefusesTaskOutsideActive(t *testing.T) {
 }
 
 func TestRefusesMissingTask(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	writeEvidence(t, root, "FAILED")
 
@@ -286,6 +292,7 @@ func TestRefusesMissingTask(t *testing.T) {
 }
 
 func TestRefusesStagedIndex(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	writeEvidence(t, root, "FAILED")
 	writeFile(t, filepath.Join(root, "README.md"), "staged\n")
@@ -301,6 +308,7 @@ func TestRefusesStagedIndex(t *testing.T) {
 }
 
 func TestRefusesWhenValidationFailsAndRestoresFile(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	writeEvidence(t, root, "FAILED")
 	active := filepath.Join(root, "tasks", "active", "TF-001-example.md")
@@ -329,6 +337,7 @@ func TestRefusesWhenValidationFailsAndRestoresFile(t *testing.T) {
 }
 
 func TestRefusesWhenCommitFailsAndRestoresFile(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	writeEvidence(t, root, "FAILED")
 	active := filepath.Join(root, "tasks", "active", "TF-001-example.md")
@@ -356,6 +365,7 @@ func TestRefusesWhenCommitFailsAndRestoresFile(t *testing.T) {
 }
 
 func TestRetainsTaskAndEvidenceBytes(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	active := filepath.Join(root, "tasks", "active", "TF-001-example.md")
 	original := readFile(t, active)
@@ -381,6 +391,7 @@ func TestRetainsTaskAndEvidenceBytes(t *testing.T) {
 }
 
 func TestReasonIsCommittedWithoutEvidence(t *testing.T) {
+	t.Parallel()
 	root := newProject(t, true)
 	reason := "worker stalled after 40 minutes"
 
@@ -400,6 +411,7 @@ func TestReasonIsCommittedWithoutEvidence(t *testing.T) {
 }
 
 func TestReasonMustBeSingleLineText(t *testing.T) {
+	t.Parallel()
 	for _, args := range [][]string{
 		{"TF-001", "--outcome", "BLOCKED", "--reason", ""},
 		{"TF-001", "--outcome", "BLOCKED", "--reason=   "},

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
 
 	"taskfactory/internal/paths"
 	"taskfactory/internal/statecommit"
@@ -67,11 +68,20 @@ type Options struct {
 }
 
 // trace is the verbose sink of the running call; it is nil unless Options.Verbose is set.
-var trace func(format string, args ...any)
+var trace atomic.Pointer[func(format string, args ...any)]
+
+// setTrace installs or clears the sink; it is safe for concurrent calls.
+func setTrace(f func(format string, args ...any)) {
+	if f == nil {
+		trace.Store(nil)
+		return
+	}
+	trace.Store(&f)
+}
 
 func tracef(format string, args ...any) {
-	if trace != nil {
-		trace(format, args...)
+	if f := trace.Load(); f != nil {
+		(*f)(format, args...)
 	}
 }
 
@@ -80,8 +90,8 @@ func tracef(format string, args ...any) {
 // on a scratch copy of the task tree outside the project, so nothing in the
 // project is moved, not even briefly.
 func PromoteWith(projectRoot, id string, opts Options) (string, error) {
-	trace = opts.Verbose
-	defer func() { trace = nil }()
+	setTrace(opts.Verbose)
+	defer setTrace(nil)
 	if !idPattern.MatchString(id) {
 		return "", UsageError{fmt.Sprintf("task %q is not a valid task ID (expected TF-NNN)", id)}
 	}

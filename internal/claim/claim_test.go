@@ -12,6 +12,7 @@ import (
 )
 
 func TestWithClaimLockSerializesProcesses(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	ready := filepath.Join(root, "ready")
 	acquired := filepath.Join(root, "acquired")
@@ -98,6 +99,7 @@ func assertFileRemainsAbsent(path string, childDone <-chan error, timeout time.D
 }
 
 func TestClaimLockHelperProcess(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("TASKFACTORY_LOCK_HELPER") != "1" {
 		return
 	}
@@ -113,6 +115,7 @@ func TestClaimLockHelperProcess(t *testing.T) {
 }
 
 func TestWithClaimLockReleasesAfterCallbackError(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	want := fmt.Errorf("callback failed")
 	if err := WithClaimLock(root, func() error { return want }); err != want {
@@ -128,6 +131,7 @@ func TestWithClaimLockReleasesAfterCallbackError(t *testing.T) {
 }
 
 func TestEligibility(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		active     int
@@ -144,6 +148,7 @@ func TestEligibility(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			root := newProject(t)
 			if tt.dependency != "" {
 				appendDependency(t, root, tt.dependency)
@@ -173,6 +178,7 @@ func TestEligibility(t *testing.T) {
 }
 
 func TestEligibilityRejectsUnknownAndInvalidReadyTasksReadOnly(t *testing.T) {
+	t.Parallel()
 	root := newProject(t)
 	before := snapshotTree(t, root)
 	if err := CheckEligibility(root, "TF-999"); err == nil || !strings.Contains(err.Error(), "TF-999") {

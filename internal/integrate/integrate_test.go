@@ -11,6 +11,7 @@ import (
 )
 
 func TestIntegrateAdvancesMainAndArchivesOnlyRequestedTask(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	if err := Run(f.root, "TF-901"); err != nil {
 		status, _ := git(f.root, "status", "--short")
@@ -41,6 +42,7 @@ func TestIntegrateAdvancesMainAndArchivesOnlyRequestedTask(t *testing.T) {
 }
 
 func TestArchiveCommitDeletesTrackedActiveTask(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	run(t, f.root, "git", "add", "-A", "--", "tasks/ready/TF-901-example.md", "tasks/active/TF-901-example.md")
 	run(t, f.root, "git", "commit", "-m", "claim task")
@@ -57,6 +59,7 @@ func TestArchiveCommitDeletesTrackedActiveTask(t *testing.T) {
 }
 
 func TestPostMergeMainFailureStopsFutureIntegration(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	configPath := filepath.Join(f.root, ".taskfactory/config.toml")
 	data, err := os.ReadFile(configPath)
@@ -94,6 +97,7 @@ func TestPostMergeMainFailureStopsFutureIntegration(t *testing.T) {
 }
 
 func TestMainMovementDuringChecksForcesRebaseAndRerun(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	marker := filepath.Join(t.TempDir(), "moved")
 	command := "echo check >> " + marker + "; if mkdir " + marker + ".once; then git -C " + f.root + " -c user.name=Test -c user.email=test@example.invalid commit --allow-empty -m external-move; fi"
@@ -118,6 +122,7 @@ func TestMainMovementDuringChecksForcesRebaseAndRerun(t *testing.T) {
 }
 
 func TestIntegrationFailureLeavesMainAndTaskStateUnchanged(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	configureIntegrationCommand(t, f.root, "false")
 	main, _ := git(f.root, "rev-parse", "refs/heads/main")
@@ -138,6 +143,7 @@ func TestIntegrationFailureLeavesMainAndTaskStateUnchanged(t *testing.T) {
 }
 
 func TestIntegrationLockSerializesCalls(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	p := filepath.Join(f.root, ".taskfactory/integration.lock")
 	lock, err := os.OpenFile(p, os.O_CREATE|os.O_RDWR, 0600)
@@ -169,6 +175,7 @@ func TestIntegrationLockSerializesCalls(t *testing.T) {
 }
 
 func TestArchiveCommitFailureRestoresActiveTask(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	hook := filepath.Join(f.root, ".git/hooks/pre-commit")
 	if err := os.WriteFile(hook, []byte("#!/bin/sh\necho rejected >&2\nexit 1\n"), 0755); err != nil {
@@ -190,6 +197,7 @@ func TestArchiveCommitFailureRestoresActiveTask(t *testing.T) {
 }
 
 func TestIntegrationEvidenceAppendFailureDoesNotMoveMain(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	path := filepath.Join(f.root, ".taskfactory/integration-evidence/TF-901.jsonl")
 	if err := os.MkdirAll(path, 0755); err != nil {
@@ -207,6 +215,7 @@ func TestIntegrationEvidenceAppendFailureDoesNotMoveMain(t *testing.T) {
 }
 
 func TestFinalPassEvidenceAppendFailurePreservesArchiveCommit(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	configureMainCommand(t, f.root, "mkdir -p .taskfactory/integration-evidence/TF-901.jsonl")
 	mainBefore, err := git(f.root, "rev-parse", "refs/heads/main")
@@ -255,8 +264,10 @@ func configureMainCommand(t *testing.T, root, command string) {
 }
 
 func TestMismatchedWorkerResultAndUnrelatedMainFileAreRejected(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"mismatched worker result", "unrelated main file"} {
 		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
 			f := newFixture(t)
 			before, _ := git(f.root, "rev-parse", "refs/heads/main")
 			if mode == "mismatched worker result" {
@@ -284,6 +295,7 @@ func TestMismatchedWorkerResultAndUnrelatedMainFileAreRejected(t *testing.T) {
 }
 
 func TestStopTemporarySiblingBlocksIntegration(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	p := filepath.Join(f.root, ".taskfactory/integration-stop.json.tmp")
 	if err := os.WriteFile(p, []byte("partial"), 0600); err != nil {
@@ -299,6 +311,7 @@ func TestStopTemporarySiblingBlocksIntegration(t *testing.T) {
 }
 
 func TestRebaseConflictDoesNotAdvanceMainOrArchive(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	write(t, f.root, "feature.txt", "conflicting main change\n")
 	run(t, f.root, "git", "add", "--", "feature.txt")
@@ -422,6 +435,7 @@ func writeWorkLogs(t *testing.T, root string) {
 }
 
 func TestLogsDirAllowedWithFiles(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	writeWorkLogs(t, f.root)
 	if err := Run(f.root, "TF-901"); err != nil {
@@ -433,6 +447,7 @@ func TestLogsDirAllowedWithFiles(t *testing.T) {
 }
 
 func TestLogsStayUntrackedAndUnstaged(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	writeWorkLogs(t, f.root)
 	if err := Run(f.root, "TF-901"); err != nil {
@@ -457,8 +472,10 @@ func TestLogsStayUntrackedAndUnstaged(t *testing.T) {
 }
 
 func TestLogsLookalikeBlocks(t *testing.T) {
+	t.Parallel()
 	for _, rel := range []string{".taskfactory/logs-old/a.log", ".taskfactory/logsx", "user-file.txt"} {
 		t.Run(rel, func(t *testing.T) {
+			t.Parallel()
 			f := newFixture(t)
 			writeWorkLogs(t, f.root)
 			write(t, f.root, rel, "x\n")
@@ -475,6 +492,7 @@ func TestLogsLookalikeBlocks(t *testing.T) {
 }
 
 func TestLogsNoFailedEvidence(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	writeWorkLogs(t, f.root)
 	if err := Run(f.root, "TF-901"); err != nil {
@@ -491,6 +509,7 @@ func TestLogsNoFailedEvidence(t *testing.T) {
 }
 
 func TestIntegrateWithIgnoredRuntime(t *testing.T) {
+	t.Parallel()
 	ignore := "# TaskFactory runtime files\n.taskfactory/claim.lock\n.taskfactory/integration.lock\n.taskfactory/evidence/\n.taskfactory/integration-evidence/\n.taskfactory/logs/\n.taskfactory/worktrees/\n"
 	f := newFixtureWithGitignore(t, ignore)
 	write(t, f.root, ".taskfactory/claim.lock", "")

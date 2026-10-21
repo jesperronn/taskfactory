@@ -8,6 +8,7 @@ import (
 )
 
 func TestPromoteHelpAndExitCodesMatchOtherCommands(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	outside := t.TempDir()
 
@@ -62,6 +63,7 @@ func TestPromoteHelpAndExitCodesMatchOtherCommands(t *testing.T) {
 }
 
 func TestPromoteNamesDependenciesRule(t *testing.T) {
+	t.Parallel()
 	binary := buildCLI(t)
 	project := initGitProject(t)
 	if out, err := runCLI(t, binary, project, "init"); err != nil {
