@@ -57,3 +57,11 @@ Check: bin/test
 
 Run each check, `bin/test` and `bin/lint` from the repository root and report
 each exit code. Report the three headers as printed with `FORCE_COLOR=1`.
+
+## Claim
+
+Owner: sonnet-worker-107
+Branch: task/TF-107
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-107
+Base commit: f37c60cfcc89520d107267388fac76f5e01acbf3
+Started at: 2026-10-21T21:55:26Z
