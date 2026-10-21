@@ -167,3 +167,11 @@ script, set `COMP_WORDS` and `COMP_CWORD`, call `_taskfactory` and compare
 `--verbose`, `--dry-run` and `--help`. Then run `bin/install.test.sh`,
 `bin/test`, `bin/lint` and `go run ./cmd/taskfactory validate tasks` from the
 repository root and report each exit code. Also report the README grep result.
+
+## Claim
+
+Owner: sonnet-worker-094
+Branch: task/TF-094
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-094
+Base commit: 4baf263d3f329ac3195c752909360ddaa7f2ecd6
+Started at: 2026-10-21T06:56:27Z
