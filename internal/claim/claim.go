@@ -203,7 +203,7 @@ func ClaimWith(projectRoot, id, owner string, opts Options) error {
 		complete := append(append([]byte(nil), data...), []byte(metadata)...)
 		if opts.DryRun {
 			if opts.Would != nil {
-				opts.Would("move task to %s", paths.TaskDirRel("active"))
+				opts.Would("move task to %s", paths.For(projectRoot).TaskDirRel("active"))
 				opts.Would("add worktree %s", worktree)
 			}
 			return nil
@@ -304,7 +304,7 @@ func ClaimWith(projectRoot, id, owner string, opts Options) error {
 		if err := os.Rename(tmpName, activePath); err != nil {
 			return restoreReady(fmt.Errorf("write complete active task file: %w", err))
 		}
-		if diagnostics := taskvalidate.Validate(projectRoot, paths.TaskFileRel("active", name)); len(diagnostics) > 0 {
+		if diagnostics := taskvalidate.Validate(projectRoot, paths.For(projectRoot).TaskFileRel("active", name)); len(diagnostics) > 0 {
 			return restoreReady(fmt.Errorf("validate active task: %s", diagnostics[0]))
 		}
 		if err := os.Remove(backupPath); err != nil {
@@ -319,7 +319,7 @@ func validateTaskStateDirectories(projectRoot string) error {
 	if err != nil {
 		return fmt.Errorf("resolve project root %s: %w", projectRoot, err)
 	}
-	layout := paths.Default(root)
+	layout := paths.Layout{Project: root, State: root, TasksDir: paths.For(projectRoot).TasksDir}
 	dirs := []string{layout.Tasks()}
 	for _, state := range paths.States {
 		dirs = append(dirs, layout.TaskDir(state))

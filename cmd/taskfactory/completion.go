@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/template"
 
+	"taskfactory/internal/config"
 	"taskfactory/internal/paths"
 	"taskfactory/internal/ui"
 )
@@ -468,6 +469,9 @@ func completeHelper(args []string, out io.Writer) int {
 			return 0
 		}
 		layout = paths.Default(root)
+	}
+	if tasksRel, err := config.TasksDirOf(layout.State); err == nil {
+		layout.TasksDir = tasksRel
 	}
 	entries, err := os.ReadDir(layout.TaskDir(state))
 	if err != nil {

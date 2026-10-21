@@ -95,8 +95,8 @@ func PromoteWith(projectRoot, id string, opts Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	inboxRel := paths.TaskFileRel("inbox", name)
-	readyRel := paths.TaskFileRel("ready", name)
+	inboxRel := layout.TaskFileRel("inbox", name)
+	readyRel := layout.TaskFileRel("ready", name)
 	inboxAbs := layout.TaskFile("inbox", name)
 	readyAbs := layout.TaskFile("ready", name)
 
@@ -118,7 +118,7 @@ func PromoteWith(projectRoot, id string, opts Options) (string, error) {
 			return "", err
 		}
 		if opts.Would != nil {
-			opts.Would("move task to %s", paths.TaskDirRel("ready"))
+			opts.Would("move task to %s", layout.TaskDirRel("ready"))
 			if gitRoot != "" {
 				opts.Would("commit")
 			}
@@ -168,6 +168,8 @@ func dryValidate(root, id, inboxRel, readyRel string) error {
 		return fmt.Errorf("create scratch directory: %w", err)
 	}
 	defer os.RemoveAll(scratch)
+	scratchLayout := paths.Layout{Project: scratch, State: scratch, TasksDir: paths.For(root).TasksDir}
+	defer paths.Register(scratchLayout)()
 	tracef("scratch copy of tasks/ in %s", scratch)
 	if err := copyTasks(root, scratch); err != nil {
 		return err
@@ -191,8 +193,9 @@ func dryValidate(root, id, inboxRel, readyRel string) error {
 // copyTasks copies every regular file below root/tasks, and the configuration
 // when present, into dst. It only reads root.
 func copyTasks(root, dst string) error {
-	state := paths.For(root).State
-	for _, top := range []string{paths.TasksRel(), paths.ConfigRel()} {
+	lay := paths.For(root)
+	state := lay.State
+	for _, top := range []string{lay.TasksRel(), paths.ConfigRel()} {
 		src := filepath.Join(state, filepath.FromSlash(top))
 		err := filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
@@ -238,17 +241,17 @@ func findInboxFile(root, id string) (string, error) {
 	for _, state := range otherStates {
 		entries, err := os.ReadDir(paths.For(root).TaskDir(state))
 		if err != nil && !os.IsNotExist(err) {
-			return "", fmt.Errorf("read tasks/%s: %w", state, err)
+			return "", fmt.Errorf("read %s: %w", paths.For(root).TaskDirRel(state), err)
 		}
 		for _, entry := range entries {
 			if !entry.IsDir() && strings.HasPrefix(entry.Name(), prefix) && strings.HasSuffix(entry.Name(), ".md") {
-				return "", fmt.Errorf("refusing to promote %s: it is in tasks/%s, not tasks/inbox", id, state)
+				return "", fmt.Errorf("refusing to promote %s: it is in %s, not %s", id, paths.For(root).TaskDirRel(state), paths.For(root).TaskDirRel("inbox"))
 			}
 		}
 	}
 	entries, err := os.ReadDir(paths.For(root).TaskDir("inbox"))
 	if err != nil {
-		return "", fmt.Errorf("read tasks/inbox: %w", err)
+		return "", fmt.Errorf("read %s: %w", paths.For(root).TaskDirRel("inbox"), err)
 	}
 	var matches []string
 	for _, entry := range entries {
@@ -258,7 +261,7 @@ func findInboxFile(root, id string) (string, error) {
 	}
 	switch len(matches) {
 	case 0:
-		return "", fmt.Errorf("refusing to promote %s: no task file exists in tasks/inbox for this ID", id)
+		return "", fmt.Errorf("refusing to promote %s: no task file exists in %s for this ID", id, paths.For(root).TaskDirRel("inbox"))
 	case 1:
 		return matches[0], nil
 	default:

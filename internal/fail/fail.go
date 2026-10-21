@@ -194,8 +194,8 @@ func FailWith(projectRoot, id string, opts Options, common CommonOptions) (strin
 	if err != nil {
 		return "", err
 	}
-	activeRel := paths.TaskFileRel("active", name)
-	failedRel := paths.TaskFileRel("failed", name)
+	activeRel := layout.TaskFileRel("active", name)
+	failedRel := layout.TaskFileRel("failed", name)
 	activeAbs := layout.TaskFile("active", name)
 	failedAbs := layout.TaskFile("failed", name)
 
@@ -220,7 +220,7 @@ func FailWith(projectRoot, id string, opts Options, common CommonOptions) (strin
 	}
 	var stagePaths []string
 	if gitRoot != "" {
-		stagePaths, err = lifecyclePaths(gitRoot, id, activeRel, failedRel)
+		stagePaths, err = lifecyclePaths(gitRoot, id, activeRel, failedRel, layout.TaskFileRel("ready", name))
 		if err != nil {
 			return "", err
 		}
@@ -231,7 +231,7 @@ func FailWith(projectRoot, id string, opts Options, common CommonOptions) (strin
 			return "", fmt.Errorf("task tree is invalid, so failing %s would be refused: %s", id, diagnostics[0])
 		}
 		if common.Would != nil {
-			common.Would("move task to %s", paths.TaskDirRel("failed"))
+			common.Would("move task to %s", layout.TaskDirRel("failed"))
 			if gitRoot != "" {
 				common.Would("commit")
 			}
@@ -295,11 +295,10 @@ func checkEvidence(root, id string, opts Options) error {
 // addition. When the active file is tracked, its deletion plus the failed
 // addition are staged. When neither is tracked the move cannot be committed
 // correctly, so the command is refused before anything changes.
-func lifecyclePaths(root, id, activeRel, failedRel string) ([]string, error) {
+func lifecyclePaths(root, id, activeRel, failedRel, readyRel string) ([]string, error) {
 	if _, err := git(root, "ls-files", "--error-unmatch", "--", activeRel); err == nil {
 		return []string{activeRel, failedRel}, nil
 	}
-	readyRel := paths.TaskFileRel("ready", filepath.Base(activeRel))
 	if _, err := git(root, "ls-files", "--error-unmatch", "--", readyRel); err == nil {
 		return []string{readyRel, failedRel}, nil
 	}
@@ -314,17 +313,17 @@ func findActiveFile(root, id string) (string, error) {
 	for _, state := range otherStates {
 		entries, err := os.ReadDir(paths.For(root).TaskDir(state))
 		if err != nil && !os.IsNotExist(err) {
-			return "", fmt.Errorf("read tasks/%s: %w", state, err)
+			return "", fmt.Errorf("read %s: %w", paths.For(root).TaskDirRel(state), err)
 		}
 		for _, entry := range entries {
 			if !entry.IsDir() && strings.HasPrefix(entry.Name(), prefix) && strings.HasSuffix(entry.Name(), ".md") {
-				return "", fmt.Errorf("refusing to fail %s: it is in tasks/%s, not tasks/active", id, state)
+				return "", fmt.Errorf("refusing to fail %s: it is in %s, not %s", id, paths.For(root).TaskDirRel(state), paths.For(root).TaskDirRel("active"))
 			}
 		}
 	}
 	entries, err := os.ReadDir(paths.For(root).TaskDir("active"))
 	if err != nil {
-		return "", fmt.Errorf("read tasks/active: %w", err)
+		return "", fmt.Errorf("read %s: %w", paths.For(root).TaskDirRel("active"), err)
 	}
 	var matches []string
 	for _, entry := range entries {
@@ -334,7 +333,7 @@ func findActiveFile(root, id string) (string, error) {
 	}
 	switch len(matches) {
 	case 0:
-		return "", fmt.Errorf("refusing to fail %s: no task file exists in tasks/active for this ID", id)
+		return "", fmt.Errorf("refusing to fail %s: no task file exists in %s for this ID", id, paths.For(root).TaskDirRel("active"))
 	case 1:
 		return matches[0], nil
 	default:

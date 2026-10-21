@@ -4,7 +4,9 @@ package config
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 
@@ -98,6 +100,11 @@ func Load(projectRoot string) (Config, error) {
 	if layout.External() && config.ProjectRoot == "" {
 		return Config{}, fmt.Errorf("configuration file %s: project_root is required when the state directory is outside the project; set project_root to the code repository", path)
 	}
+	if metadata.IsDefined("tasks_dir") {
+		if _, err := ValidateTasksDir(layout.State, path, parsed.TasksDir); err != nil {
+			return Config{}, err
+		}
+	}
 	if metadata.IsDefined("protocol_version") {
 		config.ProtocolVersion = parsed.ProtocolVersion
 	}
@@ -167,6 +174,7 @@ func Load(projectRoot string) (Config, error) {
 
 type fileConfig struct {
 	ProjectRoot     string `toml:"project_root"`
+	TasksDir        string `toml:"tasks_dir"`
 	ProtocolVersion int    `toml:"protocol_version"`
 	Workers         struct {
 		MaxParallel int `toml:"max_parallel"`
@@ -212,6 +220,91 @@ func ProjectRootOf(stateRoot string) (string, error) {
 		root = filepath.Join(stateRoot, root)
 	}
 	return filepath.Clean(root), nil
+}
+
+// TasksDirOf reads only tasks_dir from the config in stateRoot, for discovery
+// before the full config is loaded. It validates the value the same way Load
+// does and returns the default when the file or the key is absent.
+func TasksDirOf(stateRoot string) (string, error) {
+	cfgPath := paths.Default(stateRoot).Config()
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return paths.DefaultTasksDir(), nil
+		}
+		return "", fmt.Errorf("read configuration file %s: %w", cfgPath, err)
+	}
+	var parsed struct {
+		TasksDir *string `toml:"tasks_dir"`
+	}
+	if _, err := toml.Decode(string(data), &parsed); err != nil {
+		return "", fmt.Errorf("parse configuration file %s: %w", cfgPath, err)
+	}
+	if parsed.TasksDir == nil {
+		return paths.DefaultTasksDir(), nil
+	}
+	return ValidateTasksDir(stateRoot, cfgPath, *parsed.TasksDir)
+}
+
+// ValidateTasksDir checks a tasks_dir value and returns its cleaned slash
+// form. Both loaders call it. configPath only names the file in errors.
+func ValidateTasksDir(stateRoot, configPath, value string) (string, error) {
+	bad := func() (string, error) {
+		return "", fmt.Errorf("configuration file %s: tasks_dir must be a relative path inside the state directory", configPath)
+	}
+	if value == "" || strings.Contains(value, "\\") || strings.HasPrefix(value, "/") || filepath.IsAbs(value) {
+		return bad()
+	}
+	for _, part := range strings.Split(value, "/") {
+		if part == ".." {
+			return bad()
+		}
+	}
+	clean := path.Clean(value)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
+		return bad()
+	}
+	runtime := paths.RuntimeRel()
+	if clean == runtime {
+		return bad()
+	}
+	if strings.HasPrefix(clean, runtime+"/") {
+		reserved := []string{
+			paths.EvidenceDirRel(), paths.IntegrationEvidenceDirRel(), paths.LogsRel(),
+			paths.WorktreesRel(), paths.ConfigRel(), paths.ClaimLockRel(),
+			paths.IntegrationLockRel(), paths.IntegrationStopRel(),
+		}
+		for _, r := range reserved {
+			if clean == r || strings.HasPrefix(clean, r+"/") {
+				return bad()
+			}
+		}
+	}
+	// A symlink that leaves the state root is rejected.
+	if stateRoot != "" {
+		realRoot, err := filepath.EvalSymlinks(stateRoot)
+		if err != nil {
+			realRoot = filepath.Clean(stateRoot)
+		}
+		ancestor := filepath.Join(stateRoot, filepath.FromSlash(clean))
+		for {
+			if _, err := os.Lstat(ancestor); err == nil {
+				break
+			}
+			parent := filepath.Dir(ancestor)
+			if parent == ancestor {
+				break
+			}
+			ancestor = parent
+		}
+		if real, err := filepath.EvalSymlinks(ancestor); err == nil {
+			rel, err := filepath.Rel(realRoot, real)
+			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				return bad()
+			}
+		}
+	}
+	return clean, nil
 }
 
 func validateCommands(key string, commands []string) error {

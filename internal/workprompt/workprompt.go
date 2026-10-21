@@ -157,7 +157,7 @@ func findActive(root, id string) (string, error) {
 	dir := paths.For(root).TaskDir("active")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return "", fmt.Errorf("read tasks/active: %w", err)
+		return "", fmt.Errorf("read %s: %w", paths.For(root).TaskDirRel("active"), err)
 	}
 	var found []string
 	for _, entry := range entries {
@@ -167,7 +167,7 @@ func findActive(root, id string) (string, error) {
 	}
 	switch len(found) {
 	case 0:
-		return "", fmt.Errorf("refusing to build prompt for %s: task is not in tasks/active", id)
+		return "", fmt.Errorf("refusing to build prompt for %s: task is not in %s", id, paths.For(root).TaskDirRel("active"))
 	case 1:
 		return filepath.Join(dir, found[0]), nil
 	default:

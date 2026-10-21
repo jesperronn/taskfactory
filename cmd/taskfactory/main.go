@@ -921,7 +921,8 @@ func validateProject(args []string) error {
 		return err
 	}
 	state := paths.For(root).State
-	files, err := selectValidateFiles(state, args)
+	layout := paths.For(root)
+	files, err := selectValidateFiles(layout, args)
 	if err != nil {
 		return err
 	}
@@ -937,7 +938,7 @@ func validateProject(args []string) error {
 		fmt.Fprintln(os.Stdout, style.Green("inbox and ready tasks are valid"))
 	} else {
 		fmt.Fprintln(os.Stdout, style.Green(fmt.Sprintf("%d task file(s) valid", len(files))))
-		if len(args) == 1 && len(files) == 1 && strings.HasPrefix(filepath.ToSlash(files[0]), paths.TaskDirRel("inbox")+"/") {
+		if len(args) == 1 && len(files) == 1 && strings.HasPrefix(filepath.ToSlash(files[0]), layout.TaskDirRel("inbox")+"/") {
 			if info, err := os.Stat(filepath.Join(state, filepath.FromSlash(files[0]))); err == nil && info.Mode().IsRegular() && !isDirArg(state, args[0]) {
 				fmt.Fprintln(os.Stdout, "note: inbox files are checked loosely; promote applies the full ready contract")
 			}
@@ -949,11 +950,12 @@ func validateProject(args []string) error {
 
 // selectValidateFiles resolves validate arguments to slash-separated task file
 // paths relative to root. No arguments selects inbox and ready.
-func selectValidateFiles(root string, args []string) ([]string, error) {
+func selectValidateFiles(layout paths.Layout, args []string) ([]string, error) {
+	root := layout.State
 	if len(args) == 0 {
 		var files []string
 		for _, state := range []string{"inbox", "ready"} {
-			listed, err := listDirectoryFiles(root, paths.TaskDirRel(state))
+			listed, err := listDirectoryFiles(root, layout.TaskDirRel(state))
 			if err != nil {
 				return nil, err
 			}
@@ -964,7 +966,7 @@ func selectValidateFiles(root string, args []string) ([]string, error) {
 	seen := map[string]bool{}
 	var files []string
 	for _, arg := range args {
-		listed, err := resolveValidateArg(root, arg)
+		listed, err := resolveValidateArg(layout, arg)
 		if err != nil {
 			return nil, err
 		}
@@ -979,8 +981,12 @@ func selectValidateFiles(root string, args []string) ([]string, error) {
 }
 
 // resolveValidateArg maps one validate argument to the task files it selects.
-func resolveValidateArg(root, arg string) ([]string, error) {
+func resolveValidateArg(layout paths.Layout, arg string) ([]string, error) {
+	root := layout.State
 	outside := usageError{"task path must resolve inside the project tasks directory"}
+	if layout.TasksRel() != paths.DefaultTasksDir() {
+		outside = usageError{fmt.Sprintf("task path must resolve inside the project tasks directory %s", layout.TasksRel())}
+	}
 	resolvedRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
 		return nil, err
@@ -995,14 +1001,14 @@ func resolveValidateArg(root, arg string) ([]string, error) {
 	}
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
-		if !insideTasks(root, path) && !insideTasks(resolvedRoot, path) {
+		if !insideTasks(layout, root, path) && !insideTasks(layout, resolvedRoot, path) {
 			return nil, outside
 		}
 		return nil, usageError{fmt.Sprintf("task path %s cannot be read", arg)}
 	}
 	path = resolved
 	rel, err := filepath.Rel(resolvedRoot, path)
-	if err != nil || !insideTasks(resolvedRoot, path) {
+	if err != nil || !insideTasks(layout, resolvedRoot, path) {
 		return nil, outside
 	}
 	rel = filepath.ToSlash(rel)
@@ -1011,7 +1017,7 @@ func resolveValidateArg(root, arg string) ([]string, error) {
 		return nil, usageError{fmt.Sprintf("task path %s cannot be read", arg)}
 	}
 	if info.IsDir() {
-		if rel == paths.TasksRel() {
+		if rel == layout.TasksRel() {
 			// The archive is read for IDs and dependencies but is not a
 			// contract-checked selection; name tasks/archive to check it.
 			files, err := listTreeFiles(resolvedRoot, rel)
@@ -1020,7 +1026,7 @@ func resolveValidateArg(root, arg string) ([]string, error) {
 			}
 			var kept []string
 			for _, file := range files {
-				if !strings.HasPrefix(file, paths.TaskDirRel("archive")+"/") {
+				if !strings.HasPrefix(file, layout.TaskDirRel("archive")+"/") {
 					kept = append(kept, file)
 				}
 			}
@@ -1035,13 +1041,13 @@ func resolveValidateArg(root, arg string) ([]string, error) {
 }
 
 // insideTasks reports whether path is the tasks directory under root or below it.
-func insideTasks(root, path string) bool {
+func insideTasks(layout paths.Layout, root, path string) bool {
 	rel, err := filepath.Rel(root, path)
 	if err != nil {
 		return false
 	}
 	rel = filepath.ToSlash(rel)
-	return rel == paths.TasksRel() || strings.HasPrefix(rel, paths.TasksRel()+"/")
+	return rel == layout.TasksRel() || strings.HasPrefix(rel, layout.TasksRel()+"/")
 }
 
 // listDirectoryFiles returns the regular files directly inside the directory
@@ -1182,7 +1188,26 @@ func projectRoot() (string, error) {
 		return "", fmt.Errorf("resolve Git project root: %w", err)
 	}
 	verbosef("project root %s", root)
+	if err := registerTasksDir(root, root); err != nil {
+		return "", err
+	}
 	return root, nil
+}
+
+// registerTasksDir registers a layout for the project when the config in the
+// state root sets a non-default tasks_dir. Without the key nothing is
+// registered, so the default layout is used exactly as before.
+func registerTasksDir(project, state string) error {
+	tasksRel, err := config.TasksDirOf(state)
+	if err != nil {
+		return err
+	}
+	if tasksRel != paths.DefaultTasksDir() {
+		paths.Register(paths.Layout{Project: project, State: state, TasksDir: tasksRel})
+	} else if project != state {
+		paths.Register(paths.Layout{Project: project, State: state})
+	}
+	return nil
 }
 
 // initHelp is printed by "init --help" and "init -h".
@@ -1338,6 +1363,11 @@ func initializeExternalState(project, dir string, plan *initDryRun) error {
 		if _, err := config.ProjectRootOf(state); err != nil {
 			return err
 		}
+		tasksRel, err := config.TasksDirOf(state)
+		if err != nil {
+			return err
+		}
+		layout.TasksDir = tasksRel
 		defer paths.Register(layout)()
 		if _, err := config.Load(project); err != nil {
 			return fmt.Errorf("existing configuration conflicts with protocol v1: %w", err)
@@ -1506,7 +1536,11 @@ func initializeConfigAt(root string, plan *initDryRun) error {
 }
 
 func createTaskStateDirectories(root string, plan *initDryRun) error {
-	tasksDir := paths.Default(root).Tasks()
+	tasksRel, err := config.TasksDirOf(root)
+	if err != nil {
+		return err
+	}
+	tasksDir := paths.Layout{Project: root, State: root, TasksDir: tasksRel}.Tasks()
 	if err := ensureProjectDirectory(root, tasksDir, plan); err != nil {
 		return fmt.Errorf("create task directory: %w", err)
 	}
@@ -1589,8 +1623,8 @@ func externalProjectRoot(dir, source string) (string, error) {
 		return "", fmt.Errorf("project_root %s in the state config: %w", project, e)
 	}
 	verbosef("project root %s", project)
-	if project != state {
-		paths.Register(paths.Layout{Project: project, State: state})
+	if err := registerTasksDir(project, state); err != nil {
+		return "", err
 	}
 	return project, nil
 }

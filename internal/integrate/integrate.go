@@ -219,7 +219,7 @@ func RunWith(root, id string, opts Options) (retErr error) {
 			for _, command := range cfg.Verification.Main {
 				opts.Would("run %s", command)
 			}
-			opts.Would("archive %s", paths.TaskFileRel("archive", filepath.Base(taskPath)))
+			opts.Would("archive %s", paths.For(root).TaskFileRel("archive", filepath.Base(taskPath)))
 			if !paths.For(root).External() {
 				opts.Would("commit")
 			}
@@ -359,8 +359,8 @@ func archiveTask(root, id, taskPath, archive string) *failure {
 		// State is a plain folder: the archive move is a plain rename.
 		return nil
 	}
-	archiveRel := paths.TaskFileRel("archive", filepath.Base(taskPath))
-	activeRel := paths.TaskFileRel("active", filepath.Base(taskPath))
+	archiveRel := layout.TaskFileRel("archive", filepath.Base(taskPath))
+	activeRel := layout.TaskFileRel("active", filepath.Base(taskPath))
 	stagePaths := []string{archiveRel}
 	if _, trackedErr := git(gitRoot, "ls-files", "--error-unmatch", activeRel); trackedErr == nil {
 		stagePaths = append(stagePaths, activeRel)
@@ -368,7 +368,7 @@ func archiveTask(root, id, taskPath, archive string) *failure {
 		// Claims are deliberately uncommitted. When active is untracked, the
 		// committed lifecycle transition is the tracked ready deletion plus the
 		// archive addition; the claimed active file is operational state.
-		readyRel := paths.TaskFileRel("ready", filepath.Base(taskPath))
+		readyRel := layout.TaskFileRel("ready", filepath.Base(taskPath))
 		if _, readyErr := git(gitRoot, "ls-files", "--error-unmatch", readyRel); readyErr == nil {
 			stagePaths = append(stagePaths, readyRel)
 		} else {
@@ -680,7 +680,7 @@ func cleanMainRuntime(root, id, worktreeRoot string) error {
 	}
 	worktreeRel, _ := filepath.Rel(root, worktreeRoot)
 	layout := paths.For(root)
-	activeDir, readyDir := paths.TaskDirRel("active")+"/", paths.TaskDirRel("ready")+"/"
+	activeDir, readyDir := layout.TaskDirRel("active")+"/", layout.TaskDirRel("ready")+"/"
 	for path := range statuses {
 		if path == paths.IntegrationLockRel() || path == paths.ClaimLockRel() || isEvidenceRuntimePath(path) || isWorkLogPath(path) || strings.HasPrefix(path, paths.RuntimeRel()+"/.claim-backup-") && strings.HasSuffix(path, ".tmp") {
 			continue
@@ -699,14 +699,14 @@ func cleanMainRuntime(root, id, worktreeRoot string) error {
 		if strings.HasPrefix(path, readyDir) && statuses[path] == " D" {
 			name := filepath.Base(path)
 			activePath := layout.TaskFile("active", name)
-			if statuses[paths.TaskFileRel("active", name)] != "??" || !validClaimFile(root, activePath) {
+			if statuses[layout.TaskFileRel("active", name)] != "??" || !validClaimFile(root, activePath) {
 				return fmt.Errorf("unrelated main worktree change blocks integration: %s", path)
 			}
 			continue
 		}
 		if strings.HasPrefix(path, activeDir) && statuses[path] == "??" {
 			name := filepath.Base(path)
-			readyPath := paths.TaskFileRel("ready", name)
+			readyPath := layout.TaskFileRel("ready", name)
 			if statuses[readyPath] != " D" || !validClaimFile(root, filepath.Join(layout.State, filepath.FromSlash(path))) {
 				return fmt.Errorf("unrelated main worktree change blocks integration: %s", path)
 			}

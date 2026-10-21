@@ -86,7 +86,7 @@ func validateTree(root string, report func(path string) bool) []Diagnostic {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			if !os.IsNotExist(err) {
-				diagnostics = append(diagnostics, Diagnostic{filepath.FromSlash(paths.TaskDirRel(state)), "directory", err.Error()})
+				diagnostics = append(diagnostics, Diagnostic{filepath.FromSlash(layout.TaskDirRel(state)), "directory", err.Error()})
 			}
 			continue
 		}
@@ -171,7 +171,7 @@ func validateTree(root string, report func(path string) bool) []Diagnostic {
 				if child.Name() == ".gitkeep" && e == nil && len(data) == 0 {
 					continue
 				}
-				path := paths.TasksRel() + "/" + entry.Name() + "/" + child.Name()
+				path := layout.TasksRel() + "/" + entry.Name() + "/" + child.Name()
 				if e != nil {
 					diagnostics = append(diagnostics, Diagnostic{path, "file", e.Error()})
 					continue
@@ -206,7 +206,7 @@ func validateTree(root string, report func(path string) bool) []Diagnostic {
 				continue
 			}
 			if targets[0].state != "archive" {
-				diagnostics = append(diagnostics, Diagnostic{item.rel, "dependency", fmt.Sprintf("%s is unresolved; dependency must be in %s", dep, paths.TaskDirRel("archive"))})
+				diagnostics = append(diagnostics, Diagnostic{item.rel, "dependency", fmt.Sprintf("%s is unresolved; dependency must be in %s", dep, layout.TaskDirRel("archive"))})
 			}
 			graph[item.id] = append(graph[item.id], dep)
 		}

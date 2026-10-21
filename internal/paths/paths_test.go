@@ -31,7 +31,7 @@ func TestDefaultLayout(t *testing.T) {
 		"IntegrationLock":        {l.IntegrationLock(), j(".taskfactory", "integration.lock")},
 		"IntegrationStop":        {l.IntegrationStop(), j(".taskfactory", "integration-stop.json")},
 		"DefaultWorktreeRoot":    {l.DefaultWorktreeRoot(), j(".taskfactory", "worktrees")},
-		"TaskFileRel":            {TaskFileRel("failed", "x.md"), "tasks/failed/x.md"},
+		"TaskFileRel":            {l.TaskFileRel("failed", "x.md"), "tasks/failed/x.md"},
 		"ConfigRel":              {ConfigRel(), ".taskfactory/config.toml"},
 		"EvidenceRel":            {EvidenceRel("TF-001"), ".taskfactory/evidence/TF-001.jsonl"},
 		"IntegrationEvidenceDir": {IntegrationEvidenceDirRel(), ".taskfactory/integration-evidence"},
@@ -72,5 +72,24 @@ func TestRegisteredLayoutIsPerProject(t *testing.T) {
 	unregister()
 	if For(project).External() {
 		t.Errorf("layout still registered after unregister")
+	}
+}
+
+func TestConfiguredTasksDir(t *testing.T) {
+	root := filepath.Join(string(filepath.Separator), "proj")
+	l := Layout{Project: root, State: root, TasksDir: ".taskfactory/tasks"}
+	for name, c := range map[string][2]string{
+		"TasksRel":    {l.TasksRel(), ".taskfactory/tasks"},
+		"TaskDirRel":  {l.TaskDirRel("ready"), ".taskfactory/tasks/ready"},
+		"TaskFileRel": {l.TaskFileRel("failed", "x.md"), ".taskfactory/tasks/failed/x.md"},
+		"Tasks":       {l.Tasks(), filepath.Join(root, ".taskfactory", "tasks")},
+		"TaskDir":     {l.TaskDir("inbox"), filepath.Join(root, ".taskfactory", "tasks", "inbox")},
+		"TaskFile":    {l.TaskFile("active", "x.md"), filepath.Join(root, ".taskfactory", "tasks", "active", "x.md")},
+		"Default":     {Default(root).TasksRel(), "tasks"},
+		"DefaultFn":   {DefaultTasksDir(), "tasks"},
+	} {
+		if c[0] != c[1] {
+			t.Errorf("%s = %q, want %q", name, c[0], c[1])
+		}
 	}
 }

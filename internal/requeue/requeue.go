@@ -148,7 +148,7 @@ func ClaimedFailed(root string) ([]string, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("read tasks/failed: %w", err)
+		return nil, fmt.Errorf("read %s: %w", paths.For(root).TaskDirRel("failed"), err)
 	}
 	var ids []string
 	for _, entry := range entries {
@@ -158,7 +158,7 @@ func ClaimedFailed(root string) ([]string, error) {
 		}
 		data, err := os.ReadFile(paths.For(root).TaskFile("failed", name))
 		if err != nil {
-			return nil, fmt.Errorf("read tasks/failed/%s: %w", name, err)
+			return nil, fmt.Errorf("read %s/%s: %w", paths.For(root).TaskDirRel("failed"), name, err)
 		}
 		if hasClaim(data) {
 			ids = append(ids, name[:6])
@@ -219,8 +219,8 @@ func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	failedRel := paths.TaskFileRel("failed", name)
-	targetRel := paths.TaskFileRel(target, name)
+	failedRel := layout.TaskFileRel("failed", name)
+	targetRel := layout.TaskFileRel(target, name)
 	failedAbs := layout.TaskFile("failed", name)
 	targetAbs := layout.TaskFile(target, name)
 
@@ -344,13 +344,15 @@ func dryRun(root, id, target, targetRel string, plan cleanupPlan, newData []byte
 		return Result{}, fmt.Errorf("create scratch directory: %w", err)
 	}
 	defer os.RemoveAll(scratch)
+	scratchLayout := paths.Layout{Project: scratch, State: scratch, TasksDir: paths.For(root).TasksDir}
+	defer paths.Register(scratchLayout)()
 	tracef("scratch copy of tasks/ in %s", scratch)
 	if err := copyTasks(root, scratch); err != nil {
 		return Result{}, err
 	}
 	name := filepath.Base(targetRel)
 	scratchTarget := filepath.Join(scratch, filepath.FromSlash(targetRel))
-	if err := os.Remove(paths.Default(scratch).TaskFile("failed", name)); err != nil {
+	if err := os.Remove(scratchLayout.TaskFile("failed", name)); err != nil {
 		return Result{}, fmt.Errorf("prepare scratch copy: %w", err)
 	}
 	if err := os.WriteFile(scratchTarget, newData, 0o644); err != nil {
@@ -367,7 +369,7 @@ func dryRun(root, id, target, targetRel string, plan cleanupPlan, newData []byte
 		return Result{}, fmt.Errorf("task tree is invalid after requeueing %s: %s", id, diagnostics[0])
 	}
 	if opts.Would != nil {
-		opts.Would("move task to %s", paths.TaskDirRel(target))
+		opts.Would("move task to %s", paths.For(root).TaskDirRel(target))
 		if discarded != "" {
 			opts.Would("remove the Claim block")
 		}
@@ -390,8 +392,9 @@ func dryRun(root, id, target, targetRel string, plan cleanupPlan, newData []byte
 // copyTasks copies every regular file below root/tasks, and the configuration
 // when present, into dst. It only reads root.
 func copyTasks(root, dst string) error {
-	state := paths.For(root).State
-	for _, top := range []string{paths.TasksRel(), paths.ConfigRel()} {
+	lay := paths.For(root)
+	state := lay.State
+	for _, top := range []string{lay.TasksRel(), paths.ConfigRel()} {
 		src := filepath.Join(state, filepath.FromSlash(top))
 		err := filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
@@ -489,17 +492,17 @@ func findFailedFile(root, id string) (string, error) {
 	for _, state := range otherStates {
 		entries, err := os.ReadDir(paths.For(root).TaskDir(state))
 		if err != nil && !os.IsNotExist(err) {
-			return "", fmt.Errorf("read tasks/%s: %w", state, err)
+			return "", fmt.Errorf("read %s: %w", paths.For(root).TaskDirRel(state), err)
 		}
 		for _, entry := range entries {
 			if !entry.IsDir() && strings.HasPrefix(entry.Name(), prefix) && strings.HasSuffix(entry.Name(), ".md") {
-				return "", fmt.Errorf("refusing to requeue %s: it is in tasks/%s, not tasks/failed", id, state)
+				return "", fmt.Errorf("refusing to requeue %s: it is in %s, not %s", id, paths.For(root).TaskDirRel(state), paths.For(root).TaskDirRel("failed"))
 			}
 		}
 	}
 	entries, err := os.ReadDir(paths.For(root).TaskDir("failed"))
 	if err != nil {
-		return "", fmt.Errorf("read tasks/failed: %w", err)
+		return "", fmt.Errorf("read %s: %w", paths.For(root).TaskDirRel("failed"), err)
 	}
 	var matches []string
 	for _, entry := range entries {
@@ -509,7 +512,7 @@ func findFailedFile(root, id string) (string, error) {
 	}
 	switch len(matches) {
 	case 0:
-		return "", fmt.Errorf("refusing to requeue %s: no task file exists in tasks/failed for this ID", id)
+		return "", fmt.Errorf("refusing to requeue %s: no task file exists in %s for this ID", id, paths.For(root).TaskDirRel("failed"))
 	case 1:
 		return matches[0], nil
 	default:

@@ -31,6 +31,9 @@ const (
 type Layout struct {
 	Project string
 	State   string
+	// TasksDir is the validated slash path of the task folders relative to the
+	// state root. Empty means the default, "tasks".
+	TasksDir string
 }
 
 var (
@@ -89,14 +92,22 @@ func For(projectRoot string) Layout {
 // External reports whether state lives outside the project.
 func (l Layout) External() bool { return filepath.Clean(l.State) != filepath.Clean(l.Project) }
 
+// DefaultTasksDir is the tasks directory used when config sets no tasks_dir.
+func DefaultTasksDir() string { return tasksName }
+
 // TasksRel is the slash-separated tasks directory relative to the state root.
-func TasksRel() string { return tasksName }
+func (l Layout) TasksRel() string {
+	if l.TasksDir == "" {
+		return tasksName
+	}
+	return l.TasksDir
+}
 
-// TaskDirRel is tasks/<state> relative to the state root, slash separated.
-func TaskDirRel(state string) string { return tasksName + "/" + state }
+// TaskDirRel is <tasks>/<state> relative to the state root, slash separated.
+func (l Layout) TaskDirRel(state string) string { return l.TasksRel() + "/" + state }
 
-// TaskFileRel is tasks/<state>/<name> relative to the state root.
-func TaskFileRel(state, name string) string { return TaskDirRel(state) + "/" + name }
+// TaskFileRel is <tasks>/<state>/<name> relative to the state root.
+func (l Layout) TaskFileRel(state, name string) string { return l.TaskDirRel(state) + "/" + name }
 
 // RuntimeRel is the .taskfactory directory relative to the state root.
 func RuntimeRel() string { return runtimeName }
@@ -129,13 +140,13 @@ func IntegrationStopRel() string { return runtimeName + "/" + integStopName }
 func (l Layout) abs(rel string) string { return filepath.Join(l.State, filepath.FromSlash(rel)) }
 
 // Tasks is the tasks directory.
-func (l Layout) Tasks() string { return l.abs(TasksRel()) }
+func (l Layout) Tasks() string { return l.abs(l.TasksRel()) }
 
 // TaskDir is tasks/<state>.
-func (l Layout) TaskDir(state string) string { return l.abs(TaskDirRel(state)) }
+func (l Layout) TaskDir(state string) string { return l.abs(l.TaskDirRel(state)) }
 
 // TaskFile is tasks/<state>/<name>.
-func (l Layout) TaskFile(state, name string) string { return l.abs(TaskFileRel(state, name)) }
+func (l Layout) TaskFile(state, name string) string { return l.abs(l.TaskFileRel(state, name)) }
 
 // Runtime is the .taskfactory directory.
 func (l Layout) Runtime() string { return l.abs(RuntimeRel()) }
