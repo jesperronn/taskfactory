@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"taskfactory/internal/testgit"
 )
 
 func TestRunOrdersChecksStopsOnFailureAndRecordsOutput(t *testing.T) {
@@ -349,7 +351,9 @@ func TestRunRecordsBlockedShellStartError(t *testing.T) {
 
 func fixture(t *testing.T, criteria, workers []string) (string, string, string) {
 	t.Helper()
-	root := t.TempDir()
+	root := testgit.Clone(t, "verify\x00"+quoteList(workers), func(dir string) error {
+		return buildTemplate(dir, workers)
+	})
 	run := func(dir string, args ...string) string {
 		t.Helper()
 		c := exec.Command("git", append([]string{"-C", dir}, args...)...)
@@ -359,38 +363,10 @@ func fixture(t *testing.T, criteria, workers []string) (string, string, string) 
 		}
 		return strings.TrimSpace(string(out))
 	}
-	_ = run(root, "init", "-b", "main")
-	_ = run(root, "config", "user.email", "test@example.com")
-	_ = run(root, "config", "user.name", "Test")
-	_ = run(root, "config", "commit.gpgsign", "false")
-	if err := os.MkdirAll(filepath.Join(root, ".taskfactory"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	cfg := `protocol_version = 1
-[git]
-worktree_root = ".taskfactory/worktrees"
-[verification]
-worker = [` + quoteList(workers) + `]
-integration = ["true"]
-`
-	if err := os.WriteFile(filepath.Join(root, ".taskfactory", "config.toml"), []byte(cfg), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	for _, d := range []string{"inbox", "ready", "active", "failed", "archive"} {
-		if err := os.MkdirAll(filepath.Join(root, "tasks", d), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(root, "README"), []byte("base\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	run(root, "add", ".")
-	run(root, "commit", "-m", "base")
 	base := run(root, "rev-parse", "HEAD")
 	branch := "feature/TF-099"
-	run(root, "branch", branch, base)
 	worktree := filepath.Join(root, ".taskfactory", "worktrees", "TF-099")
-	run(root, "worktree", "add", worktree, branch)
+	run(root, "worktree", "add", "-b", branch, worktree, base)
 	var crit strings.Builder
 	for i, c := range criteria {
 		crit.WriteString("### C" + string(rune('1'+i)) + ": check\n\nCheck: " + c + "\n\n")
@@ -432,6 +408,40 @@ Started at: 2026-10-08T12:00:00Z
 	}
 	return root, worktree, base
 }
+
+// buildTemplate makes the base repository, with no worktree and no claim, once
+// per distinct worker command list.
+func buildTemplate(root string, workers []string) error {
+	if err := testgit.Init(root, "user.email", "test@example.com", "user.name", "Test", "commit.gpgsign", "false"); err != nil {
+		return err
+	}
+	cfg := `protocol_version = 1
+[git]
+worktree_root = ".taskfactory/worktrees"
+[verification]
+worker = [` + quoteList(workers) + `]
+integration = ["true"]
+`
+	if err := os.MkdirAll(filepath.Join(root, ".taskfactory"), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(root, ".taskfactory", "config.toml"), []byte(cfg), 0o600); err != nil {
+		return err
+	}
+	for _, d := range []string{"inbox", "ready", "active", "failed", "archive"} {
+		if err := os.MkdirAll(filepath.Join(root, "tasks", d), 0o755); err != nil {
+			return err
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "README"), []byte("base\n"), 0o644); err != nil {
+		return err
+	}
+	if err := testgit.Git(root, "add", "."); err != nil {
+		return err
+	}
+	return testgit.Git(root, "commit", "-q", "-m", "base")
+}
+
 func quoteList(values []string) string {
 	quoted := make([]string, len(values))
 	for i, v := range values {

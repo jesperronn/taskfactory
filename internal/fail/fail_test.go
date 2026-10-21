@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"taskfactory/internal/testgit"
 )
 
 const testBaseCommit = "0123456789abcdef0123456789abcdef01234567"
@@ -57,26 +59,45 @@ func taskContract(id, root string, claimed bool) string {
 // the fixture repository sets commit.gpgsign to false in its own configuration.
 func newProject(t *testing.T, claimed bool) string {
 	t.Helper()
-	root, err := filepath.EvalSymlinks(t.TempDir())
+	root, err := filepath.EvalSymlinks(testgit.Clone(t, "fail", buildTemplate))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runGit(t, root, "init", "-q", "-b", "main")
-	runGit(t, root, "config", "user.name", "Test Worker")
-	runGit(t, root, "config", "user.email", "worker@example.invalid")
-	runGit(t, root, "config", "commit.gpgsign", "false")
-	for _, state := range []string{"inbox", "ready", "active", "failed", "archive"} {
-		dir := filepath.Join(root, "tasks", state)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		writeFile(t, filepath.Join(dir, ".gitkeep"), "")
+	if claimed {
+		// The claim line holds this root's absolute path, so it cannot live in
+		// the shared template. Fold it into the single fixture commit.
+		writeFile(t, filepath.Join(root, "tasks", "active", "TF-001-example.md"), taskContract("TF-001", root, true))
+		runGit(t, root, "add", "--all")
+		runGit(t, root, "commit", "-q", "--amend", "--no-edit")
 	}
-	writeFile(t, filepath.Join(root, ".taskfactory", "config.toml"), testConfig)
-	writeFile(t, filepath.Join(root, "tasks", "active", "TF-001-example.md"), taskContract("TF-001", root, claimed))
-	runGit(t, root, "add", "--all")
-	runGit(t, root, "commit", "-q", "-m", "fixture")
 	return root
+}
+
+// buildTemplate makes the unclaimed fixture repository once per test binary.
+func buildTemplate(root string) error {
+	if err := testgit.Init(root, "user.name", "Test Worker", "user.email", "worker@example.invalid", "commit.gpgsign", "false"); err != nil {
+		return err
+	}
+	files := map[string]string{
+		filepath.Join(".taskfactory", "config.toml"):          testConfig,
+		filepath.Join("tasks", "active", "TF-001-example.md"): taskContract("TF-001", root, false),
+	}
+	for _, state := range []string{"inbox", "ready", "active", "failed", "archive"} {
+		files[filepath.Join("tasks", state, ".gitkeep")] = ""
+	}
+	for rel, content := range files {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			return err
+		}
+	}
+	if err := testgit.Git(root, "add", "--all"); err != nil {
+		return err
+	}
+	return testgit.Git(root, "commit", "-q", "-m", "fixture")
 }
 
 // writeEvidence appends one valid attempt record for TF-001 with the given

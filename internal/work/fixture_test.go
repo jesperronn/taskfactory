@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"taskfactory/internal/adapter/common"
+	"taskfactory/internal/testgit"
 )
 
 const (
@@ -67,17 +68,31 @@ type fixture struct {
 // real worktree. With claim false the task file has no Claim block.
 func newFixture(t *testing.T, claim bool) fixture {
 	t.Helper()
-	root, err := filepath.EvalSymlinks(t.TempDir())
+	root, err := filepath.EvalSymlinks(testgit.Clone(t, "work", func(dir string) error {
+		if err := testgit.Init(dir, "commit.gpgsign", "false", "user.name", "Test Worker", "user.email", "worker@example.invalid"); err != nil {
+			return err
+		}
+		for rel, content := range map[string]string{
+			".taskfactory/config.toml":    testConfig,
+			"docs/worker-instructions.md": "# Worker instructions\n",
+			"example.txt":                 "base\n",
+		} {
+			p := filepath.Join(dir, filepath.FromSlash(rel))
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+				return err
+			}
+		}
+		if err := testgit.Git(dir, "add", "-A"); err != nil {
+			return err
+		}
+		return testgit.Git(dir, "commit", "-q", "-m", "init")
+	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	git(t, root, "init", "-q", "-b", "main")
-	git(t, root, "config", "commit.gpgsign", "false")
-	write(t, filepath.Join(root, ".taskfactory", "config.toml"), testConfig)
-	write(t, filepath.Join(root, "docs", "worker-instructions.md"), "# Worker instructions\n")
-	write(t, filepath.Join(root, "example.txt"), "base\n")
-	git(t, root, "add", "-A")
-	git(t, root, "commit", "-q", "-m", "init")
 	base := git(t, root, "rev-parse", "refs/heads/main")
 	worktree := filepath.Join(root, ".taskfactory", "worktrees", testID)
 	git(t, root, "worktree", "add", "-q", worktree, "-b", testBranch, "main")

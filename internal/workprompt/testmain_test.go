@@ -3,6 +3,8 @@ package workprompt
 import (
 	"os"
 	"testing"
+
+	"taskfactory/internal/testgit"
 )
 
 // TestMain disables global and system Git configuration for every test in the
@@ -12,5 +14,7 @@ import (
 func TestMain(m *testing.M) {
 	os.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	os.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-	os.Exit(m.Run())
+	code := m.Run()
+	testgit.Cleanup()
+	os.Exit(code)
 }

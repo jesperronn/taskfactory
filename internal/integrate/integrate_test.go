@@ -8,6 +8,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"taskfactory/internal/testgit"
 )
 
 func TestIntegrateAdvancesMainAndArchivesOnlyRequestedTask(t *testing.T) {
@@ -369,33 +371,16 @@ func newFixtureWithGitignore(t *testing.T, gitignore string) fixture {
 // a slash path relative to the project.
 func newFixtureAt(t *testing.T, gitignore, tasksDir string) fixture {
 	t.Helper()
-	root := t.TempDir()
-	run(t, root, "git", "init", "-b", "main")
-	run(t, root, "git", "config", "user.name", "Test")
-	run(t, root, "git", "config", "user.email", "test@example.invalid")
-	run(t, root, "git", "config", "commit.gpgsign", "false")
-	for _, d := range []string{tasksDir + "/inbox", tasksDir + "/ready", tasksDir + "/active", tasksDir + "/failed", tasksDir + "/archive", ".taskfactory"} {
-		if err := os.MkdirAll(filepath.Join(root, d), 0755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	config := "protocol_version = 1\n[workers]\nmax_parallel=4\n[git]\nuse_worktrees=true\nworktree_root=\".taskfactory/worktrees\"\nintegration_strategy=\"ff-only\"\n[integration]\nstop_on_main_failure=true\n[verification]\nworker=[\"true\"]\nintegration=[\"true\"]\n"
-	write(t, root, ".taskfactory/config.toml", config)
-	baseTask := "# TF-901: Example\n\n## Goal\n\nDo it.\n\n## Dependencies\n\nNone\n\n## Scope\n\nImplement.\n\n## Constraints\n\nKeep it small.\n\n## Success criteria\n\n### C1: works\n\nCheck: true\n\n## Verification\n\nRun it.\n"
-	write(t, root, tasksDir+"/ready/TF-901-example.md", baseTask)
-	if gitignore != "" {
-		write(t, root, ".gitignore", gitignore)
-	}
-	run(t, root, "git", "add", ".")
-	run(t, root, "git", "commit", "-m", "initial")
+	root := testgit.Clone(t, "integrate\x00"+tasksDir+"\x00"+gitignore, func(dir string) error {
+		return buildTemplate(dir, gitignore, tasksDir)
+	})
 	base, _ := git(root, "rev-parse", "HEAD")
 	branch := "task/TF-901"
-	run(t, root, "git", "branch", branch, base)
 	candidate := filepath.Join(root, ".taskfactory/worktrees/TF-901")
 	if err := os.MkdirAll(filepath.Dir(candidate), 0755); err != nil {
 		t.Fatal(err)
 	}
-	run(t, root, "git", "worktree", "add", candidate, branch)
+	run(t, root, "git", "worktree", "add", "-b", branch, candidate, base)
 	active := strings.TrimSuffix(baseTask, "\n") + "\n\n## Claim\n\nOwner: test\nBranch: task/TF-901\nWorktree: " + candidate + "\nBase commit: " + base + "\nStarted at: 2026-10-08T12:00:00Z\n"
 	write(t, root, tasksDir+"/active/TF-901-example.md", active)
 	if err := os.Remove(filepath.Join(root, tasksDir+"/ready/TF-901-example.md")); err != nil {
@@ -409,6 +394,39 @@ func newFixtureAt(t *testing.T, gitignore, tasksDir string) fixture {
 	write(t, root, ".taskfactory/evidence/TF-901.jsonl", evidence)
 	return fixture{root, candidate, result}
 }
+
+// buildTemplate makes the repository every fixture starts from: config, the
+// ready task and the initial commit. It has no worktree and no absolute path.
+func buildTemplate(root, gitignore, tasksDir string) error {
+	if err := testgit.Init(root, "user.name", "Test", "user.email", "test@example.invalid", "commit.gpgsign", "false"); err != nil {
+		return err
+	}
+	for _, d := range []string{tasksDir + "/inbox", tasksDir + "/ready", tasksDir + "/active", tasksDir + "/failed", tasksDir + "/archive", ".taskfactory"} {
+		if err := os.MkdirAll(filepath.Join(root, d), 0755); err != nil {
+			return err
+		}
+	}
+	config := "protocol_version = 1\n[workers]\nmax_parallel=4\n[git]\nuse_worktrees=true\nworktree_root=\".taskfactory/worktrees\"\nintegration_strategy=\"ff-only\"\n[integration]\nstop_on_main_failure=true\n[verification]\nworker=[\"true\"]\nintegration=[\"true\"]\n"
+	files := map[string]string{
+		".taskfactory/config.toml":            config,
+		tasksDir + "/ready/TF-901-example.md": baseTask,
+	}
+	if gitignore != "" {
+		files[".gitignore"] = gitignore
+	}
+	for rel, content := range files {
+		if err := os.WriteFile(filepath.Join(root, rel), []byte(content), 0644); err != nil {
+			return err
+		}
+	}
+	if err := testgit.Git(root, "add", "."); err != nil {
+		return err
+	}
+	return testgit.Git(root, "commit", "-q", "-m", "initial")
+}
+
+const baseTask = "# TF-901: Example\n\n## Goal\n\nDo it.\n\n## Dependencies\n\nNone\n\n## Scope\n\nImplement.\n\n## Constraints\n\nKeep it small.\n\n## Success criteria\n\n### C1: works\n\nCheck: true\n\n## Verification\n\nRun it.\n"
+
 func write(t *testing.T, root, rel, s string) {
 	t.Helper()
 	p := filepath.Join(root, rel)

@@ -1,6 +1,7 @@
 package claim
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"taskfactory/internal/taskvalidate"
+	"taskfactory/internal/testgit"
 )
 
 func TestClaimCreatesBranchWorktreeAndValidatedActiveTask(t *testing.T) {
@@ -238,35 +240,42 @@ func TestClaimSerializesSameTaskClaims(t *testing.T) {
 
 func newGitProject(t *testing.T, capacity int, ids ...string) string {
 	t.Helper()
-	root := t.TempDir()
-	gitRun(t, root, "init", "--quiet", "--initial-branch=main")
-	gitRun(t, root, "config", "user.name", "TaskFactory Test")
-	gitRun(t, root, "config", "user.email", "taskfactory@example.invalid")
-	gitRun(t, root, "config", "commit.gpgsign", "false")
-	for _, state := range []string{"inbox", "ready", "active", "failed", "archive"} {
-		if err := os.MkdirAll(filepath.Join(root, "tasks", state), 0o755); err != nil {
-			t.Fatal(err)
+	return testgit.Clone(t, fmt.Sprint("claim\x00", capacity, "\x00", ids), func(root string) error {
+		if err := testgit.Init(root, "user.name", "TaskFactory Test", "user.email", "taskfactory@example.invalid", "commit.gpgsign", "false"); err != nil {
+			return err
 		}
-	}
-	if err := os.MkdirAll(filepath.Join(root, ".taskfactory"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	config := "protocol_version = 1\n[workers]\nmax_parallel = " + string(rune('0'+capacity)) + "\n[git]\nworktree_root = \".taskfactory/worktrees\"\n"
-	if err := os.WriteFile(filepath.Join(root, ".taskfactory", "config.toml"), []byte(config), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	for _, id := range ids {
-		writeReady(t, root, id)
-	}
-	gitRun(t, root, "add", ".")
-	gitRun(t, root, "commit", "--quiet", "-m", "fixture")
-	return root
+		for _, state := range []string{"inbox", "ready", "active", "failed", "archive"} {
+			if err := os.MkdirAll(filepath.Join(root, "tasks", state), 0o755); err != nil {
+				return err
+			}
+		}
+		if err := os.MkdirAll(filepath.Join(root, ".taskfactory"), 0o755); err != nil {
+			return err
+		}
+		config := "protocol_version = 1\n[workers]\nmax_parallel = " + string(rune('0'+capacity)) + "\n[git]\nworktree_root = \".taskfactory/worktrees\"\n"
+		if err := os.WriteFile(filepath.Join(root, ".taskfactory", "config.toml"), []byte(config), 0o600); err != nil {
+			return err
+		}
+		for _, id := range ids {
+			content := readyContent(id)
+			if err := os.WriteFile(filepath.Join(root, "tasks", "ready", id+"-target.md"), []byte(content), 0o600); err != nil {
+				return err
+			}
+		}
+		if err := testgit.Git(root, "add", "."); err != nil {
+			return err
+		}
+		return testgit.Git(root, "commit", "--quiet", "-m", "fixture")
+	})
+}
+
+func readyContent(id string) string {
+	return "# " + id + ": Target\n\n## Goal\n\nDo it.\n\n## Dependencies\n\nNone\n\n## Scope\n\nImplement it.\n\n## Constraints\n\nKeep it small.\n\n## Success criteria\n\n### C1: It works\n\nCheck: go test ./...\n\n## Verification\n\nRun the check.\n"
 }
 
 func writeReady(t *testing.T, root, id string) {
 	t.Helper()
-	content := "# " + id + ": Target\n\n## Goal\n\nDo it.\n\n## Dependencies\n\nNone\n\n## Scope\n\nImplement it.\n\n## Constraints\n\nKeep it small.\n\n## Success criteria\n\n### C1: It works\n\nCheck: go test ./...\n\n## Verification\n\nRun the check.\n"
-	if err := os.WriteFile(filepath.Join(root, "tasks", "ready", id+"-target.md"), []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "tasks", "ready", id+"-target.md"), []byte(readyContent(id)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"taskfactory/internal/testgit"
 )
 
 func validTask(id, slug string) string {
@@ -31,21 +33,27 @@ func invalidTask(id string) string {
 // system Git configuration are disabled so only the fixture identity applies.
 func newRepo(t *testing.T) string {
 	t.Helper()
-	root := t.TempDir()
-	runGit(t, root, "init", "-q", "-b", "main")
-	runGit(t, root, "config", "user.name", "Test Worker")
-	runGit(t, root, "config", "user.email", "worker@example.invalid")
-	runGit(t, root, "config", "commit.gpgsign", "false")
-	for _, state := range []string{"inbox", "ready", "active", "failed", "archive"} {
-		dir := filepath.Join(root, "tasks", state)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
+	return testgit.Clone(t, "promote", func(root string) error {
+		if err := testgit.Init(root, "user.name", "Test Worker", "user.email", "worker@example.invalid", "commit.gpgsign", "false"); err != nil {
+			return err
 		}
-		writeFile(t, filepath.Join(dir, ".gitkeep"), "")
-	}
-	writeFile(t, filepath.Join(root, "README.md"), "fixture\n")
-	commitAll(t, root, "fixture")
-	return root
+		for _, state := range []string{"inbox", "ready", "active", "failed", "archive"} {
+			dir := filepath.Join(root, "tasks", state)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(dir, ".gitkeep"), nil, 0o644); err != nil {
+				return err
+			}
+		}
+		if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("fixture\n"), 0o644); err != nil {
+			return err
+		}
+		if err := testgit.Git(root, "add", "--all"); err != nil {
+			return err
+		}
+		return testgit.Git(root, "commit", "-q", "--allow-empty", "-m", "fixture")
+	})
 }
 
 func runGit(t *testing.T, root string, args ...string) string {
