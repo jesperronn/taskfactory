@@ -157,3 +157,11 @@ code. In a scratch project with `HOME` set to a temporary directory, run
 `taskfactory skill status` (expect exit 1), `skill install --dry-run`,
 `skill install`, `skill status` (expect 0), edit the installed `SKILL.md` and
 rerun status (expect 1, stale), and paste the output.
+
+## Claim
+
+Owner: sonnet-worker-095
+Branch: task/TF-095
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-095
+Base commit: 846cc9a2e9be28a9c636920854f4f8c6ea4ec6d0
+Started at: 2026-10-21T07:09:59Z
