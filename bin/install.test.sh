@@ -60,7 +60,7 @@ fixture="${fixture_root}/install"
 mkdir -p "${fixture}/bin"
 cp "${repo_root}/bin/install" "${repo_root}/bin/build" "${fixture}/bin/"
 cp "${repo_root}/go.mod" "${repo_root}/go.sum" "${fixture}/"
-cp -R "${repo_root}/cmd" "${repo_root}/internal" "${fixture}/"
+cp -R "${repo_root}/cmd" "${repo_root}/internal" "${repo_root}/skills" "${fixture}/"
 git -C "${fixture}" init --quiet
 git -C "${fixture}" add -A
 git -C "${fixture}" -c user.name=test -c user.email=test@example.invalid commit --quiet -m fixture

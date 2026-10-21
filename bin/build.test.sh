@@ -56,7 +56,7 @@ new_fixture() {
   mkdir -p "${fixture_root}/${name}/bin"
   cp "${repo_root}/bin/build" "${fixture_root}/${name}/bin/build"
   cp "${repo_root}/go.mod" "${repo_root}/go.sum" "${fixture_root}/${name}/"
-  cp -R "${repo_root}/cmd" "${repo_root}/internal" "${fixture_root}/${name}/"
+  cp -R "${repo_root}/cmd" "${repo_root}/internal" "${repo_root}/skills" "${fixture_root}/${name}/"
 }
 
 # git_fixture creates a fixture that is its own Git repository with one commit.

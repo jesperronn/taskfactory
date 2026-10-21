@@ -13,7 +13,7 @@ trap 'rm -rf "$fixture"' EXIT
 # half runs against real contracts and real dependencies.
 project="$fixture/project"
 mkdir -p "$project"
-cp -R "$repo_dir/bin" "$repo_dir/cmd" "$repo_dir/internal" "$repo_dir/tasks" \
+cp -R "$repo_dir/bin" "$repo_dir/cmd" "$repo_dir/internal" "$repo_dir/skills" "$repo_dir/tasks" \
   "$repo_dir/go.mod" "$repo_dir/go.sum" "$repo_dir/.mdsmith.yml" "$project/"
 if [[ -d $repo_dir/.taskfactory ]]; then
   cp -R "$repo_dir/.taskfactory" "$project/"
