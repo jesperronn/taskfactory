@@ -83,3 +83,11 @@ Check: go run ./cmd/taskfactory validate tasks
 
 Run each check, `bin/test` and `bin/lint` from the repository root and report
 each exit code.
+
+## Claim
+
+Owner: sonnet-worker-101
+Branch: task/TF-101
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-101
+Base commit: a7d7130042849432590e2f70a7a962c66600af57
+Started at: 2026-10-21T09:30:23Z
