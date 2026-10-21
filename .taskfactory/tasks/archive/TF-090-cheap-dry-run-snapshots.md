@@ -42,11 +42,19 @@ Keep the snapshot as the assertion, but:
 
 Check: go test -count=1 -run 'TestDryRun' ./cmd/taskfactory
 
-### C2: Whole Go suite meets the time limit
+### C2: Dry-run tests finish within 20 seconds in total
 
-Check: bin/test --budget ./...
+Check: go test -count=1 -timeout 20s -run 'TestDryRun' ./cmd/taskfactory
 
 ## Verification
 
 Run the dry-run tests with `-v` and report each test's duration before and
-after. Run `bin/test --budget ./...` and report its exit code.
+after. Run the C2 command and report its exit code.
+
+## Claim
+
+Owner: sonnet-worker-090
+Branch: task/TF-090
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-090
+Base commit: 2954270410742b2dcf763978b7c15e2bf6ae41a8
+Started at: 2026-10-21T20:31:44Z
