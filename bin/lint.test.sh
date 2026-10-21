@@ -133,7 +133,7 @@ for mode in check autofix; do
     actual_args=$(cat "$args_file")
     actual_vet=$(cat "$vet_file")
     actual_tf=$(cat "$tf_file")
-    if [[ $actual_tf != "run ./cmd/taskfactory validate tasks" ]]; then
+    if [[ $actual_tf != "run ./cmd/taskfactory validate .taskfactory/tasks" ]]; then
       printf '[FAIL] %s: whole-tree validation args=%q\n' "$mode" "$actual_tf" >&2
       exit 1
     fi

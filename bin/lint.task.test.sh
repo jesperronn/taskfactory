@@ -13,7 +13,7 @@ trap 'rm -rf "$fixture"' EXIT
 # half runs against real contracts and real dependencies.
 project="$fixture/project"
 mkdir -p "$project"
-cp -R "$repo_dir/bin" "$repo_dir/cmd" "$repo_dir/internal" "$repo_dir/skills" "$repo_dir/tasks" \
+cp -R "$repo_dir/bin" "$repo_dir/cmd" "$repo_dir/internal" "$repo_dir/skills" \
   "$repo_dir/go.mod" "$repo_dir/go.sum" "$repo_dir/.mdsmith.yml" "$project/"
 if [[ -d $repo_dir/.taskfactory ]]; then
   cp -R "$repo_dir/.taskfactory" "$project/"
@@ -22,8 +22,8 @@ fi
 git -C "$project" init -q
 
 # A self-contained ready-contract fixture, so this test never depends on a live
-# task staying in tasks/ready. Its one dependency, TF-003, is archived.
-task_rel=tasks/ready/TF-900-lint-fixture.md
+# task staying in .taskfactory/tasks/ready. Its one dependency, TF-003, is archived.
+task_rel=.taskfactory/tasks/ready/TF-900-lint-fixture.md
 pristine="$fixture/pristine.md"
 cat > "$pristine" <<'TASK'
 # TF-900: Lint fixture
@@ -120,9 +120,9 @@ if (( status != 1 )) || [[ $output != *"FAIL markdown lint: $task_rel"* ]] \
 fi
 printf '[PASS] both halves broken names both failures\n'
 
-# Archive: tasks/archive is not validated. The copy below has a broken contract
+# Archive: .taskfactory/tasks/archive is not validated. The copy below has a broken contract
 # but clean Markdown, so a validate run would fail and exit 1.
-archive_rel=tasks/archive/TF-990-archived-copy.md
+archive_rel=.taskfactory/tasks/archive/TF-990-archived-copy.md
 sed -e 's/TF-900/TF-990/g' -e 's/^- TF-003$/- TF-999/' "$pristine" \
   > "$project/$archive_rel"
 run_lint "$archive_rel"

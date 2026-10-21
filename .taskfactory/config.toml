@@ -1,4 +1,5 @@
 protocol_version = 1
+tasks_dir = ".taskfactory/tasks"
 
 [workers]
 max_parallel = 4
