@@ -323,3 +323,38 @@ assert_status "${iso_status}" 1 'isolation: an unexpected go call fails the fixt
 assert_contains "${iso_output}" 'stubs/go: unexpected go call: go test ./...' 'isolation: the stub names the unexpected go call'
 assert_contains "${iso_output}" 'FAIL: Go tests: go test ./...' 'isolation: the failed go test is reported, not run'
 assert_contains "$(cat "${iso}/go-calls")" '|test ./...' 'isolation: the stub recorded the unexpected call'
+
+# color: all three step headers are bold cyan when FORCE_COLOR is set, plain
+# when NO_COLOR is set or when color is not forced and stdout is not a terminal.
+new_fixture color
+: > "${fixture_root}/color/go.mod"
+mkdir -p "${fixture_root}/color/.taskfactory"
+: > "${fixture_root}/color/.taskfactory/config.toml"
+printf '#!/usr/bin/env bash\nexit 0\n' > "${fixture_root}/color/bin/a.test.sh"
+chmod +x "${fixture_root}/color/bin/a.test.sh"
+# shellcheck disable=SC2016
+install_go_stub "${fixture_root}/color" 'test\ ./...|run\ ./cmd/taskfactory\ validate\ *' 'exit 0'
+# color_run ENV...: runs bin/test in the color fixture with extra environment.
+color_run() {
+  color_status=0
+  color_output=$(cd / && env -u NO_COLOR -u FORCE_COLOR PATH="${fixture_root}/color/stubs:${PATH}" "$@" "${fixture_root}/color/bin/test" 2>&1) || color_status=$?
+}
+esc=$'\033'
+color_run FORCE_COLOR=1
+assert_status "${color_status}" 0 'color: forced run exits 0'
+assert_contains "${color_output}" "${esc}[1;36m==> go test ./...${esc}[0m" 'color: go test header is bold cyan when forced'
+assert_contains "${color_output}" "${esc}[1;36m==> go run ./cmd/taskfactory validate tasks${esc}[0m" 'color: validate header is bold cyan when forced'
+assert_contains "${color_output}" "${esc}[1;36m==> bin/a.test.sh${esc}[0m" 'color: shell test header is bold cyan when forced'
+color_run FORCE_COLOR=1 NO_COLOR=1
+assert_status "${color_status}" 0 'color: NO_COLOR run exits 0'
+if [[ "${color_output}" == *"${esc}"* ]]; then
+  printf '[FAIL] color: NO_COLOR output contains escape codes: %q\n' "${color_output}" >&2
+  exit 1
+fi
+assert_contains "${color_output}" $'==> go test ./...\n' 'color: plain when NO_COLOR overrides FORCE_COLOR'
+color_run
+if [[ "${color_output}" == *"${esc}"* ]]; then
+  printf '[FAIL] color: output is colored without a terminal or FORCE_COLOR: %q\n' "${color_output}" >&2
+  exit 1
+fi
+printf '[PASS] color: plain when NO_COLOR is set, or without a terminal and FORCE_COLOR\n'
