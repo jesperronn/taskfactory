@@ -93,9 +93,9 @@ func TestLaunchMapsExitStallAndBlocked(t *testing.T) {
 	})
 
 	t.Run("timeout is stalled", func(t *testing.T) {
-		installBinary(t, "tool", "/bin/sleep 5\n")
+		installBinary(t, "tool", "exec /bin/sleep 5\n")
 		res := Launch(context.Background(), LaunchSpec{
-			Binary: "tool", Dir: t.TempDir(), Timeout: time.Second, Notes: "note",
+			Binary: "tool", Dir: t.TempDir(), Timeout: 300 * time.Millisecond, Notes: "note",
 		})
 		if res.State != StateStalled || res.ExitCode != nil {
 			t.Fatalf("result = %+v, want stalled with no exit code", res)

@@ -12,7 +12,7 @@ import (
 // run must be recorded as stalled, not as an exit.
 func TestRunStallsAtAdapterTimeout(t *testing.T) {
 	binDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(binDir, Binary), []byte("#!/bin/sh\n/bin/sleep 5\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(binDir, Binary), []byte("#!/bin/sh\nexec /bin/sleep 5\n"), 0o755); err != nil {
 		t.Fatalf("write stub: %v", err)
 	}
 	t.Setenv("PATH", binDir)

@@ -12,7 +12,7 @@ import (
 // past the bound. The run must be recorded as stalled, not as an exit.
 func TestRunStallsAtAdapterTimeout(t *testing.T) {
 	binDir := t.TempDir()
-	script := "#!/bin/sh\nif [ \"$1\" = \"models\" ]; then printf '%s\\n' '{\"models\":[{\"selector\":\"" + testModel + "\"}]}'; exit 0; fi\n/bin/sleep 5\n"
+	script := "#!/bin/sh\nif [ \"$1\" = \"models\" ]; then printf '%s\\n' '{\"models\":[{\"selector\":\"" + testModel + "\"}]}'; exit 0; fi\nexec /bin/sleep 5\n"
 	if err := os.WriteFile(filepath.Join(binDir, Binary), []byte(script), 0o755); err != nil {
 		t.Fatalf("write stub: %v", err)
 	}
