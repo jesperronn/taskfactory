@@ -1186,7 +1186,7 @@ func projectRoot() (string, error) {
 }
 
 // initHelp is printed by "init --help" and "init -h".
-const initHelp = `Usage: taskfactory init [path] [--state-dir <dir>]
+const initHelp = `Usage: taskfactory init [path]
 
 Create the project configuration and the task state directories in the Git
 repository that contains path, which may be any directory inside the project
