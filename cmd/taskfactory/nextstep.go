@@ -30,6 +30,7 @@ var nextSteps = map[string]hint{
 	"check-main":    {"taskfactory integrate <ID>", "fix main, rerun taskfactory check-main"},
 	"fail":          {"taskfactory requeue <ID> --to ready", "taskfactory status shows the task state"},
 	"requeue":       {"taskfactory claim <ID> --owner <name>", "taskfactory status shows the task state"},
+	"completion":    {"add it to your shell profile, see README", "taskfactory completion bash or taskfactory completion zsh"},
 	"requeue-inbox": {"taskfactory promote <ID>", "taskfactory status shows the task state"},
 }
 

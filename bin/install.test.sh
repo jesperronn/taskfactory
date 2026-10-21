@@ -84,6 +84,7 @@ test -x "${prefix_dir}/taskfactory"
 printf '[PASS] PREFIX: installs an executable binary\n'
 assert_contains "$("${prefix_dir}/taskfactory" --version)" "taskfactory version ${expected_version}" 'PREFIX: installed binary reports the embedded version'
 assert_contains "${output}" "taskfactory version ${expected_version}" 'PREFIX: install output prints the version'
+assert_contains "${output}" 'hint: enable tab completion with: source <(taskfactory completion bash)' 'PREFIX: install prints the completion hint'
 
 gobin_dir="${dest_root}/gobin"
 output=$(run_install GOBIN="${gobin_dir}")

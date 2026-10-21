@@ -1001,6 +1001,31 @@ name; `bin/install` is the global install. A plain
 `go install ./cmd/taskfactory` from a checkout installs only `taskfactory`,
 without the alias. Windows is out of scope because of the symlink.
 
+## Shell completion
+
+`taskfactory completion bash|zsh` prints a tab-completion script for both
+`taskfactory` and `tf`. It completes commands, flags, flag values and task IDs.
+
+For bash, add this to `~/.bashrc`:
+
+```sh
+source <(taskfactory completion bash)
+```
+
+For zsh, add this to `~/.zshrc`, after `compdef` is available
+(`autoload -Uz compinit && compinit`):
+
+```sh
+source <(taskfactory completion zsh)
+```
+
+Alternatively, save the zsh script as `_taskfactory` in a directory on `fpath`:
+`taskfactory completion zsh > ~/.zfunc/_taskfactory`.
+
+Task IDs are read from the task directories of the repository you are in, and
+nothing is offered outside a repository. `bin/install` prints this hint but
+never edits your dotfiles.
+
 ## Releases
 
 No release has been cut and `bin/release` does not exist yet. The planned

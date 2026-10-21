@@ -52,6 +52,7 @@ var commandSummaries = []commandSummary{
 	{"fail", "fail <ID> --outcome <FAILED|BLOCKED>", "move a claimed task to failed"},
 	{"requeue", "requeue <ID> [--to ready|inbox] [--discard-claim]", "return a failed task to ready or inbox"},
 	{"work", "work <ID> --adapter <omp|pi|claude> --model <id>", "launch a local worker on a claimed task"},
+	{"completion", "completion <bash|zsh>", "print a shell completion script"},
 }
 
 // commandHelps maps each command in commandSummaries to its per-command help.
@@ -67,6 +68,7 @@ var commandHelps = map[string]string{
 	"fail":       failHelp,
 	"requeue":    requeueHelp,
 	"work":       workHelp,
+	"completion": completionHelp,
 }
 
 // styleArguments colors the words after a subcommand name: flags starting with
@@ -574,6 +576,9 @@ func main() {
 
 	args := fs.Args()
 	var common commonFlags
+	if len(args) > 0 && args[0] == "__complete" {
+		os.Exit(completeHelper(args[1:], os.Stdout))
+	}
 	if len(args) > 0 && wantsHelp(args[1:]) {
 		if args[0] == "requeue" {
 			fmt.Fprint(os.Stdout, styleHelp(stdoutStyle, requeueHelpText()))
@@ -585,7 +590,7 @@ func main() {
 		}
 	}
 	if len(args) > 0 {
-		if _, known := commandHelps[args[0]]; known {
+		if _, known := commandHelps[args[0]]; known && args[0] != "completion" {
 			rest, flags, err := extractCommonFlags(args[1:])
 			if err != nil {
 				fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory "+args[0], err.Error()))
@@ -598,6 +603,9 @@ func main() {
 		}
 	}
 	dry := dryRun{out: os.Stdout}
+	if len(args) >= 1 && args[0] == "completion" {
+		os.Exit(completionCommand(args[1:], os.Stdout, os.Stderr, stdoutIsTerminal()))
+	}
 	if len(args) >= 1 && args[0] == "init" {
 		if len(args) > 2 {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory init", fmt.Sprintf("unexpected extra argument %q; usage: taskfactory init [path]", args[2])))

@@ -49,6 +49,8 @@ if [[ "${TASKFACTORY_NO_ALIAS:-}" != 1 ]]; then
   fi
 fi
 
+printf 'hint: enable tab completion with: source <(taskfactory completion bash) (see README for zsh)\n'
+
 case ":${PATH}:" in
   *":${destination}:"*) ;;
   *) printf 'hint: %s is not on PATH\n' "${destination}" >&2 ;;

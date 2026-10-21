@@ -42,6 +42,9 @@ Every command also accepts `--verbose` (detail on stderr) and `--dry-run`
 (prints `would: ` lines and changes nothing). When unsure, run `--dry-run`
 before `claim`, `integrate` and `requeue`.
 
+`taskfactory completion bash|zsh` prints a shell completion script. It is for
+humans at a terminal; agents never need it.
+
 Any subcommand not in this table is **not implemented**. Flags that exist are
 the ones in a command's `--help` and in this skill, such as `--dry-run` above
 and `requeue --discard-claim` below. Do not invent others.
