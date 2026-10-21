@@ -123,6 +123,9 @@ func RunWith(root, id string, opts Options) (retErr error) {
 	entry := attempt{TaskID: id, Attempt: nextAttempt(root, id), RecordedAt: time.Now().UTC().Format(time.RFC3339), Outcome: "FAILED", Stage: "eligibility", ExitCode: nil}
 	var fail *failure
 	appended := false
+	// baseBranch is the configured git.base_branch once the config has loaded;
+	// until then the evidence defer uses the default.
+	baseBranch := config.DefaultBaseBranch
 	defer func() {
 		if appended || opts.DryRun {
 			return
@@ -140,7 +143,7 @@ func RunWith(root, id string, opts Options) (retErr error) {
 			}
 		}
 		if entry.MainAfter == "" {
-			if v, e := git(root, "rev-parse", "--verify", "refs/heads/main^{commit}"); e == nil {
+			if v, e := git(root, "rev-parse", "--verify", "refs/heads/"+baseBranch+"^{commit}"); e == nil {
 				entry.MainAfter = v
 			}
 		}
@@ -165,8 +168,9 @@ func RunWith(root, id string, opts Options) (retErr error) {
 		fail = &failure{outcome: "BLOCKED", stage: "eligibility", err: e}
 		return e
 	}
+	baseBranch = cfg.Git.BaseBranch
 	if !opts.DryRun {
-		if handled, merged, f, e := recoverMerged(root, id); handled {
+		if handled, merged, f, e := recoverMerged(root, id, baseBranch); handled {
 			if f != nil {
 				fail = f
 				return e
@@ -201,14 +205,14 @@ func RunWith(root, id string, opts Options) (retErr error) {
 		fail = &failure{outcome: "FAILED", stage: "eligibility", err: fmt.Errorf("task %s candidate is not clean: %w", id, e)}
 		return fail.err
 	}
-	main, e := git(root, "rev-parse", "--verify", "refs/heads/main^{commit}")
+	main, e := git(root, "rev-parse", "--verify", "refs/heads/"+baseBranch+"^{commit}")
 	if e != nil {
-		fail = &failure{outcome: "BLOCKED", stage: "eligibility", err: fmt.Errorf("local refs/heads/main is unavailable: %w", e)}
+		fail = &failure{outcome: "BLOCKED", stage: "eligibility", err: fmt.Errorf("local refs/heads/%s is unavailable: %w", baseBranch, e)}
 		return fail.err
 	}
 	entry.MainBefore = main
-	if branchName, _ := git(root, "branch", "--show-current"); branchName != "main" {
-		fail = &failure{outcome: "BLOCKED", stage: "eligibility", err: fmt.Errorf("repository worktree must have local main checked out (currently %q)", branchName)}
+	if branchName, _ := git(root, "branch", "--show-current"); branchName != baseBranch {
+		fail = &failure{outcome: "BLOCKED", stage: "eligibility", err: fmt.Errorf("repository worktree must have local %s checked out (currently %q)", baseBranch, branchName)}
 		return fail.err
 	}
 	if e = cleanMainRuntime(root, id, cfg.Git.WorktreeRoot); e != nil {
@@ -221,11 +225,11 @@ func RunWith(root, id string, opts Options) (retErr error) {
 	}
 	if opts.DryRun {
 		if opts.Would != nil {
-			opts.Would("rebase %s onto main", branch)
+			opts.Would("rebase %s onto %s", branch, baseBranch)
 			for _, command := range cfg.Verification.Integration {
 				opts.Would("run %s", command)
 			}
-			opts.Would("fast-forward main")
+			opts.Would("fast-forward %s", baseBranch)
 			for _, command := range cfg.Verification.Main {
 				opts.Would("run %s", command)
 			}
@@ -241,7 +245,7 @@ func RunWith(root, id string, opts Options) (retErr error) {
 		if output, rebaseErr := gitOutputErr(candidate, "rebase", main); rebaseErr != nil {
 			_, _ = git(candidate, "rebase", "--abort")
 			fail = &failure{outcome: "FAILED", stage: "rebase", output: output, err: rebaseErr}
-			return fmt.Errorf("rebase task %s onto main: %w", id, rebaseErr)
+			return fmt.Errorf("rebase task %s onto %s: %w", id, baseBranch, rebaseErr)
 		}
 		verified, e := git(candidate, "rev-parse", "HEAD")
 		if e != nil {
@@ -276,7 +280,7 @@ func RunWith(root, id string, opts Options) (retErr error) {
 			fail = &failure{outcome: "FAILED", stage: "merge", err: e}
 			return e
 		}
-		current, e := git(root, "rev-parse", "--verify", "refs/heads/main^{commit}")
+		current, e := git(root, "rev-parse", "--verify", "refs/heads/"+baseBranch+"^{commit}")
 		if e != nil {
 			fail = &failure{outcome: "BLOCKED", stage: "merge", err: e}
 			return e
@@ -293,7 +297,7 @@ func RunWith(root, id string, opts Options) (retErr error) {
 	}
 	if out, err := gitOutputErr(root, "merge", "--ff-only", entry.Verified); err != nil {
 		fail = &failure{outcome: "FAILED", stage: "merge", output: out, err: err}
-		return fmt.Errorf("fast-forward local main: %w", err)
+		return fmt.Errorf("fast-forward local %s: %w", baseBranch, err)
 	}
 	entry.MainAfter, _ = git(root, "rev-parse", "HEAD")
 	for _, command := range cfg.Verification.Main {
@@ -414,7 +418,7 @@ func archiveTask(root, id, taskPath, archive string) *failure {
 // marker has no PASS after it and its verified commit is in main, the next run
 // archives and commits, records PASS, and never merges again. It reports
 // whether it handled the run.
-func recoverMerged(root, id string) (handled bool, merged attempt, f *failure, err error) {
+func recoverMerged(root, id, baseBranch string) (handled bool, merged attempt, f *failure, err error) {
 	layout := paths.For(root)
 	if !layout.External() {
 		return false, attempt{}, nil, nil
@@ -443,7 +447,7 @@ func recoverMerged(root, id string) (handled bool, merged attempt, f *failure, e
 	if !found || last.Verified == "" {
 		return false, attempt{}, nil, nil
 	}
-	if _, e = git(root, "merge-base", "--is-ancestor", last.Verified, "refs/heads/main"); e != nil {
+	if _, e = git(root, "merge-base", "--is-ancestor", last.Verified, "refs/heads/"+baseBranch); e != nil {
 		return false, attempt{}, nil, nil
 	}
 	name := ""

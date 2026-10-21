@@ -94,7 +94,7 @@ solely on worker success.
 
 ### Integration contract
 
-`integrate <ID>` operates only on local `refs/heads/main`; it does not fetch or
+`integrate <ID>` operates only on the local base branch, `refs/heads/main` unless `git.base_branch` names another; it does not fetch or
 push. Require local main to exist and be checked out in the repository worktree.
 The main worktree may contain ready-to-active claim transitions (each ready task
 file moved to active with its Claim block), TaskFactory's exact runtime paths

@@ -50,6 +50,7 @@ above.
 | `git.use_worktrees`                | boolean          | `true`                              | Must be `true`; `false` is invalid because v1 requires isolated worker worktrees.                                          |
 | `git.worktree_root`                | string           | `".taskfactory/worktrees"`          | Non-empty path. Relative paths resolve from repository root; absolute paths are allowed, including outside the repository. |
 | `git.integration_strategy`         | string           | `"ff-only"`                         | Must equal `"ff-only"`; v1 supports no other integration strategy.                                                         |
+| `git.base_branch`                  | string           | `"main"`                            | A valid local branch name; see "The git.base_branch key" below.                                                            |
 | `integration.stop_on_main_failure` | boolean          | `true`                              | When true, a failed main verification stops integration and the task is not archived.                                      |
 | `verification.worker`              | array of strings | `["go test ./..."]`                 | Must contain at least one non-empty command string.                                                                        |
 | `verification.integration`         | array of strings | `["go test ./...", "go vet ./..."]` | Must contain at least one non-empty command string.                                                                        |
@@ -83,6 +84,24 @@ the path leaves the state root. `.taskfactory/tasks` is not ignored by the
 `.gitignore` lines `init` writes, because those name only the runtime paths, so
 the task folders stay trackable. `init` never writes the key; when the config
 already sets it, `init` creates the state directories there.
+
+## The git.base_branch key
+
+`git.base_branch` names the local branch that `claim` creates task branches from
+(`refs/heads/<name>`), that `integrate` rebases onto and fast-forwards, that
+`check-main` verifies and that `requeue` checks a task branch against before it
+removes it. The default is `"main"`, so a project without the key behaves
+exactly as before. TaskFactory never detects the branch: a repository whose
+default branch is `master` sets `base_branch = "master"`.
+
+The value must be a plain branch name that Git accepts: it is not empty, has no
+space, control character or any of `~ ^ : ? * [ \`, does not start with `-`, `/`
+or `.`, does not end with `.` or `/`, contains no `..`, `@{` or `//`, and no
+path component starts with `.` or ends with `.lock`. A bad value fails the load
+with an error naming `git.base_branch`. Error messages that mention the base
+branch name the configured branch, for example `local refs/heads/master is
+unavailable`. Integration still requires that branch checked out in the
+repository worktree.
 
 ## Validation and errors
 

@@ -80,12 +80,13 @@ func CheckMainWith(root string, opts Options) (retErr error) {
 	if len(checks) == 0 {
 		return nil
 	}
-	if branchName, _ := git(root, "branch", "--show-current"); branchName != "main" {
-		return fmt.Errorf("repository worktree must have local main checked out (currently %q)", branchName)
+	base := cfg.Git.BaseBranch
+	if branchName, _ := git(root, "branch", "--show-current"); branchName != base {
+		return fmt.Errorf("repository worktree must have local %s checked out (currently %q)", base, branchName)
 	}
-	mainCommit, err := git(root, "rev-parse", "--verify", "refs/heads/main^{commit}")
+	mainCommit, err := git(root, "rev-parse", "--verify", "refs/heads/"+base+"^{commit}")
 	if err != nil {
-		return fmt.Errorf("local refs/heads/main is unavailable: %w", err)
+		return fmt.Errorf("local refs/heads/%s is unavailable: %w", base, err)
 	}
 	if opts.DryRun {
 		if opts.Would != nil {
@@ -99,11 +100,11 @@ func CheckMainWith(root string, opts Options) (retErr error) {
 		return nil
 	}
 	for _, command := range checks {
-		if err = requireMainAt(root, mainCommit); err != nil {
+		if err = requireMainAt(root, base, mainCommit); err != nil {
 			return err
 		}
 		out, code, startErr := runCommand(root, command)
-		if err = requireMainAt(root, mainCommit); err != nil {
+		if err = requireMainAt(root, base, mainCommit); err != nil {
 			return err
 		}
 		if startErr == nil && *code == 0 {
@@ -123,7 +124,7 @@ func CheckMainWith(root string, opts Options) (retErr error) {
 		}
 		return fmt.Errorf("main check %q failed with exit code %d on %s; integration remains stopped", command, *code, mainCommit)
 	}
-	if err = requireMainAt(root, mainCommit); err != nil {
+	if err = requireMainAt(root, base, mainCommit); err != nil {
 		return err
 	}
 	return clearStop(root)
@@ -171,14 +172,14 @@ func loadStopState(root string) (stopState, error) {
 	return stopState{path: path, present: true}, nil
 }
 
-// requireMainAt verifies that local main still points at want.
-func requireMainAt(root, want string) error {
-	got, err := git(root, "rev-parse", "--verify", "refs/heads/main^{commit}")
+// requireMainAt verifies that the local base branch still points at want.
+func requireMainAt(root, base, want string) error {
+	got, err := git(root, "rev-parse", "--verify", "refs/heads/"+base+"^{commit}")
 	if err != nil {
-		return fmt.Errorf("local refs/heads/main is unavailable: %w", err)
+		return fmt.Errorf("local refs/heads/%s is unavailable: %w", base, err)
 	}
 	if got != want {
-		return fmt.Errorf("main moved from %s to %s during main checks; integration stop state was not changed; rerun taskfactory check-main", want, got)
+		return fmt.Errorf("%s moved from %s to %s during main checks; integration stop state was not changed; rerun taskfactory check-main", base, want, got)
 	}
 	return nil
 }

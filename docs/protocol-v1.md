@@ -117,9 +117,10 @@ integration, and claim does not verify that it is tracked.
 
 ## Integration and main health
 
-Integration is a local operation on the repository's `refs/heads/main`; it does
+Integration is a local operation on the repository's base branch,
+`refs/heads/main` unless `git.base_branch` names another; it does
 not fetch, push, contact a remote, or update a remote-tracking ref. It requires
-that local `main` exists and is checked out in the repository worktree. The
+that the local base branch (`main` by default) exists and is checked out in the repository worktree. The
 repository worktree may contain ready-to-active lifecycle changes from
 concurrent claims: each must be exactly a ready task file moved to active with
 the Claim block appended. It may also contain these TaskFactory operational

@@ -194,13 +194,13 @@ func ClaimWith(projectRoot, id, owner string, opts Options) error {
 		} else if !os.IsNotExist(err) {
 			return fmt.Errorf("inspect worktree path %s: %w", worktree, err)
 		}
-		base, err := runGit(projectRoot, "rev-parse", "--verify", "refs/heads/main^{commit}")
+		base, err := runGit(projectRoot, "rev-parse", "--verify", "refs/heads/"+cfg.Git.BaseBranch+"^{commit}")
 		if err != nil {
-			return fmt.Errorf("resolve local main commit refs/heads/main: %w", err)
+			return fmt.Errorf("resolve local %s commit refs/heads/%s: %w", cfg.Git.BaseBranch, cfg.Git.BaseBranch, err)
 		}
 		base = strings.TrimSpace(base)
 		if !regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`).MatchString(base) {
-			return fmt.Errorf("resolve local main commit refs/heads/main: Git returned invalid full object ID %q", base)
+			return fmt.Errorf("resolve local %s commit refs/heads/%s: Git returned invalid full object ID %q", cfg.Git.BaseBranch, cfg.Git.BaseBranch, base)
 		}
 		data, err := os.ReadFile(readyPath)
 		if err != nil {

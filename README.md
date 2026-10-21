@@ -95,7 +95,7 @@ The **task contract defines when it is finished**.
 # Quick start
 
 This walks one small task through the whole loop with a local worker. Run it
-in a Git repository with at least one commit on `main`. Every step is a command
+in a Git repository with at least one commit on `main` (or on the branch `git.base_branch` names). Every step is a command
 that exists today, including `requeue` for the failed branch.
 
 1. Install. From a TaskFactory checkout run `bin/install`, which builds
@@ -192,8 +192,9 @@ that exists today, including `requeue` for the failed branch.
 7. Verify. `taskfactory verify TF-001` reruns the task checks in the worktree
    and appends evidence to `.taskfactory/evidence/TF-001.jsonl`. Only this
    evidence counts, not the worker's report.
-8. Integrate. `taskfactory integrate TF-001` rebases the branch onto main,
-   verifies again, fast-forwards main and archives the task.
+8. Integrate. `taskfactory integrate TF-001` rebases the branch onto main
+   (the `git.base_branch` branch, default `main`), verifies again,
+   fast-forwards it and archives the task.
 9. Check main. `taskfactory check-main` reruns main's verification. After
    a successful loop `git status --short` is empty.
 
@@ -233,7 +234,7 @@ fails with `branch task/TF-001 already exists`). It removes the ones recorded
 in the Claim block, or the conventional `.taskfactory/worktrees/TF-001` and
 `task/TF-001` when there is no Claim block. It does this only when it is safe:
 the worktree has no changes and no untracked files, the branch has no commits
-that are not already on local `main` (a branch still at its claim base commit
+that are not already on the local base branch, `main` by default (a branch still at its claim base commit
 counts), and the worktree is inside `.taskfactory/worktrees` and is not the
 main checkout. These checks run before anything changes. If one fails,
 `requeue` exits 1, changes nothing and prints the commands below. The cleanup

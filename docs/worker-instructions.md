@@ -58,7 +58,7 @@ the environment owner, not by TaskFactory.
 does not commit them, so they are untracked until someone commits them. Commit
 both, with the `tasks/` contracts, before the first claim. Claim reads the
 config from the project root and creates the task branch from
-`refs/heads/main`, so an uncommitted contract is missing from the worker's
+`refs/heads/main` (or the branch `git.base_branch` names), so an uncommitted contract is missing from the worker's
 checkout. Claim does not check that the config is tracked; that refusal is
 not verified. Integration refuses unless
 `.taskfactory/config.toml` is tracked in HEAD and unchanged.

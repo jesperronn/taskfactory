@@ -353,7 +353,7 @@ After the requeue commit, requeue removes the task's old worktree and branch so
 the task can be claimed again: the ones recorded in the Claim block, or the
 conventional .taskfactory/worktrees/<ID> and task/<ID> when there is no Claim
 block. It does so only when that is safe: the worktree is clean (no changes, no
-untracked files), the branch has no commits outside local main, and the
+untracked files), the branch has no commits outside the local base branch (main by default), and the
 worktree is inside .taskfactory/worktrees and is not the main checkout. These
 checks run first; if one fails requeue exits 1 and changes nothing, and prints
 the manual commands: git worktree remove <worktree path>, then git branch -d

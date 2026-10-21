@@ -13,6 +13,9 @@ import (
 	"taskfactory/internal/paths"
 )
 
+// DefaultBaseBranch is the base branch when git.base_branch is not set.
+const DefaultBaseBranch = "main"
+
 const (
 	protocolVersion  = 1
 	maxParallelLimit = 4
@@ -40,6 +43,9 @@ type Git struct {
 	UseWorktrees        bool
 	WorktreeRoot        string
 	IntegrationStrategy string
+	// BaseBranch is the local branch that claim branches from and integrate
+	// fast-forwards. It defaults to "main".
+	BaseBranch string
 }
 
 // Integration contains integration pipeline policy.
@@ -87,6 +93,7 @@ func Load(projectRoot string) (Config, error) {
 			UseWorktrees:        true,
 			WorktreeRoot:        paths.WorktreesRel(),
 			IntegrationStrategy: "ff-only",
+			BaseBranch:          DefaultBaseBranch,
 		},
 		Integration: Integration{StopOnMainFailure: true},
 		Verification: Verification{
@@ -120,6 +127,9 @@ func Load(projectRoot string) (Config, error) {
 	if metadata.IsDefined("git", "integration_strategy") {
 		config.Git.IntegrationStrategy = parsed.Git.IntegrationStrategy
 	}
+	if metadata.IsDefined("git", "base_branch") {
+		config.Git.BaseBranch = parsed.Git.BaseBranch
+	}
 	if metadata.IsDefined("integration", "stop_on_main_failure") {
 		config.Integration.StopOnMainFailure = parsed.Integration.StopOnMainFailure
 	}
@@ -144,6 +154,9 @@ func Load(projectRoot string) (Config, error) {
 	}
 	if config.Git.IntegrationStrategy != "ff-only" {
 		return Config{}, fmt.Errorf("configuration file %s: git.integration_strategy must be \"ff-only\", got %q", path, config.Git.IntegrationStrategy)
+	}
+	if err := ValidateBaseBranch(config.Git.BaseBranch); err != nil {
+		return Config{}, fmt.Errorf("configuration file %s: %w", path, err)
 	}
 	if config.Git.WorktreeRoot == "" {
 		return Config{}, fmt.Errorf("configuration file %s: git.worktree_root must be a non-empty path", path)
@@ -183,6 +196,7 @@ type fileConfig struct {
 		UseWorktrees        bool   `toml:"use_worktrees"`
 		WorktreeRoot        string `toml:"worktree_root"`
 		IntegrationStrategy string `toml:"integration_strategy"`
+		BaseBranch          string `toml:"base_branch"`
 	} `toml:"git"`
 	Integration struct {
 		StopOnMainFailure bool `toml:"stop_on_main_failure"`
@@ -363,4 +377,67 @@ func resolveWorktreeRoot(projectRoot, configured string) (string, error) {
 		ancestor = filepath.Join(ancestor, missing[i])
 	}
 	return filepath.Clean(ancestor), nil
+}
+
+// ValidateBaseBranch checks a git.base_branch value: a plain local branch
+// name that Git itself would accept. Errors name the key.
+func ValidateBaseBranch(name string) error {
+	bad := func(why string) error {
+		return fmt.Errorf("git.base_branch %q is not a valid branch name: %s", name, why)
+	}
+	if name == "" {
+		return bad("it is empty")
+	}
+	if strings.HasPrefix(name, "-") {
+		return bad("it must not start with \"-\"")
+	}
+	if strings.HasPrefix(name, "/") || strings.HasSuffix(name, "/") || strings.Contains(name, "//") {
+		return bad("it has an empty path component")
+	}
+	if strings.Contains(name, "..") || strings.Contains(name, "@{") || name == "@" {
+		return bad("it contains \"..\" or \"@{\"")
+	}
+	if strings.HasSuffix(name, ".") {
+		return bad("it must not end with \".\"")
+	}
+	for _, r := range name {
+		if r <= ' ' || r == 0x7f || strings.ContainsRune("~^:?*[\\", r) {
+			return bad("it contains a space, control or special character")
+		}
+	}
+	for _, part := range strings.Split(name, "/") {
+		if strings.HasPrefix(part, ".") || strings.HasSuffix(part, ".lock") {
+			return bad("a component must not start with \".\" or end with \".lock\"")
+		}
+	}
+	return nil
+}
+
+// BaseBranchOf reads only git.base_branch from the config in stateRoot, for
+// commands that need the branch without loading the whole config. It validates
+// the value as Load does and returns the default when the file or key is absent.
+func BaseBranchOf(stateRoot string) (string, error) {
+	cfgPath := paths.Default(stateRoot).Config()
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return DefaultBaseBranch, nil
+		}
+		return "", fmt.Errorf("read configuration file %s: %w", cfgPath, err)
+	}
+	var parsed struct {
+		Git struct {
+			BaseBranch *string `toml:"base_branch"`
+		} `toml:"git"`
+	}
+	if _, err := toml.Decode(string(data), &parsed); err != nil {
+		return "", fmt.Errorf("parse configuration file %s: %w", cfgPath, err)
+	}
+	if parsed.Git.BaseBranch == nil {
+		return DefaultBaseBranch, nil
+	}
+	if err := ValidateBaseBranch(*parsed.Git.BaseBranch); err != nil {
+		return "", fmt.Errorf("configuration file %s: %w", cfgPath, err)
+	}
+	return *parsed.Git.BaseBranch, nil
 }

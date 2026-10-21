@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"taskfactory/internal/config"
 	"taskfactory/internal/paths"
 )
 
@@ -36,11 +37,14 @@ type worktreeEntry struct {
 // that removing them loses nothing. claimBlock is the Claim block text, or
 // empty when the task has none. A refusal is returned as an error.
 func planCleanup(root, id, claimBlock string) (cleanupPlan, error) {
+	base, err := config.BaseBranchOf(root)
+	if err != nil {
+		return cleanupPlan{}, err
+	}
 	wtRoot := resolvePath(paths.For(root).DefaultWorktreeRoot())
 	worktree := filepath.Join(wtRoot, id)
 	branch := "task/" + id
 	if claimBlock != "" {
-		var err error
 		if worktree, branch, err = claimedLocation(root, id, claimBlock); err != nil {
 			return cleanupPlan{}, err
 		}
@@ -52,7 +56,7 @@ func planCleanup(root, id, claimBlock string) (cleanupPlan, error) {
 	if worktree == root {
 		return cleanupPlan{}, unsafeCleanup(id, worktree, branch, "the worktree is the project's own main checkout")
 	}
-	if branch == "" || branch == "main" || strings.HasPrefix(branch, "-") {
+	if branch == "" || branch == "main" || branch == base || strings.HasPrefix(branch, "-") {
 		return cleanupPlan{}, unsafeCleanup(id, worktree, branch, fmt.Sprintf("the branch %q is not a task branch", branch))
 	}
 	if _, err := git(root, "check-ref-format", "refs/heads/"+branch); err != nil {
@@ -94,8 +98,8 @@ func planCleanup(root, id, claimBlock string) (cleanupPlan, error) {
 	if !plan.hasDir && !plan.hasBranch {
 		return plan, nil
 	}
-	if _, err := git(root, "rev-parse", "--verify", "--quiet", "refs/heads/main"); err != nil {
-		return cleanupPlan{}, fmt.Errorf("refusing to requeue %s: cannot check %s against local main: branch main does not exist", id, branch)
+	if _, err := git(root, "rev-parse", "--verify", "--quiet", "refs/heads/"+base); err != nil {
+		return cleanupPlan{}, fmt.Errorf("refusing to requeue %s: cannot check %s against local %s: branch %s does not exist", id, branch, base, base)
 	}
 
 	var problems []string
@@ -107,19 +111,19 @@ func planCleanup(root, id, claimBlock string) (cleanupPlan, error) {
 		if strings.TrimSpace(status) != "" {
 			problems = append(problems, fmt.Sprintf("the worktree %s has uncommitted or untracked files:\n%s", worktree, strings.TrimRight(status, "\n")))
 		}
-		if n, err := countRange(worktree, "refs/heads/main..HEAD"); err != nil {
+		if n, err := countRange(worktree, "refs/heads/"+base+"..HEAD"); err != nil {
 			return cleanupPlan{}, fmt.Errorf("refusing to requeue %s: check worktree %s: %w", id, worktree, err)
 		} else if n > 0 && own.branch != branch {
-			problems = append(problems, fmt.Sprintf("the worktree %s has %d commit(s) on its HEAD that are not on main; inspect them with git -C %s log --oneline main..HEAD", worktree, n, worktree))
+			problems = append(problems, fmt.Sprintf("the worktree %s has %d commit(s) on its HEAD that are not on %s; inspect them with git -C %s log --oneline %s..HEAD", worktree, n, base, worktree, base))
 		}
 	}
 	if plan.hasBranch {
-		n, err := countRange(root, "refs/heads/main..refs/heads/"+branch)
+		n, err := countRange(root, "refs/heads/"+base+"..refs/heads/"+branch)
 		if err != nil {
 			return cleanupPlan{}, fmt.Errorf("refusing to requeue %s: check branch %s: %w", id, branch, err)
 		}
 		if n > 0 {
-			problems = append(problems, fmt.Sprintf("the branch %s has %d unmerged commit(s) that are not on main; inspect them with git log --oneline main..%s", branch, n, branch))
+			problems = append(problems, fmt.Sprintf("the branch %s has %d unmerged commit(s) that are not on %s; inspect them with git log --oneline %s..%s", branch, n, base, base, branch))
 		}
 	}
 	if len(problems) > 0 {
