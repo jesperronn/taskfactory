@@ -39,3 +39,11 @@ Check: bin/test && bin/lint
 ## Verification
 
 Run the three checks from the repository root and report each exit code.
+
+## Claim
+
+Owner: sonnet-worker-098
+Branch: task/TF-098
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-098
+Base commit: 1f481dd0c925bb04d239be8ea903a5a0c09168b5
+Started at: 2026-10-21T21:26:52Z
