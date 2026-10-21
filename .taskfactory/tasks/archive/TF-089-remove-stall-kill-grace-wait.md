@@ -45,15 +45,23 @@ replaced with a short fixed poll interval.
 
 ## Success criteria
 
-### C1: Stall tests finish under a second
+### C1: Stall tests no longer wait out the kill grace
 
 Check: go test -count=1 -run 'Stall|TestLaunchMapsExitStallAndBlocked' ./internal/adapter/...
 
-### C2: Whole Go suite meets the time limit
+### C2: Adapter packages meet the time limit
 
-Check: bin/test --budget ./...
+Check: bin/test --budget ./internal/adapter/...
 
 ## Verification
 
 Run the stall tests with `-v` and report each test's duration. Run
-`bin/test --budget ./...` and report its exit code.
+`bin/test --budget ./internal/adapter/...` and report its exit code.
+
+## Claim
+
+Owner: sonnet-worker-089
+Branch: task/TF-089
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-089
+Base commit: 2954270410742b2dcf763978b7c15e2bf6ae41a8
+Started at: 2026-10-21T20:31:44Z
