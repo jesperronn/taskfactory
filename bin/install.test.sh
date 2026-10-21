@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# shellcheck source=bin/testlib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/testlib.sh"
+testlib_verbose_wrap "${BASH_SOURCE[0]}" "$@"
 
 known_scenarios="default idempotent optout foreign shadow help usage"
 if (( $# > 0 )); then

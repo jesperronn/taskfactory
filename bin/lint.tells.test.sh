@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# shellcheck source=bin/testlib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/testlib.sh"
+testlib_verbose_wrap "${BASH_SOURCE[0]}" "$@"
 
 # Tests for the advisory `bin/lint --tells` mode. They run the real pinned
 # mdsmith against a scratch project that holds one file with known tells.

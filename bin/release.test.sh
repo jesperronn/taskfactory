@@ -3,6 +3,9 @@
 # Usage: bin/release.test.sh [dry-run|gates|tag|signing|versions|no-signing-flags|publish-needs-flag|publish-existing|publish-new|publish-race|publish-failures]
 # With no argument every section runs. Zero assertions is a failure.
 set -euo pipefail
+# shellcheck source=bin/testlib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/testlib.sh"
+testlib_verbose_wrap "${BASH_SOURCE[0]}" "$@"
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/release-test.XXXXXX")

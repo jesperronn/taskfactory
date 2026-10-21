@@ -2,6 +2,9 @@
 # Tests for bin/package. Usage: bin/package.test.sh [archives|version|skill|checksums|refuse]
 # With no argument every section runs. Zero assertions is a failure.
 set -euo pipefail
+# shellcheck source=bin/testlib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/testlib.sh"
+testlib_verbose_wrap "${BASH_SOURCE[0]}" "$@"
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/package-test.XXXXXX")

@@ -4,6 +4,9 @@
 # With no argument every section runs. Zero assertions is a failure.
 # No network, no real gh, no token: a fake gh is placed first on PATH.
 set -euo pipefail
+# shellcheck source=bin/testlib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/testlib.sh"
+testlib_verbose_wrap "${BASH_SOURCE[0]}" "$@"
 
 export GIT_CONFIG_GLOBAL=/dev/null
 export GIT_CONFIG_SYSTEM=/dev/null

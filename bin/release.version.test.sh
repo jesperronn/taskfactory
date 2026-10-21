@@ -3,6 +3,9 @@
 # Sections: parse compare last-tag advice check parse-rc compare-rc next-rc
 # (default: all).
 set -euo pipefail
+# shellcheck source=bin/testlib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/testlib.sh"
+testlib_verbose_wrap "${BASH_SOURCE[0]}" "$@"
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 export GIT_CONFIG_GLOBAL=/dev/null
