@@ -45,6 +45,8 @@ var completionSpecs = []completionSpec{
 	{Command: "work", Positional: "ids:active", Flags: []completionFlag{
 		{Name: "--adapter", Values: []string{"omp", "pi", "claude"}},
 		{Name: "--model", Free: true},
+		{Name: "--haiku-model", Free: true},
+		{Name: "--endpoint", Free: true},
 		{Name: "--timeout", Free: true},
 	}},
 	{Command: "verify", Positional: "ids:active"},
@@ -52,6 +54,7 @@ var completionSpecs = []completionSpec{
 	{Command: "check-main", Positional: "none"},
 	{Command: "fail", Positional: "ids:active", Flags: []completionFlag{
 		{Name: "--outcome", Values: []string{"FAILED", "BLOCKED"}},
+		{Name: "--reason", Free: true},
 	}},
 	{Command: "requeue", Positional: "ids:failed", Flags: []completionFlag{
 		{Name: "--to", Values: []string{"ready", "inbox"}},
@@ -67,6 +70,10 @@ var completionSpecs = []completionSpec{
 
 // completionCommonFlags are offered for every command except completion.
 var completionCommonFlags = []string{"--verbose", "--dry-run"}
+
+// completionHiddenFlags lists, per command, flags that are real but deliberately
+// not completed. The drift test requires each entry to appear in the command help.
+var completionHiddenFlags = map[string][]string{}
 
 func findCompletionSpec(command string) (completionSpec, bool) {
 	for _, s := range completionSpecs {

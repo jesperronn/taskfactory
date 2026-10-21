@@ -365,6 +365,7 @@ Next step: taskfactory claim <ID> --owner <name> after a requeue to ready.
 
 Flags:
   --to <ready|inbox>  target state, ready by default
+  --discard-claim     remove the Claim block of a claimed failed task first
   --verbose   write detail lines starting "verbose: " to stderr
   --dry-run   print what would change as "would: " lines and change nothing
   --help, -h          print this help and exit successfully

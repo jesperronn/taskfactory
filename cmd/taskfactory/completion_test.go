@@ -335,3 +335,182 @@ func TestCompletionHelpAndHint(t *testing.T) {
 		t.Errorf("__complete = %+v", r)
 	}
 }
+
+// helpFlagNames returns the first --name token of each line of the Flags:
+// section of help, and whether the section exists.
+func helpFlagNames(help string) ([]string, bool) {
+	lines := strings.Split(help, "\n")
+	var names []string
+	found := false
+	for i, line := range lines {
+		if line != "Flags:" {
+			continue
+		}
+		found = true
+		for _, l := range lines[i+1:] {
+			if strings.TrimSpace(l) == "" {
+				break
+			}
+			for _, tok := range strings.Fields(l) {
+				tok = strings.TrimRight(tok, ",")
+				if strings.HasPrefix(tok, "--") {
+					names = append(names, tok)
+					break
+				}
+			}
+		}
+		break
+	}
+	return names, found
+}
+
+// completionDrift reports every disagreement between a command's help Flags:
+// section, its completion spec and its exempt flags.
+func completionDrift(command, help string, spec completionSpec, hidden []string) (missing, extra []string) {
+	helpFlags, ok := helpFlagNames(help)
+	if !ok {
+		return []string{command + ": help has no Flags: section"}, nil
+	}
+	inHelp := map[string]bool{}
+	for _, f := range helpFlags {
+		inHelp[f] = true
+	}
+	known := map[string]bool{"--help": true}
+	for _, f := range completionCommonFlags {
+		known[f] = true
+	}
+	for _, f := range spec.Flags {
+		known[f.Name] = true
+	}
+	for _, f := range hidden {
+		known[f] = true
+		if !inHelp[f] {
+			extra = append(extra, command+": exempt flag "+f+" is not in the command help")
+		}
+	}
+	for _, f := range helpFlags {
+		if !known[f] {
+			missing = append(missing, command+": help flag "+f+" has no completion entry")
+		}
+	}
+	for _, f := range spec.Flags {
+		if !inHelp[f.Name] {
+			extra = append(extra, command+": table flag "+f.Name+" is not in the command help")
+		}
+	}
+	return missing, extra
+}
+
+func TestCompletionFlagsCoverHelp(t *testing.T) {
+	for _, c := range commandSummaries {
+		spec, ok := findCompletionSpec(c.name)
+		if !ok {
+			t.Errorf("command %q has no completionSpecs entry", c.name)
+			continue
+		}
+		missing, _ := completionDrift(c.name, commandHelps[c.name], spec, completionHiddenFlags[c.name])
+		for _, m := range missing {
+			t.Error(m)
+		}
+	}
+}
+
+func TestCompletionTableFlagsInHelp(t *testing.T) {
+	for _, c := range commandSummaries {
+		spec, ok := findCompletionSpec(c.name)
+		if !ok {
+			continue
+		}
+		_, extra := completionDrift(c.name, commandHelps[c.name], spec, nil)
+		for _, m := range extra {
+			t.Error(m)
+		}
+	}
+}
+
+func TestCompletionDriftDetectsMissingFlag(t *testing.T) {
+	spec, _ := findCompletionSpec("work")
+	var trimmed []completionFlag
+	for _, f := range spec.Flags {
+		if f.Name != "--endpoint" {
+			trimmed = append(trimmed, f)
+		}
+	}
+	spec.Flags = trimmed
+	missing, _ := completionDrift("work", commandHelps["work"], spec, nil)
+	if len(missing) != 1 || !strings.Contains(missing[0], "work") || !strings.Contains(missing[0], "--endpoint") {
+		t.Errorf("missing = %v, want one message naming work and --endpoint", missing)
+	}
+	// A table flag absent from the help is reported too.
+	spec, _ = findCompletionSpec("status")
+	spec.Flags = []completionFlag{{Name: "--bogus"}}
+	_, extra := completionDrift("status", commandHelps["status"], spec, nil)
+	if len(extra) != 1 || !strings.Contains(extra[0], "--bogus") {
+		t.Errorf("extra = %v, want one message naming --bogus", extra)
+	}
+	// A command whose help has no Flags: section fails.
+	missing, _ = completionDrift("ghost", "Usage: ghost\n", completionSpec{Command: "ghost"}, nil)
+	if len(missing) != 1 || !strings.Contains(missing[0], "no Flags: section") {
+		t.Errorf("missing = %v, want a no Flags: section message", missing)
+	}
+}
+
+func TestCompletionHiddenFlagsExempt(t *testing.T) {
+	for command, flags := range completionHiddenFlags {
+		spec, ok := findCompletionSpec(command)
+		if !ok {
+			t.Errorf("exempt entry names unknown command %q", command)
+			continue
+		}
+		if _, extra := completionDrift(command, commandHelps[command], spec, flags); len(extra) > 0 {
+			for _, m := range extra {
+				t.Error(m)
+			}
+		}
+	}
+	// An exempt flag that is not in the help is reported.
+	spec, _ := findCompletionSpec("status")
+	_, extra := completionDrift("status", commandHelps["status"], spec, []string{"--nonesuch"})
+	if len(extra) != 1 || !strings.Contains(extra[0], "--nonesuch") {
+		t.Errorf("extra = %v, want one message naming --nonesuch", extra)
+	}
+	// An exempt flag in the help suppresses the missing report.
+	spec, _ = findCompletionSpec("work")
+	var trimmed []completionFlag
+	for _, f := range spec.Flags {
+		if f.Name != "--endpoint" {
+			trimmed = append(trimmed, f)
+		}
+	}
+	spec.Flags = trimmed
+	missing, extra := completionDrift("work", commandHelps["work"], spec, []string{"--endpoint"})
+	if len(missing) != 0 || len(extra) != 0 {
+		t.Errorf("exempt --endpoint: missing=%v extra=%v", missing, extra)
+	}
+}
+
+func TestBashCompletionAddedFlags(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not available")
+	}
+	binary := buildCLI(t)
+	root := completionFixture(t)
+	cases := []struct {
+		words []string
+		want  string
+	}{
+		{[]string{"tf", "work", "TF-001", "--haiku-model", ""}, ""},
+		{[]string{"tf", "work", "TF-001", "--endpoint", ""}, ""},
+		{[]string{"tf", "fail", "--reason", ""}, ""},
+		{[]string{"tf", "fail", "--reason", "x", ""}, "TF-003 TF-004"},
+		{[]string{"tf", "work", "--hai"}, "--haiku-model"},
+		{[]string{"tf", "work", "--end"}, "--endpoint"},
+		{[]string{"tf", "fail", "--rea"}, "--reason"},
+	}
+	for _, c := range cases {
+		got := strings.Join(bashComplete(t, binary, root, c.words...), " ")
+		if got != c.want {
+			t.Errorf("%q: COMPREPLY = %q, want %q", c.words, got, c.want)
+		}
+	}
+}
