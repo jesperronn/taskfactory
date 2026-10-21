@@ -73,12 +73,12 @@ var completionSpecs = []completionSpec{
 var completionCommonFlags = []string{"--verbose", "--dry-run"}
 
 // completionStateDirFlag is offered, with a free value, for every command that
-// reads task state: all but completion, init and skill.
+// reads or writes task state: all but completion and skill.
 const completionStateDirFlag = "--state-dir"
 
 // acceptsStateDir reports whether the command takes --state-dir.
 func acceptsStateDir(command string) bool {
-	return command != "completion" && command != "init" && command != "skill"
+	return command != "completion" && command != "skill"
 }
 
 // completionHiddenFlags lists, per command, flags that are real but deliberately

@@ -15,6 +15,7 @@ import (
 
 	"taskfactory/internal/config"
 	"taskfactory/internal/paths"
+	"taskfactory/internal/statecommit"
 	"taskfactory/internal/taskvalidate"
 )
 
@@ -153,6 +154,17 @@ func RunWith(root, id string, opts Options) (retErr error) {
 	if e != nil {
 		fail = &failure{outcome: "BLOCKED", stage: "eligibility", err: e}
 		return e
+	}
+	if !opts.DryRun {
+		if handled, merged, f, e := recoverMerged(root, id); handled {
+			if f != nil {
+				fail = f
+				return e
+			}
+			entry.Note = "Recovered after a crash: main was already fast-forwarded; the archive move and state commit were finished without merging again."
+			entry.Branch, entry.WorkerResult, entry.MainBefore, entry.Verified = merged.Branch, merged.WorkerResult, merged.MainBefore, merged.Verified
+			return finishPass(root, id, &entry, &appended, &fail, &retErr)
+		}
 	}
 	if e = cleanConfig(root); e != nil {
 		fail = &failure{outcome: "FAILED", stage: "eligibility", err: e}
@@ -300,46 +312,150 @@ func RunWith(root, id string, opts Options) (retErr error) {
 		fail = &failure{outcome: "FAILED", stage: "archive", err: fmt.Errorf("archive task path already exists: %s", archive)}
 		return fail.err
 	}
-	if e = os.Rename(taskPath, archive); e != nil {
-		fail = &failure{outcome: "FAILED", stage: "archive", err: e}
-		return fmt.Errorf("move task to archive: %w", e)
-	}
 	if layout.External() {
-		// State is outside the project, so the archive move is a plain rename.
-		return finishPass(root, id, &entry, &appended, &fail, &retErr)
+		// The project fast-forward is done. Record that in the state directory
+		// before the archive move and commit, so a crash between them is
+		// finished by the next run instead of merging twice.
+		marker := entry
+		marker.Outcome = "MERGED"
+		marker.Stage = "merge"
+		marker.Note = "Main fast-forwarded and its checks passed; the archive move and state commit follow."
+		if e = appendRecord(root, id, marker); e != nil {
+			fail = &failure{outcome: "FAILED", stage: "archive", err: fmt.Errorf("main advanced; record merge marker: %w", e)}
+			return fail.err
+		}
+		entry.Attempt++
+	}
+	if f := archiveTask(root, id, taskPath, archive); f != nil {
+		fail = f
+		return fmt.Errorf("archive task %s: %w", id, f.err)
+	}
+	return finishPass(root, id, &entry, &appended, &fail, &retErr)
+}
+
+// archiveTask moves the active task file to the archive and, when task moves
+// are committed (the project, or an external state repository), commits that
+// transition. A plain external folder gets the rename only. A file already at
+// the archive path with no active file is a move that a crash left uncommitted.
+// On failure it restores the active file and returns the failure to record.
+func archiveTask(root, id, taskPath, archive string) *failure {
+	layout := paths.For(root)
+	renamed := false
+	if _, e := os.Lstat(taskPath); e == nil {
+		if e = os.Rename(taskPath, archive); e != nil {
+			return &failure{outcome: "FAILED", stage: "archive", err: fmt.Errorf("move task to archive: %w", e)}
+		}
+		renamed = true
+	} else if _, ae := os.Lstat(archive); ae != nil {
+		return &failure{outcome: "FAILED", stage: "archive", err: fmt.Errorf("task %s is in neither active nor archive", id)}
+	}
+	restore := func() {
+		if renamed {
+			_ = os.Rename(archive, taskPath)
+		}
+	}
+	gitRoot := statecommit.GitRoot(layout)
+	if gitRoot == "" {
+		// State is a plain folder: the archive move is a plain rename.
+		return nil
 	}
 	archiveRel := paths.TaskFileRel("archive", filepath.Base(taskPath))
 	activeRel := paths.TaskFileRel("active", filepath.Base(taskPath))
 	stagePaths := []string{archiveRel}
-	if _, trackedErr := git(root, "ls-files", "--error-unmatch", activeRel); trackedErr == nil {
+	if _, trackedErr := git(gitRoot, "ls-files", "--error-unmatch", activeRel); trackedErr == nil {
 		stagePaths = append(stagePaths, activeRel)
 	} else {
 		// Claims are deliberately uncommitted. When active is untracked, the
 		// committed lifecycle transition is the tracked ready deletion plus the
 		// archive addition; the claimed active file is operational state.
 		readyRel := paths.TaskFileRel("ready", filepath.Base(taskPath))
-		if _, readyErr := git(root, "ls-files", "--error-unmatch", readyRel); readyErr == nil {
+		if _, readyErr := git(gitRoot, "ls-files", "--error-unmatch", readyRel); readyErr == nil {
 			stagePaths = append(stagePaths, readyRel)
 		} else {
-			_ = os.Rename(archive, taskPath)
-			fail = &failure{outcome: "FAILED", stage: "archive", err: fmt.Errorf("cannot identify tracked lifecycle deletion for %s", id)}
-			return fail.err
+			restore()
+			return &failure{outcome: "FAILED", stage: "archive", err: fmt.Errorf("cannot identify tracked lifecycle deletion for %s", id)}
 		}
 	}
+	message := "chore(tasks): archive integrated " + id
+	if layout.External() {
+		if e := statecommit.Commit(gitRoot, []string{message}, stagePaths); e != nil {
+			restore()
+			return &failure{outcome: "FAILED", stage: "archive", err: fmt.Errorf("commit archive transition: %w", e)}
+		}
+		return nil
+	}
 	addArgs := append([]string{"add", "-A", "--"}, stagePaths...)
-	if out, err := gitOutputErr(root, addArgs...); err != nil {
-		_ = os.Rename(archive, taskPath)
-		fail = &failure{outcome: "FAILED", stage: "archive", output: out, err: err}
-		return err
+	if out, err := gitOutputErr(gitRoot, addArgs...); err != nil {
+		restore()
+		return &failure{outcome: "FAILED", stage: "archive", output: out, err: err}
 	}
-	if out, err := gitOutputErr(root, "commit", "-m", "chore(tasks): archive integrated "+id); err != nil {
+	if out, err := gitOutputErr(gitRoot, "commit", "-m", message); err != nil {
 		resetArgs := append([]string{"reset", "--"}, stagePaths...)
-		_, _ = git(root, resetArgs...)
-		_ = os.Rename(archive, taskPath)
-		fail = &failure{outcome: "FAILED", stage: "archive", output: out, err: err}
-		return fmt.Errorf("commit archive transition: %w", err)
+		_, _ = git(gitRoot, resetArgs...)
+		restore()
+		return &failure{outcome: "FAILED", stage: "archive", output: out, err: fmt.Errorf("commit archive transition: %w", err)}
 	}
-	return finishPass(root, id, &entry, &appended, &fail, &retErr)
+	return nil
+}
+
+// recoverMerged finishes an integration whose project fast-forward succeeded
+// but whose archive move or state commit did not. The merge marker in the
+// state directory's integration evidence is the source of truth: when the last
+// marker has no PASS after it and its verified commit is in main, the next run
+// archives and commits, records PASS, and never merges again. It reports
+// whether it handled the run.
+func recoverMerged(root, id string) (handled bool, merged attempt, f *failure, err error) {
+	layout := paths.For(root)
+	if !layout.External() {
+		return false, attempt{}, nil, nil
+	}
+	b, e := os.ReadFile(layout.IntegrationEvidence(id))
+	if e != nil {
+		return false, attempt{}, nil, nil
+	}
+	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+	// Failed recovery attempts append records after the marker, so the marker
+	// counts until a PASS record follows it.
+	var last attempt
+	found := false
+	for _, line := range lines {
+		var rec attempt
+		if json.Unmarshal([]byte(line), &rec) != nil {
+			continue
+		}
+		switch rec.Outcome {
+		case "MERGED":
+			last, found = rec, true
+		case "PASS":
+			found = false
+		}
+	}
+	if !found || last.Verified == "" {
+		return false, attempt{}, nil, nil
+	}
+	if _, e = git(root, "merge-base", "--is-ancestor", last.Verified, "refs/heads/main"); e != nil {
+		return false, attempt{}, nil, nil
+	}
+	name := ""
+	for _, state := range []string{"active", "archive"} {
+		es, _ := os.ReadDir(layout.TaskDir(state))
+		for _, x := range es {
+			if !x.IsDir() && strings.HasPrefix(x.Name(), id+"-") && strings.HasSuffix(x.Name(), ".md") {
+				name = x.Name()
+				break
+			}
+		}
+		if name != "" {
+			break
+		}
+	}
+	if name == "" {
+		return true, last, &failure{outcome: "FAILED", stage: "archive", err: fmt.Errorf("task %s has a merge marker but no active or archived task file", id)}, fmt.Errorf("recover %s: no active or archived task file", id)
+	}
+	if fl := archiveTask(root, id, layout.TaskFile("active", name), layout.TaskFile("archive", name)); fl != nil {
+		return true, last, fl, fmt.Errorf("recover archive of %s: %w", id, fl.err)
+	}
+	return true, last, nil, nil
 }
 
 // finishPass records the PASS attempt after the archive move (and, in the
@@ -352,9 +468,13 @@ func finishPass(root, id string, entry *attempt, appended *bool, fail **failure,
 	entry.ExitCode = nil
 	entry.Output = ""
 	entry.Error = ""
+	recoveredNote := entry.Note
 	entry.Note = "Integration checks passed; lifecycle archive commit followed the feature commit."
 	if paths.For(root).External() {
 		entry.Note = "Integration checks passed; the task was archived in the external state directory."
+	}
+	if recoveredNote != "" {
+		entry.Note = recoveredNote
 	}
 	*appended = true
 	if e := appendRecord(root, id, *entry); e != nil {

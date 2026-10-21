@@ -133,9 +133,61 @@ func TestStateDirDiscovery(t *testing.T) {
 		t.Errorf("missing project_root: %+v, want exit 1 naming project_root", res)
 	}
 
-	// init and skill do not take the flag.
-	res = runStateEnv(t, binary, project, nil, "init", "--state-dir", byFlag)
+	// skill does not take the flag (init does, since TF-103).
+	res = runStateEnv(t, binary, project, nil, "skill", "--state-dir", byFlag)
 	if res.code != exitUsage {
-		t.Errorf("init --state-dir: %+v, want exit %d", res, exitUsage)
+		t.Errorf("skill --state-dir: %+v, want exit %d", res, exitUsage)
+	}
+}
+
+func TestInitStateDir(t *testing.T) {
+	binary := buildCLI(t)
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
+	project := initGitProject(t)
+	resolved, err := filepath.EvalSymlinks(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, asRepo := range []bool{false, true} {
+		state := filepath.Join(t.TempDir(), "state")
+		if err := os.MkdirAll(state, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if asRepo {
+			if out, err := exec.Command("git", "-C", state, "init", "-q").CombinedOutput(); err != nil {
+				t.Fatalf("git init: %v %s", err, out)
+			}
+		}
+		res := runStateEnv(t, binary, project, []string{"TF_STATE_DIR="}, "init", "--state-dir", state)
+		if res.code != 0 {
+			t.Fatalf("init --state-dir (repo=%v): %+v", asRepo, res)
+		}
+		data, err := os.ReadFile(filepath.Join(state, ".taskfactory", "config.toml"))
+		if err != nil || !strings.Contains(string(data), fmt.Sprintf("project_root = %q", resolved)) || !strings.Contains(string(data), "protocol_version = 1") {
+			t.Errorf("state config (repo=%v) = %q, %v", asRepo, data, err)
+		}
+		for _, d := range []string{"inbox", "ready", "active", "failed", "archive"} {
+			if info, err := os.Stat(filepath.Join(state, "tasks", d)); err != nil || !info.IsDir() {
+				t.Errorf("tasks/%s missing in the state dir (repo=%v): %v", d, asRepo, err)
+			}
+		}
+		ignore, ignoreErr := os.ReadFile(filepath.Join(state, ".gitignore"))
+		if asRepo != (ignoreErr == nil) || (asRepo && !strings.Contains(string(ignore), ".taskfactory/evidence/")) {
+			t.Errorf(".gitignore in the state dir (repo=%v) = %q, %v", asRepo, ignore, ignoreErr)
+		}
+		// Nothing in the project, and the state is usable by later commands.
+		for _, rel := range []string{"tasks", ".taskfactory", ".gitignore"} {
+			if _, err := os.Lstat(filepath.Join(project, rel)); !os.IsNotExist(err) {
+				t.Errorf("project contains %s: %v", rel, err)
+			}
+		}
+		if res := runStateEnv(t, binary, t.TempDir(), nil, "status", "--state-dir", state); res.code != 0 || !strings.Contains(res.stdout, "inbox: 0") {
+			t.Errorf("status on the new state dir (repo=%v): %+v", asRepo, res)
+		}
+	}
+	if !strings.Contains(commandHelps["init"], "--state-dir") {
+		t.Error("init help does not document --state-dir")
 	}
 }

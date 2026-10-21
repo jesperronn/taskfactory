@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"taskfactory/internal/paths"
+	"taskfactory/internal/statecommit"
 	"taskfactory/internal/taskvalidate"
 )
 
@@ -70,8 +71,18 @@ func PromoteWith(projectRoot, id string, opts Options) (string, error) {
 		return "", fmt.Errorf("resolve project root %s: %w", projectRoot, err)
 	}
 	layout := paths.For(root)
+	stateRepo := statecommit.IsRepo(layout)
+	// gitRoot is where task moves are committed: the project in the default
+	// layout, the state repository for an external one, and "" for a plain
+	// external folder, which gets renames only.
+	gitRoot := ""
 	if !layout.External() {
-		staged, err := git(root, "diff", "--cached", "--name-only")
+		gitRoot = root
+	} else if stateRepo {
+		gitRoot = layout.State
+	}
+	if gitRoot != "" {
+		staged, err := git(gitRoot, "diff", "--cached", "--name-only")
 		if err != nil {
 			return "", fmt.Errorf("inspect index: %w", err)
 		}
@@ -108,7 +119,7 @@ func PromoteWith(projectRoot, id string, opts Options) (string, error) {
 		}
 		if opts.Would != nil {
 			opts.Would("move task to %s", paths.TaskDirRel("ready"))
-			if !layout.External() {
+			if gitRoot != "" {
 				opts.Would("commit")
 			}
 		}
@@ -132,16 +143,16 @@ func PromoteWith(projectRoot, id string, opts Options) (string, error) {
 		return "", restore(fmt.Errorf("task tree is invalid after promoting %s: %s", id, diagnostics[0]))
 	}
 
-	if layout.External() {
+	if gitRoot == "" {
 		return readyRel, nil
 	}
 	stage := []string{readyRel}
-	if _, err := git(root, "ls-files", "--error-unmatch", "--", inboxRel); err == nil {
+	if _, err := git(gitRoot, "ls-files", "--error-unmatch", "--", inboxRel); err == nil {
 		stage = []string{inboxRel, readyRel}
 	}
-	if err := commitPaths(root, id, stage); err != nil {
+	if err := commitPaths(gitRoot, id, stage); err != nil {
 		// Unstage only the promoted paths so the index matches HEAD again.
-		if _, resetErr := git(root, append([]string{"reset", "-q", "--"}, stage...)...); resetErr != nil {
+		if _, resetErr := git(gitRoot, append([]string{"reset", "-q", "--"}, stage...)...); resetErr != nil {
 			err = errors.Join(err, fmt.Errorf("unstage promoted paths: %w", resetErr))
 		}
 		return "", restore(fmt.Errorf("commit promotion of %s: %w", id, err))

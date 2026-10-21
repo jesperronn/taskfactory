@@ -115,6 +115,21 @@ that exists today, including `requeue` for the failed branch.
    uses `docs/worker-instructions.md` from the claimed worktree when it
    exists. When it does not, the prompt carries built-in worker instructions
    and says so; `init` does not write the file.
+
+   To keep task state outside the project, run
+   `taskfactory init [path] --state-dir <dir>`. It writes the five `tasks/`
+   directories and `.taskfactory/config.toml` (with `project_root` naming the
+   code repository) in `<dir>` and nothing in the project; later commands find
+   it through `--state-dir <dir>` or `TF_STATE_DIR`. If `<dir>` is a Git
+   repository, `promote`, `fail`, `requeue` and the integrate archive step
+   commit their moves there (`git -C <dir>`, same messages, your git config;
+   signing is never overridden), the "tracked in HEAD" guards look at that
+   repository, and `init` adds the runtime paths to its `.gitignore`. If `<dir>`
+   is a plain folder, moves are plain renames. Integrate records a `MERGED`
+   marker in `<dir>/.taskfactory/integration-evidence/` after the project
+   fast-forward; if the archive move or state commit then fails or crashes, the
+   next `integrate <ID>` reads the marker, finishes the archive and commit, and
+   never merges twice.
 3. Plan. Write `tasks/inbox/TF-001-<slug>.md` with a `# TF-001: title`
    heading and the ready headings Goal, Dependencies, Scope, Constraints,
    Success criteria (each `### CN:` followed by one `Check:` line) and
@@ -891,7 +906,7 @@ The initial command direction is:
 taskfactory --help
 taskfactory --version
 
-taskfactory init [path]
+taskfactory init [path] [--state-dir <dir>]
 taskfactory status
 taskfactory validate
 taskfactory claim

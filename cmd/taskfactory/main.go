@@ -22,6 +22,7 @@ import (
 	"taskfactory/internal/paths"
 	"taskfactory/internal/promote"
 	"taskfactory/internal/requeue"
+	"taskfactory/internal/statecommit"
 	"taskfactory/internal/taskvalidate"
 	"taskfactory/internal/ui"
 	"taskfactory/internal/verify"
@@ -1185,7 +1186,7 @@ func projectRoot() (string, error) {
 }
 
 // initHelp is printed by "init --help" and "init -h".
-const initHelp = `Usage: taskfactory init [path]
+const initHelp = `Usage: taskfactory init [path] [--state-dir <dir>]
 
 Create the project configuration and the task state directories in the Git
 repository that contains path, which may be any directory inside the project
@@ -1196,6 +1197,16 @@ creates .gitignore, or appends to it, with the TaskFactory runtime paths
 (locks, evidence, logs and worktrees) that are not already listed; other lines
 are left alone and .taskfactory/config.toml is never ignored. Commit the
 configuration and .gitignore together before the first claim.
+
+With --state-dir <dir> the task state lives outside the project: init writes
+the five tasks/ directories and .taskfactory/config.toml in <dir>, with
+project_root naming the Git repository that contains path, and writes nothing in
+the project. If <dir> is itself a Git repository, promote, fail, requeue and the
+integrate archive step commit their moves there with your git config (signing is
+never overridden), and init adds the runtime paths to <dir>/.gitignore. If <dir>
+is a plain folder, moves are plain renames. Commit the config in <dir> before the
+first claim when it is a repository. Later commands find the state with
+--state-dir <dir> or TF_STATE_DIR.
 
 With --dry-run nothing changes.
 
@@ -1208,6 +1219,7 @@ Arguments:
 Flags:
   --verbose   write detail lines starting "verbose: " to stderr
   --dry-run   print what would change as "would: " lines and change nothing
+  --state-dir <path>  keep task state in this directory (default: the project)
   --help, -h  print this help and exit successfully
 
 Exit codes:
@@ -1278,6 +1290,9 @@ func initializeProject(target string, dryRunOn bool, out dryRun) error {
 	if dryRunOn {
 		plan = &initDryRun{out: out, root: root, seen: map[string]bool{}}
 	}
+	if stateDirFlag != "" {
+		return initializeExternalState(root, stateDirFlag, plan)
+	}
 	return initializeAt(root, plan)
 }
 
@@ -1286,6 +1301,85 @@ func initializeAt(root string, plan *initDryRun) error {
 		return err
 	}
 	return ensureGitignore(root, plan)
+}
+
+// initializeExternalState writes the state layout for a project whose task
+// state lives in stateDir: the five tasks/ directories, and a config with
+// project_root naming the code repository. Nothing is written in the project.
+// When stateDir is itself a git repository, its .gitignore gets the runtime
+// paths, so task moves can be committed there. An existing config is kept, and
+// must name its project_root.
+func initializeExternalState(project, dir string, plan *initDryRun) error {
+	state, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("resolve state directory %s: %w", dir, err)
+	}
+	if _, statErr := os.Stat(state); os.IsNotExist(statErr) {
+		if plan != nil {
+			plan.root = state
+			plan.wouldCreate(state)
+		} else if err := os.MkdirAll(state, 0o755); err != nil {
+			return fmt.Errorf("create state directory %s: %w", state, err)
+		}
+	}
+	if resolved, e := filepath.EvalSymlinks(state); e == nil {
+		state = resolved
+	}
+	if state == project {
+		return fmt.Errorf("state directory %s is the project itself; omit --state-dir for the default layout", state)
+	}
+	if plan != nil {
+		plan.root = state
+	}
+	verbosef("state directory %s", state)
+	layout := paths.Layout{Project: project, State: state}
+	configPath := layout.Config()
+	if _, err := os.Stat(configPath); err == nil {
+		if _, err := config.ProjectRootOf(state); err != nil {
+			return err
+		}
+		defer paths.Register(layout)()
+		if _, err := config.Load(project); err != nil {
+			return fmt.Errorf("existing configuration conflicts with protocol v1: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect configuration file %s: %w", configPath, err)
+	} else {
+		if plan != nil {
+			plan.wouldCreate(layout.Runtime())
+			plan.wouldCreate(configPath)
+		} else {
+			if err := os.MkdirAll(layout.Runtime(), 0o755); err != nil {
+				return fmt.Errorf("create configuration directory: %w", err)
+			}
+			verbosef("write %s", configPath)
+			content := fmt.Sprintf("project_root = %q\n\n%s", project, defaultConfig)
+			if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
+				return fmt.Errorf("create configuration file %s: %w", configPath, err)
+			}
+		}
+	}
+	for _, d := range append([]string{""}, taskStates...) {
+		path := layout.Tasks()
+		if d != "" {
+			path = layout.TaskDir(d)
+		}
+		if _, err := os.Stat(path); err == nil {
+			continue
+		}
+		if plan != nil {
+			plan.wouldCreate(path)
+			continue
+		}
+		verbosef("create directory %s", path)
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			return fmt.Errorf("create task state directory %s: %w", path, err)
+		}
+	}
+	if statecommit.IsRepo(layout) {
+		return ensureGitignore(state, plan)
+	}
+	return nil
 }
 
 // gitignoreComment and runtimeIgnorePaths are what init keeps in the project

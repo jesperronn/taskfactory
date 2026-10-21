@@ -533,7 +533,7 @@ func TestCompletionStateDir(t *testing.T) {
 				flag = &f
 			}
 		}
-		want := c.name != "completion" && c.name != "init" && c.name != "skill"
+		want := c.name != "completion" && c.name != "skill"
 		if (flag != nil) != want {
 			t.Errorf("%s: --state-dir in completion table = %v, want %v", c.name, flag != nil, want)
 			continue

@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"taskfactory/internal/paths"
+	"taskfactory/internal/statecommit"
 	"taskfactory/internal/taskvalidate"
 	"taskfactory/internal/verify"
 )
@@ -170,8 +171,17 @@ func FailWith(projectRoot, id string, opts Options, common CommonOptions) (strin
 		return "", fmt.Errorf("resolve project root %s: %w", projectRoot, err)
 	}
 	layout := paths.For(root)
+	// gitRoot is where the move is committed and where the tracked-in-HEAD
+	// guard looks: the project, the state repository, or "" for a plain
+	// external folder (renames only, no guard).
+	gitRoot := ""
 	if !layout.External() {
-		staged, err := git(root, "diff", "--cached", "--name-only")
+		gitRoot = root
+	} else if statecommit.IsRepo(layout) {
+		gitRoot = layout.State
+	}
+	if gitRoot != "" {
+		staged, err := git(gitRoot, "diff", "--cached", "--name-only")
 		if err != nil {
 			return "", fmt.Errorf("inspect index: %w", err)
 		}
@@ -209,8 +219,8 @@ func FailWith(projectRoot, id string, opts Options, common CommonOptions) (strin
 		return "", err
 	}
 	var stagePaths []string
-	if !layout.External() {
-		stagePaths, err = lifecyclePaths(root, id, activeRel, failedRel)
+	if gitRoot != "" {
+		stagePaths, err = lifecyclePaths(gitRoot, id, activeRel, failedRel)
 		if err != nil {
 			return "", err
 		}
@@ -222,7 +232,7 @@ func FailWith(projectRoot, id string, opts Options, common CommonOptions) (strin
 		}
 		if common.Would != nil {
 			common.Would("move task to %s", paths.TaskDirRel("failed"))
-			if !layout.External() {
+			if gitRoot != "" {
 				common.Would("commit")
 			}
 		}
@@ -243,12 +253,12 @@ func FailWith(projectRoot, id string, opts Options, common CommonOptions) (strin
 		return "", restore(fmt.Errorf("task tree is invalid after failing %s: %s", id, diagnostics[0]))
 	}
 
-	if layout.External() {
+	if gitRoot == "" {
 		return failedRel, nil
 	}
-	if err := commitPaths(root, id, stagePaths, opts); err != nil {
+	if err := commitPaths(gitRoot, id, stagePaths, opts); err != nil {
 		// Unstage only the moved paths so the index matches HEAD again.
-		if _, resetErr := git(root, append([]string{"reset", "-q", "--"}, stagePaths...)...); resetErr != nil {
+		if _, resetErr := git(gitRoot, append([]string{"reset", "-q", "--"}, stagePaths...)...); resetErr != nil {
 			err = errors.Join(err, fmt.Errorf("unstage failed paths: %w", resetErr))
 		}
 		return "", restore(fmt.Errorf("commit failure of %s: %w", id, err))

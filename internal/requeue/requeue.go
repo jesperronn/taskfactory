@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"taskfactory/internal/paths"
+	"taskfactory/internal/statecommit"
 	"taskfactory/internal/taskvalidate"
 	"taskfactory/internal/verify"
 )
@@ -203,8 +204,9 @@ func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 		return Result{}, fmt.Errorf("resolve project root %s: %w", projectRoot, err)
 	}
 	layout := paths.For(root)
-	if !layout.External() {
-		staged, err := git(root, "diff", "--cached", "--name-only")
+	gitRoot := statecommit.GitRoot(layout)
+	if gitRoot != "" {
+		staged, err := git(gitRoot, "diff", "--cached", "--name-only")
 		if err != nil {
 			return Result{}, fmt.Errorf("inspect index: %w", err)
 		}
@@ -260,8 +262,8 @@ func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 	}
 
 	stage := []string{targetRel}
-	if !layout.External() {
-		if _, err := git(root, "ls-files", "--error-unmatch", "--", failedRel); err == nil {
+	if gitRoot != "" {
+		if _, err := git(gitRoot, "ls-files", "--error-unmatch", "--", failedRel); err == nil {
 			stage = []string{failedRel, targetRel}
 		}
 	}
@@ -313,10 +315,10 @@ func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 		}
 	}
 
-	if !layout.External() {
-		if err := commitPaths(root, id, target, stage, asideRel, attempts, discarded); err != nil {
+	if gitRoot != "" {
+		if err := commitPaths(gitRoot, id, target, stage, asideRel, attempts, discarded); err != nil {
 			// Unstage only the moved paths so the index matches HEAD again.
-			if _, resetErr := git(root, append([]string{"reset", "-q", "--"}, stage...)...); resetErr != nil {
+			if _, resetErr := git(gitRoot, append([]string{"reset", "-q", "--"}, stage...)...); resetErr != nil {
 				err = errors.Join(err, fmt.Errorf("unstage requeued paths: %w", resetErr))
 			}
 			return Result{}, restore(fmt.Errorf("commit requeue of %s: %w", id, err))
@@ -372,7 +374,7 @@ func dryRun(root, id, target, targetRel string, plan cleanupPlan, newData []byte
 		if asideRel != "" {
 			opts.Would("rename evidence aside to %s", asideRel)
 		}
-		if !paths.For(root).External() {
+		if statecommit.GitRoot(paths.For(root)) != "" {
 			opts.Would("commit")
 		}
 		if plan.hasDir {
