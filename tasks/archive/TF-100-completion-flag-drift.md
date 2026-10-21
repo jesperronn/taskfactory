@@ -115,3 +115,11 @@ Run each named test above, `bin/test`, `bin/lint` and
 each exit code. In a scratch edit only, remove `--endpoint` from
 `completionSpecs`, show that `TestCompletionFlagsCoverHelp` fails naming
 `work` and `--endpoint`, then revert the edit. Report the grep output of C7.
+
+## Claim
+
+Owner: sonnet-worker-100
+Branch: task/TF-100
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-100
+Base commit: a7d7130042849432590e2f70a7a962c66600af57
+Started at: 2026-10-21T09:30:18Z
