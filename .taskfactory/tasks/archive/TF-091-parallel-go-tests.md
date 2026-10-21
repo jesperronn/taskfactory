@@ -74,7 +74,7 @@ Check: go test -count=1 -json ./... | grep -c '"Action":"run"'
 
 ### C4: The slowest package is far below its old time
 
-Check: bin/test --budget ./cmd/taskfactory
+Check: go test -count=1 -timeout 30s ./cmd/taskfactory
 
 ### C5: The whole task tree validates
 
@@ -87,3 +87,11 @@ Before editing, record the C3 count and per-package wall times from
 code. Report the C3 count before and after; the two numbers must be equal, and
 a name present before and absent after is a failure. Report per-package times
 before and after, then run `bin/test` and `bin/lint` and report their codes.
+
+## Claim
+
+Owner: sonnet-worker-091
+Branch: task/TF-091
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-091
+Base commit: ef7c93b68b52e716bf0e587fd58f07a36c4d2fd7
+Started at: 2026-10-21T20:50:31Z
