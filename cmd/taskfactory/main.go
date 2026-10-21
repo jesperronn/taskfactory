@@ -19,6 +19,7 @@ import (
 	"taskfactory/internal/config"
 	"taskfactory/internal/fail"
 	"taskfactory/internal/integrate"
+	"taskfactory/internal/newtask"
 	"taskfactory/internal/paths"
 	"taskfactory/internal/promote"
 	"taskfactory/internal/requeue"
@@ -46,6 +47,7 @@ var commandSummaries = []commandSummary{
 	{"init", "init [path]", "initialize project config"},
 	{"status", "status", "show tasks by state"},
 	{"validate", "validate [path...]", "check task files"},
+	{"new", `new "<title>"`, "scaffold an inbox task skeleton"},
 	{"claim", "claim <ID> --owner <name>", "claim a ready task"},
 	{"verify", "verify <ID>", "run a task's checks"},
 	{"integrate", "integrate <ID>", "fast-forward a verified task"},
@@ -63,6 +65,7 @@ var commandHelps = map[string]string{
 	"init":       initHelp,
 	"status":     statusHelp,
 	"validate":   validateHelp,
+	"new":        newHelp,
 	"claim":      claimHelp,
 	"verify":     verifyHelp,
 	"integrate":  integrateHelp,
@@ -272,7 +275,7 @@ Exit codes:
 const promoteHelp = `Usage: taskfactory promote <ID>
 
 Promote the inbox task <ID> to tasks/ready when its complete executable contract
-validates. The task file moves unchanged from tasks/inbox to tasks/ready, the
+validates and no TODO marker (left by "taskfactory new") remains. The task file moves unchanged from tasks/inbox to tasks/ready, the
 inbox, ready, active and failed task files are validated, and only the two task
 paths are committed. Any refusal or failure restores the file to tasks/inbox.
 
@@ -548,6 +551,60 @@ func requeueHelpText() string {
 	return requeueHelp + "\nClaimed failed tasks in this project (human decision needed): " + strings.Join(ids, ", ") + "\n"
 }
 
+// newHelp is printed by "new --help" and "new -h".
+const newHelp = `Usage: taskfactory new "<title>"
+
+Write a ready-to-edit task skeleton to tasks/inbox/<ID>-<slug>.md. The ID is the
+next free TF-NNN across every state directory, the archive included. The slug is
+the title in lowercase letters and digits with single hyphens. The skeleton has
+every ready heading in order, one "### C1:" criterion with a Check line, and
+TODO markers where prose is needed. It passes "taskfactory validate" as an inbox
+file, and "taskfactory promote" refuses it while any TODO marker remains.
+
+An empty title, or a title with no letters or digits, is refused. The command
+writes only that one file, creates no commit, and refuses to overwrite a file.
+
+With --dry-run nothing changes.
+
+Next step: edit the file, then taskfactory validate and taskfactory promote <ID>.
+
+Flags:
+  --verbose   write detail lines starting "verbose: " to stderr
+  --dry-run   print what would change as "would: " lines and change nothing
+  --state-dir <path>  keep task state in this directory (default: the project;
+                      TF_STATE_DIR is used when the flag is absent)
+  --help, -h  print this help and exit successfully
+
+Exit codes:
+  0  the skeleton was written
+  1  the command failed, for example the project could not be found
+  2  invalid usage, such as a missing, empty or unusable title
+`
+
+func newTask(args []string, common commonFlags, dry dryRun) error {
+	if len(args) != 1 {
+		return newtask.UsageErrorf(`usage: taskfactory new "<title>"`)
+	}
+	if strings.HasPrefix(args[0], "-") {
+		return newtask.UsageErrorf(`unknown flag %q; usage: taskfactory new "<title>"`, args[0])
+	}
+	root, err := projectRoot()
+	if err != nil {
+		return err
+	}
+	res, err := newtask.Create(root, args[0], newtask.Options{DryRun: common.DryRun, Verbose: verboseFunc(), Would: dry.would})
+	if err != nil {
+		return err
+	}
+	if common.DryRun {
+		dry.done()
+		return nil
+	}
+	fmt.Fprintf(os.Stdout, "created %s\n", res.Rel)
+	printNextOnSuccess(os.Stdout, ui.For(os.Stdout), "new", res.ID)
+	return nil
+}
+
 func promoteTask(args []string, common commonFlags, dry dryRun) error {
 	root, err := projectRoot()
 	if err != nil {
@@ -744,6 +801,18 @@ func main() {
 		}
 		fmt.Fprintf(os.Stdout, "integrated %s\n", args[1])
 		printNextOnSuccess(os.Stdout, stdoutStyle, "integrate", args[1])
+		return
+	}
+	if len(args) > 0 && args[0] == "new" {
+		if err := newTask(args[1:], common, dry); err != nil {
+			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory new", err.Error()))
+			var usage newtask.UsageError
+			if errors.As(err, &usage) {
+				os.Exit(exitUsage)
+			}
+			printNextOnFailure(os.Stderr, stderrStyle, "new", "")
+			os.Exit(1)
+		}
 		return
 	}
 	if len(args) > 0 && args[0] == "promote" {

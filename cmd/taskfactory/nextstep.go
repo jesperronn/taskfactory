@@ -22,6 +22,7 @@ type hint struct {
 var nextSteps = map[string]hint{
 	"status":        {"taskfactory validate", "run taskfactory init at the repo root"},
 	"validate":      {"taskfactory promote <ID> or claim <ID>", "fix the files, rerun taskfactory validate"},
+	"new":           {"edit the file, then taskfactory validate and taskfactory promote <ID>", "give a title with letters or digits, run inside the project"},
 	"promote":       {"taskfactory claim <ID> --owner <name>", "fix tasks/inbox, rerun taskfactory promote <ID>"},
 	"claim":         {"taskfactory work <ID> --adapter <name> --model <id>", "taskfactory status shows the task state"},
 	"work":          {"taskfactory verify <ID>", ""},

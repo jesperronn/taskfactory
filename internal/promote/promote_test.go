@@ -389,3 +389,28 @@ func TestSigningOverrideAbsentFromProductionSources(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPromoteRefusesTodo(t *testing.T) {
+	root := newRepo(t)
+	task := strings.Replace(validTask("TF-030", "todo"), "Make the example change.", "TODO: state the outcome.", 1)
+	writeTask(t, root, "inbox", "TF-030-todo.md", task)
+	commitAll(t, root, "setup")
+	before := snapshotTasks(t, root)
+	beforeHead := head(t, root)
+
+	for _, opts := range []Options{{}, {DryRun: true}} {
+		_, err := PromoteWith(root, "TF-030", opts)
+		if err == nil || !strings.Contains(err.Error(), "TODO marker") || !strings.Contains(err.Error(), "line 5") {
+			t.Fatalf("PromoteWith(dry=%v) error = %v, want a TODO refusal naming line 5", opts.DryRun, err)
+		}
+	}
+	if !sameFiles(before, snapshotTasks(t, root)) || head(t, root) != beforeHead {
+		t.Fatal("refusal changed files or HEAD")
+	}
+	// Once the marker is replaced the same file promotes.
+	writeTask(t, root, "inbox", "TF-030-todo.md", validTask("TF-030", "todo"))
+	commitAll(t, root, "filled in")
+	if _, err := Promote(root, "TF-030"); err != nil {
+		t.Fatalf("Promote after filling in: %v", err)
+	}
+}

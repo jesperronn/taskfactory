@@ -19,6 +19,25 @@ import (
 
 var idPattern = regexp.MustCompile(`^TF-[0-9]{3}$`)
 
+// todoPattern matches the TODO marker that "taskfactory new" leaves where prose
+// is still needed.
+var todoPattern = regexp.MustCompile(`\bTODO\b`)
+
+// refuseTodo refuses a task file that still has a TODO marker, naming the first
+// line. The task is not moved.
+func refuseTodo(id, abs, rel string) error {
+	data, err := os.ReadFile(abs)
+	if err != nil {
+		return fmt.Errorf("read inbox task %s: %w", rel, err)
+	}
+	for i, line := range strings.Split(string(data), "\n") {
+		if todoPattern.MatchString(line) {
+			return fmt.Errorf("refusing to promote %s: %s line %d still has a TODO marker; replace every TODO with real content", id, rel, i+1)
+		}
+	}
+	return nil
+}
+
 // otherStates are the state directories that must not hold the task being
 // promoted. Promotion is refused when any of them contains a file for its ID.
 var otherStates = []string{"ready", "active", "failed", "archive"}
@@ -111,6 +130,10 @@ func PromoteWith(projectRoot, id string, opts Options) (string, error) {
 		return "", fmt.Errorf("refusing to promote %s: %s already exists", id, readyRel)
 	} else if !os.IsNotExist(err) {
 		return "", fmt.Errorf("inspect ready path %s: %w", readyRel, err)
+	}
+
+	if err := refuseTodo(id, inboxAbs, inboxRel); err != nil {
+		return "", err
 	}
 
 	if opts.DryRun {

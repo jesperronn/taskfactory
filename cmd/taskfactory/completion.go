@@ -42,6 +42,7 @@ var completionSpecs = []completionSpec{
 	{Command: "init", Positional: "path"},
 	{Command: "status", Positional: "none"},
 	{Command: "validate", Positional: "paths"},
+	{Command: "new", Positional: "none"},
 	{Command: "promote", Positional: "ids:inbox"},
 	{Command: "claim", Positional: "ids:ready", Flags: []completionFlag{{Name: "--owner", Free: true}}},
 	{Command: "work", Positional: "ids:active", Flags: []completionFlag{

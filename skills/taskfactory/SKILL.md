@@ -129,6 +129,9 @@ Rules:
 
 ## Planner
 
+- Start a new inbox item with `taskfactory new "<title>"`. It writes the
+  skeleton `tasks/inbox/<ID>-<slug>.md` with the next free ID and `TODO` markers
+  and commits nothing; `promote` refuses it until every `TODO` is replaced.
 - Refine inbox items into ready contracts using the template above.
 - Run `taskfactory promote <ID>` to move the single inbox file for that ID to
   `tasks/ready/`. It validates the file against the ready contract, validates

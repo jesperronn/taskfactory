@@ -136,7 +136,10 @@ that exists today, including `requeue` for the failed branch.
    fast-forward; if the archive move or state commit then fails or crashes, the
    next `integrate <ID>` reads the marker, finishes the archive and commit, and
    never merges twice.
-3. Plan. Write `tasks/inbox/TF-001-<slug>.md` with a `# TF-001: title`
+3. Plan. Run `taskfactory new "Fix the greeting"` to write a skeleton to
+   `tasks/inbox/` with the next free ID (archive included), every ready heading
+   and `TODO` markers; `promote` refuses the file until every `TODO` is replaced.
+   Or write `tasks/inbox/TF-001-<slug>.md` by hand with a `# TF-001: title`
    heading and the ready headings Goal, Dependencies, Scope, Constraints,
    Success criteria (each `### CN:` followed by one `Check:` line) and
    Verification. Dependencies is exactly `None`, or one `- TF-NNN` line per
@@ -915,6 +918,7 @@ taskfactory --version
 taskfactory init [path] [--state-dir <dir>]
 taskfactory status
 taskfactory validate
+taskfactory new "<title>"
 taskfactory claim
 taskfactory verify
 taskfactory integrate
