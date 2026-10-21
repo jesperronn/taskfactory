@@ -158,7 +158,7 @@ run_shell_test() {
 # run_go_tests PKG... runs go test for the packages and checks the total
 # time against the budget when --budget is set.
 run_go_tests() {
-  local out start elapsed
+  local out start elapsed go_status=0 pkg_ms
   printf '==> go test %s\n' "$*"
   if (( ! budget )); then
     if ! go test "$@"; then
@@ -169,20 +169,38 @@ run_go_tests() {
   fi
   out=$(mktemp)
   start=$(now_ms)
-  if ! go test -count=1 -v "$@" > "${out}" 2>&1; then
-    cat "${out}"
+  go test -count=1 -json "$@" > "${out}" 2>&1 || go_status=$?
+  elapsed=$(( $(now_ms) - start ))
+  # A package that reports a longer time than the wall clock sets the total.
+  pkg_ms=$(perl -MJSON::PP -e '
+    my $max = 0;
+    while (<STDIN>) {
+      my $d = eval { JSON::PP::decode_json($_) };
+      next unless ref $d eq "HASH" && !defined $d->{Test} && defined $d->{Elapsed};
+      $max = $d->{Elapsed} if $d->{Elapsed} > $max;
+    }
+    printf "%d\n", $max * 1000;' < "${out}")
+  if (( pkg_ms > elapsed )); then elapsed=${pkg_ms}; fi
+  # Print the test output text from the JSON stream (non-JSON lines as is).
+  perl -MJSON::PP -e '
+    while (<STDIN>) {
+      my $d = eval { JSON::PP::decode_json($_) };
+      if (ref $d eq "HASH") { print $d->{Output} if defined $d->{Output}; }
+      else { print; }
+    }' < "${out}"
+  if (( go_status != 0 )); then
     printf 'FAIL: Go tests: go test %s\n' "$*" >&2
     failed=1
   fi
-  elapsed=$(( $(now_ms) - start ))
   if (( elapsed > go_total_limit )); then
     printf 'FAIL: budget: Go tests took %sms, over the %sms limit; slowest tests:\n' "${elapsed}" "${go_total_limit}" >&2
-    awk '/--- (PASS|FAIL): / {
-      if (match($0, /\([0-9.]+s\)/)) {
-        secs = substr($0, RSTART + 1, RLENGTH - 2)
-        print secs, $3
-      }
-    }' "${out}" | sort -rn | head -5 >&2
+    perl -MJSON::PP -e '
+      while (<STDIN>) {
+        my $d = eval { JSON::PP::decode_json($_) };
+        next unless ref $d eq "HASH" && $d->{Test} && defined $d->{Elapsed};
+        next unless $d->{Action} =~ /^(pass|fail)$/;
+        printf "%.2fs %s %s\n", $d->{Elapsed}, $d->{Package} // "", $d->{Test};
+      }' < "${out}" | sort -rn | head -5 >&2
     failed=1
   fi
   rm -f "${out}"

@@ -240,3 +240,28 @@ budget_output=$(cd / && "${fixture_root}/budget/bin/test" --budget bin/slow.test
 assert_status "${budget_status}" 1 '--budget fails a shell test with a case over 1s'
 assert_contains "${budget_output}" 'budget: bin/slow.test.sh has cases over 1.000s' '--budget names the slow test file'
 assert_contains "${budget_output}" '2.500s [PASS] slow case' '--budget prints the slow case'
+
+# --budget parses go test -json and names a slow Go test.
+new_fixture gobudget
+: > "${fixture_root}/gobudget/go.mod"
+mkdir -p "${fixture_root}/gobudget/pkg" "${fixture_root}/gobudget/stubs"
+: > "${fixture_root}/gobudget/pkg/pkg.go"
+cat > "${fixture_root}/gobudget/stubs/go" <<'EOF2'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${GO_LOG}"
+printf '{"Action":"pass","Package":"x/pkg","Test":"TestSlowOne","Elapsed":%s}\n' "${SLOW_ELAPSED}"
+printf '{"Action":"pass","Package":"x/pkg","Test":"TestFast","Elapsed":0.01}\n'
+printf '{"Action":"pass","Package":"x/pkg","Elapsed":%s}\n' "${SLOW_ELAPSED}"
+EOF2
+chmod +x "${fixture_root}/gobudget/stubs/go"
+gobudget_run() {
+  budget_status=0
+  budget_output=$(cd / && PATH="${fixture_root}/gobudget/stubs:${PATH}" GO_LOG="${fixture_root}/gobudget-go" SLOW_ELAPSED="$1" "${fixture_root}/gobudget/bin/test" --budget pkg 2>&1) || budget_status=$?
+}
+gobudget_run 0.02
+assert_status "${budget_status}" 0 '--budget passes fast Go tests'
+assert_contains "$(cat "${fixture_root}/gobudget-go")" 'test -count=1 -json ./pkg' '--budget runs go test -json'
+gobudget_run 6.5
+assert_status "${budget_status}" 1 '--budget fails Go tests over 5s in total'
+assert_contains "${budget_output}" 'budget: Go tests took 6500ms, over the 5000ms limit' '--budget reports the Go total'
+assert_contains "${budget_output}" '6.50s x/pkg TestSlowOne' '--budget names the slow Go test and its time'
