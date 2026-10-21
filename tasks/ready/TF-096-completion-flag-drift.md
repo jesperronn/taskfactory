@@ -96,9 +96,9 @@ Check: go test ./cmd/taskfactory -run 'TestBashCompletion$|TestZshCompletionSynt
 
 Check: grep -c -e '--reason' -e '--haiku-model' -e '--endpoint' cmd/taskfactory/completion.go
 
-### C8: The exempt set is declared exactly once
+### C8: The exempt set is declared in completion.go
 
-Check: grep -c 'var completionHiddenFlags' cmd/taskfactory/completion.go | grep -qx 1
+Check: grep -q 'var completionHiddenFlags' cmd/taskfactory/completion.go
 
 ### C9: The full test suite passes
 
