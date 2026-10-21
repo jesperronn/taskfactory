@@ -53,3 +53,37 @@ testlib_stamp() {
     printf "[TIME] %7.3fs total\n", time - $start;
   '
 }
+
+# testlib_install_go_stub DIR: writes DIR/go, a stand-in for `go` that makes
+# `go build` instant. It writes a small script at the -o path that prints
+# "taskfactory version <V>" for --version, where <V> is read from the
+# -X main.version=<V> linker flag, so a test still sees the arguments the
+# wrapper passed. Every other go command, and every call with
+# TESTLIB_REAL_GO set, runs the real go. Put DIR first on PATH to use it. Keep
+# one real build per test file by setting TESTLIB_REAL_GO=1 for that call.
+testlib_install_go_stub() {
+  local testlib_dir=$1 testlib_real_go
+  testlib_real_go=$(command -v go)
+  cat > "${testlib_dir}/go" <<STUB
+#!/usr/bin/env bash
+if [[ -n "\${TESTLIB_REAL_GO:-}" || "\${1:-}" != build ]]; then
+  exec "${testlib_real_go}" "\$@"
+fi
+shift
+stub_out="" stub_version=""
+while (( \$# )); do
+  case "\$1" in
+    -o) stub_out=\$2; shift ;;
+    -ldflags)
+      case "\$2" in *main.version=*) stub_version=\${2##*main.version=}; stub_version=\${stub_version%% *} ;; esac
+      shift ;;
+  esac
+  shift
+done
+[[ -n "\${stub_out}" ]] || exit 2
+mkdir -p "\$(dirname "\${stub_out}")" || exit 1
+printf '#!/usr/bin/env bash\ncase "\${1:-}" in\n  --version) echo "taskfactory version %s" ;;\n  --help) echo "taskfactory stub help" ;;\nesac\n' "\${stub_version}" > "\${stub_out}"
+chmod +x "\${stub_out}"
+STUB
+  chmod +x "${testlib_dir}/go"
+}

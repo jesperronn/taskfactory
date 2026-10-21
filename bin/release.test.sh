@@ -55,19 +55,28 @@ chmod +x "${stub}"
 
 # new_fixture <name>: sets fx (work repo) and origin (bare repo). main is
 # pushed to origin and has one feat commit after the initial chore commit.
+# The template repository pair is built once with git; each fixture is a copy of
+# it with the origin URL repointed, which costs three processes instead of ten.
+fixture_template="${tmp}/template"
 new_fixture() {
   local name=$1
   origin="${tmp}/${name}-origin.git"
   fx="${tmp}/${name}"
-  git init -q --bare -b main "${origin}"
-  git init -q -b main "${fx}"
-  git -C "${fx}" config user.name Tester
-  git -C "${fx}" config user.email tester@example.com
-  git -C "${fx}" config commit.gpgsign false
-  git -C "${fx}" remote add origin "${origin}"
-  git -C "${fx}" commit -q --allow-empty -m "chore: start"
-  git -C "${fx}" commit -q --allow-empty -m "fix: first fix"
-  git -C "${fx}" push -q origin main
+  if [[ ! -d "${fixture_template}" ]]; then
+    mkdir "${fixture_template}"
+    git init -q --bare -b main "${fixture_template}/origin.git"
+    git init -q -b main "${fixture_template}/work"
+    git -C "${fixture_template}/work" config user.name Tester
+    git -C "${fixture_template}/work" config user.email tester@example.com
+    git -C "${fixture_template}/work" config commit.gpgsign false
+    git -C "${fixture_template}/work" remote add origin "${fixture_template}/origin.git"
+    git -C "${fixture_template}/work" commit -q --allow-empty -m "chore: start"
+    git -C "${fixture_template}/work" commit -q --allow-empty -m "fix: first fix"
+    git -C "${fixture_template}/work" push -q origin main
+  fi
+  cp -R "${fixture_template}/origin.git" "${origin}"
+  cp -R "${fixture_template}/work" "${fx}"
+  git -C "${fx}" remote set-url origin "${origin}"
 }
 commit() { git -C "${fx}" commit -q --allow-empty -m "$1"; git -C "${fx}" push -q origin main; }
 tag_old() { git -C "${fx}" tag -a "$1" -m "old $1"; }
@@ -95,9 +104,12 @@ if want dry-run; then
   assert_has "${out}" "Dry run: nothing was changed" "dry run says nothing changed"
   assert_has "${out}" "last release tag: none" "first release has no last tag"
   assert_eq "$(git -C "${fx}" tag --list)" "" "dry run creates no tag"
-  # One real, small package run (cross-build of the real project).
+  # One real, small package run (a real cross-build of the real project). The
+  # test-only TF_PACKAGE_TARGETS limits it to the one target the case names;
+  # bin/package.test.sh covers the full set of four archives.
   status=0
-  out=$(RELEASE_REPO_DIR="${fx}" RELEASE_TEST_CMD=true RELEASE_LINT_CMD=true "${release}" v1.0.0-rc.1 2>&1) || status=$?
+  out=$(RELEASE_REPO_DIR="${fx}" RELEASE_TEST_CMD=true RELEASE_LINT_CMD=true TF_PACKAGE_TARGETS=linux/arm64 \
+    "${release}" v1.0.0-rc.1 2>&1) || status=$?
   if [[ ${status} -eq 0 ]]; then
     assert_has "${out}" "taskfactory_v1.0.0-rc.1_linux_arm64.tar.gz" "real bin/package names the linux archive"
   else
@@ -283,7 +295,7 @@ echo "$*" >> "${FAKE_GH_DIR}/calls.log"
 [[ "$1" == release ]] || exit 3
 case "$2" in
   view)
-    c=$(cat "${FAKE_GH_DIR}/views" 2>/dev/null || echo 0)
+    c=0; [[ ! -f "${FAKE_GH_DIR}/views" ]] || c=$(<"${FAKE_GH_DIR}/views")
     c=$((c + 1)); echo "${c}" > "${FAKE_GH_DIR}/views"
     if [[ -n "${FAKE_GH_VIEW_FAIL:-}" ]]; then echo "HTTP 500" >&2; exit 1; fi
     if [[ -n "${FAKE_GH_APPEAR_AT:-}" && ${c} -ge ${FAKE_GH_APPEAR_AT} && ! -f "${FAKE_GH_DIR}/exists" ]]; then
@@ -318,15 +330,17 @@ gh_calls() { cat "${FAKE_GH_DIR}/calls.log"; }
 gh_count() { grep -c "$1" "${FAKE_GH_DIR}/calls.log" || true; }
 sign_fixture() { # signed tagging via a stand-in gpg.program
   local g="${tmp}/gpg-pub-stub"
-  cat > "${g}" <<'GPG'
+  if [[ ! -x "${g}" ]]; then
+    cat > "${g}" <<'GPG'
 #!/usr/bin/env bash
 cat > /dev/null
 echo "[GNUPG:] SIG_CREATED D 1 8 00 0 0 0 0" >&2
 printf '%s\n' "-----BEGIN PGP SIGNATURE-----" stub "-----END PGP SIGNATURE-----"
 GPG
-  chmod +x "${g}"
-  git -C "${fx}" config tag.gpgSign true
-  git -C "${fx}" config gpg.program "${g}"
+    chmod +x "${g}"
+  fi
+  # Two settings written to the repository config, with no git processes.
+  printf '[tag]\n\tgpgSign = true\n[gpg]\n\tprogram = %s\n' "${g}" >> "${fx}/.git/config"
 }
 
 if want publish-needs-flag; then

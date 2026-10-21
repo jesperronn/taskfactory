@@ -40,6 +40,16 @@ else
   sums_check=(shasum -a 256 -c)
 fi
 
+# A stand-in go is first on PATH, so the four cross builds are instant and write
+# a fake binary that reports the version bin/package passed. Archive layout,
+# checksums, version checks and refusals all run for real. The one real go build
+# is the "host binary prints the version" case: it sets TESTLIB_REAL_GO=1 and
+# builds the whole package once for real.
+stub_bin="${tmp}/stub-bin"
+mkdir -p "${stub_bin}"
+testlib_install_go_stub "${stub_bin}"
+export PATH="${stub_bin}:${PATH}"
+
 # Build once and reuse for the sections that inspect archives.
 out="${tmp}/out"
 "${repo_root}/bin/package" "${v}" "${out}" >"${tmp}/package.log" 2>&1 || { cat "${tmp}/package.log" >&2; fail "bin/package succeeds"; }
@@ -66,8 +76,14 @@ if want version; then
     arm64|aarch64) arch=arm64 ;;
     *) fail "unsupported host arch $(uname -m)" ;;
   esac
+  # The one real build, for the host target only (TF_PACKAGE_TARGETS).
+  # -trimpath is what bin/package passes already, so Go reuses compiled
+  # packages and only one link is paid.
+  real_out="${tmp}/real-out"
+  TF_PACKAGE_TARGETS="${os}/${arch}" TESTLIB_REAL_GO=1 "${repo_root}/bin/package" "${v}" "${real_out}" >"${tmp}/real-package.log" 2>&1 || { cat "${tmp}/real-package.log" >&2; fail "real bin/package succeeds"; }
+  pass "real bin/package build succeeds"
   mkdir "${tmp}/host"
-  tar -xzf "${out}/taskfactory_${v}_${os}_${arch}.tar.gz" -C "${tmp}/host"
+  tar -xzf "${real_out}/taskfactory_${v}_${os}_${arch}.tar.gz" -C "${tmp}/host"
   assert_eq "$("${tmp}/host/taskfactory" --version)" "taskfactory version ${v}" "host binary prints the version"
 fi
 

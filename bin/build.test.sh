@@ -28,6 +28,15 @@ done
 fixture_root=$(mktemp -d)
 trap 'rm -rf "${fixture_root}"' EXIT
 
+# Most scenarios put a stand-in go first on PATH: it records the version bin/build
+# passes and writes a small fake binary. The tagged scenario sets
+# TESTLIB_REAL_GO=1 for one real go build, so the real compiler is still
+# exercised end to end.
+stub_bin="${fixture_root}/stub-bin"
+mkdir -p "${stub_bin}"
+testlib_install_go_stub "${stub_bin}"
+export PATH="${stub_bin}:${PATH}"
+
 assert_contains() {
   local value=$1
   local expected=$2
@@ -50,27 +59,38 @@ assert_status() {
   printf '[PASS] %s\n' "${context}"
 }
 
-# new_fixture copies only the Go module and bin/build into a fresh directory.
+# new_fixture copies bin/build and the module files into a fresh directory. A
+# second argument, real, also copies the Go sources for a real go build.
 new_fixture() {
   local name=$1
   mkdir -p "${fixture_root}/${name}/bin"
   cp "${repo_root}/bin/build" "${fixture_root}/${name}/bin/build"
   cp "${repo_root}/go.mod" "${repo_root}/go.sum" "${fixture_root}/${name}/"
-  cp -R "${repo_root}/cmd" "${repo_root}/internal" "${repo_root}/skills" "${fixture_root}/${name}/"
+  if [[ "${2:-}" == real ]]; then
+    cp -R "${repo_root}/cmd" "${repo_root}/internal" "${repo_root}/skills" "${fixture_root}/${name}/"
+  fi
 }
 
 # git_fixture creates a fixture that is its own Git repository with one commit.
+# The repository is built once as a template and copied, so a scenario pays for
+# one cp instead of git init, add and commit. Go sources for a real build are
+# copied in as untracked files, which do not change git describe --dirty.
 git_fixture() {
   local name=$1
-  local dir="${fixture_root}/${name}"
-  new_fixture "${name}"
-  git -C "${dir}" init --quiet
-  git -C "${dir}" config commit.gpgsign false
-  git -C "${dir}" config tag.gpgsign false
-  git -C "${dir}" config user.name test
-  git -C "${dir}" config user.email test@example.invalid
-  git -C "${dir}" add -A
-  git -C "${dir}" commit --quiet -m fixture
+  local template="${fixture_root}/template"
+  if [[ ! -d "${template}" ]]; then
+    new_fixture template
+    git -C "${template}" init --quiet
+    # One write instead of four git config calls.
+    printf '[commit]\n\tgpgsign = false\n[tag]\n\tgpgsign = false\n[user]\n\tname = test\n\temail = test@example.invalid\n' \
+      >>"${template}/.git/config"
+    git -C "${template}" add -A
+    git -C "${template}" commit --quiet -m fixture
+  fi
+  cp -R "${template}" "${fixture_root}/${name}"
+  if [[ "${2:-}" == real ]]; then
+    cp -R "${repo_root}/cmd" "${repo_root}/internal" "${repo_root}/skills" "${fixture_root}/${name}/"
+  fi
 }
 
 # check_version builds in the fixture and checks the printed and embedded version.
@@ -85,10 +105,12 @@ check_version() {
   assert_contains "${version_output}" "taskfactory version ${expected}" "${name} PASS binary reports ${expected}"
 }
 
+# The one real go build: a real binary must report the embedded version.
 scenario_tagged() {
-  git_fixture tagged
+  git_fixture tagged real
   git -C "${fixture_root}/tagged" tag -a -m release v1.2.0
-  check_version tagged v1.2.0
+  printf '[PASS] tagged PASS fixture with real sources is ready\n'
+  TESTLIB_REAL_GO=1 GOFLAGS=-trimpath check_version tagged v1.2.0
 }
 
 scenario_untagged() {

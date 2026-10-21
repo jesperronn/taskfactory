@@ -8,10 +8,12 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 repo_dir=$PWD
 
 # tasksdir scenario: a project whose config sets tasks_dir under .taskfactory.
-# It runs the real, pinned mdsmith with the repository's .mdsmith.yml, so it
-# proves that Markdown under .taskfactory/tasks is linted while a worktree copy
-# under .taskfactory/worktrees stays ignored. Only the taskfactory and go vet
-# calls are recorded instead of run.
+# Its first case runs the real, pinned mdsmith with the repository's
+# .mdsmith.yml, so it proves that Markdown under .taskfactory/tasks is linted
+# while a worktree copy under .taskfactory/worktrees stays ignored. The other
+# cases only check what bin/lint does with mdsmith's exit status, so mdsmith is
+# a stub there (MD_STUB_EXIT). The taskfactory and go vet calls are recorded
+# instead of run.
 run_tasksdir_scenario() {
   local real_go dir project stubs status output tf_file
   real_go=$(command -v go)
@@ -24,7 +26,10 @@ run_tasksdir_scenario() {
   cat > "$stubs/go" <<EOF
 #!/usr/bin/env bash
 case "\$*" in
-  run\ github.com/jeduden/mdsmith/*) exec "$real_go" "\$@" ;;
+  run\ github.com/jeduden/mdsmith/*)
+    if [[ -n "\${MD_REAL:-}" ]]; then exec "$real_go" "\$@"; fi
+    printf '%s\n' "\$*" >> "$dir/mdsmith-calls"
+    exit "\${MD_STUB_EXIT:-0}" ;;
   vet\ *) exit 0 ;;
   run\ ./cmd/taskfactory\ *) printf '%s\n' "\$*" >> "$tf_file"; exit 0 ;;
   *) echo "unexpected go call: \$*" >&2; exit 99 ;;
@@ -44,21 +49,28 @@ EOF
     status=0
     output=$(cd "$project" && PATH="$stubs:$PATH" bin/lint "$@" 2>&1) || status=$?
   }
+  # The shellcheck stub only records; the real one runs in lint.real-mdsmith.test.sh.
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$stubs/shellcheck"
+  chmod +x "$stubs/shellcheck"
   tasksdir_fail() {
     printf '[FAIL] tasksdir %s: exit=%s output=%s\n' "$1" "$status" "$output" >&2
     rm -rf "$dir"
     exit 1
   }
 
-  lint_here
+  MD_REAL=1 lint_here
   if (( status == 0 )) || [[ $output != *"$task"* ]]; then tasksdir_fail "whole project must lint $task"; fi
   if [[ $output == *worktrees* ]]; then tasksdir_fail "worktree copy must stay ignored"; fi
   printf '[PASS] tasksdir: whole-project lint reports Markdown under .taskfactory/tasks\n'
 
   printf '# TF-900: x\n\nGood spacing.\n' > "$project/$task"
   : > "$tf_file"
+  : > "$dir/mdsmith-calls"
   lint_here
   if (( status != 0 )); then tasksdir_fail "whole project with a clean task file"; fi
+  if [[ $(cat "$dir/mdsmith-calls") != "run github.com/jeduden/mdsmith/cmd/mdsmith@v0.57.0 check" ]]; then
+    tasksdir_fail "whole-project mdsmith args=$(cat "$dir/mdsmith-calls")"
+  fi
   if [[ $(cat "$tf_file") != "run ./cmd/taskfactory validate .taskfactory/tasks" ]]; then
     tasksdir_fail "whole-tree validation args=$(cat "$tf_file")"
   fi
@@ -66,7 +78,7 @@ EOF
 
   printf '# TF-900: x\n\n\nBad spacing.\n' > "$project/$task"
   : > "$tf_file"
-  lint_here "$task"
+  MD_STUB_EXIT=1 lint_here "$task"
   if (( status == 0 )) || [[ $output != *"FAIL markdown lint: $task"* ]]; then tasksdir_fail "task path markdown lint"; fi
   if [[ $(cat "$tf_file") != "run ./cmd/taskfactory validate $task" ]]; then
     tasksdir_fail "task path validation args=$(cat "$tf_file")"
@@ -75,7 +87,7 @@ EOF
 
   printf '# TF-901: old\n\n\nBad spacing.\n' > "$project/.taskfactory/tasks/archive/TF-901-old.md"
   : > "$tf_file"
-  lint_here .taskfactory/tasks/archive/TF-901-old.md
+  MD_STUB_EXIT=1 lint_here .taskfactory/tasks/archive/TF-901-old.md
   if [[ -s $tf_file ]]; then tasksdir_fail "archive files must not be contract-checked"; fi
   printf '[PASS] tasksdir: archived files are not contract-checked\n'
   rm -rf "$dir"
@@ -110,10 +122,31 @@ esac
 EOF
 chmod +x "$stub_dir/go"
 
+# The Bash linter stub records its arguments and succeeds. bin/lint's Bash step
+# is asserted by the arguments it passes; lint.real-mdsmith.test.sh runs the
+# real one over a bad script.
+cat > "$stub_dir/shellcheck" <<'SC'
+#!/usr/bin/env bash
+printf '%s\n' "$*" > "$LINT_SHELLCHECK_FILE"
+exit 0
+SC
+chmod +x "$stub_dir/shellcheck"
+
+# The wrapper tests run in a small project with a copy of bin/lint, so a
+# whole-project run walks a few files instead of the real repository.
+main_project=$(mktemp -d)
+trap 'rm -rf "$stub_dir" "$main_project"' EXIT
+mkdir -p "$main_project/bin" "$main_project/.taskfactory"
+cp "$repo_dir/bin/lint" "$main_project/bin/lint"
+: > "$main_project/go.mod"
+printf 'tasks_dir = ".taskfactory/tasks"\n' > "$main_project/.taskfactory/config.toml"
+printf 'package main\n\nfunc main() {}\n' > "$main_project/main.go"
+
 mdsmith='run github.com/jeduden/mdsmith/cmd/mdsmith@v0.57.0'
 args_file="$stub_dir/args"
 vet_file="$stub_dir/vet"
 tf_file="$stub_dir/taskfactory"
+shellcheck_file="$stub_dir/shellcheck-args"
 for mode in check autofix; do
   for expected_status in 0 1 2; do
     if [[ $mode == autofix ]]; then
@@ -126,13 +159,17 @@ for mode in check autofix; do
     # The stub stands in for mdsmith's own exit codes: 0, 1 and 2 must pass through.
 
     actual_status=0
-    rm -f "$args_file" "$vet_file" "$tf_file"
-    PATH="$stub_dir:$PATH" LINT_ARGS_FILE="$args_file" LINT_VET_FILE="$vet_file" \
-      LINT_TF_FILE="$tf_file" LINT_STUB_EXIT="$expected_status" \
-      "$repo_dir/bin/lint" ${option:+"$option"} || actual_status=$?
+    rm -f "$args_file" "$vet_file" "$tf_file" "$shellcheck_file"
+    (cd "$main_project" && PATH="$stub_dir:$PATH" LINT_ARGS_FILE="$args_file" LINT_VET_FILE="$vet_file" \
+      LINT_TF_FILE="$tf_file" LINT_SHELLCHECK_FILE="$shellcheck_file" LINT_STUB_EXIT="$expected_status" \
+      bin/lint ${option:+"$option"}) || actual_status=$?
     actual_args=$(cat "$args_file")
     actual_vet=$(cat "$vet_file")
     actual_tf=$(cat "$tf_file")
+    if [[ $(cat "$shellcheck_file") != "bin/lint" ]]; then
+      printf '[FAIL] %s: shellcheck args=%q, want bin/lint\n' "$mode" "$(cat "$shellcheck_file")" >&2
+      exit 1
+    fi
     if [[ $actual_tf != "run ./cmd/taskfactory validate .taskfactory/tasks" ]]; then
       printf '[FAIL] %s: whole-tree validation args=%q\n' "$mode" "$actual_tf" >&2
       exit 1
@@ -156,7 +193,7 @@ done
 # Path arguments: a misformatted Go file must fail, and a path argument must
 # lint only that path.
 fixture=$(mktemp -d)
-trap 'rm -rf "$stub_dir" "$fixture"' EXIT
+trap 'rm -rf "$stub_dir" "$main_project" "$fixture"' EXIT
 mkdir -p "$fixture/project/bin" "$fixture/project/docs"
 cp "$repo_dir/bin/lint" "$fixture/project/bin/lint"
 cp "$repo_dir/.mdsmith.yml" "$fixture/project/.mdsmith.yml"
@@ -169,7 +206,8 @@ lint="$fixture/project/bin/lint"
 run_lint() {  # run_lint ARGS...: sets status and output
   status=0
   output=$(cd "$fixture/project" && PATH="$stub_dir:$PATH" LINT_ARGS_FILE="$stub_dir/args" \
-    LINT_VET_FILE="$stub_dir/vet" LINT_STUB_EXIT=0 "$lint" "$@" 2>&1) || status=$?
+    LINT_VET_FILE="$stub_dir/vet" LINT_SHELLCHECK_FILE="$stub_dir/shellcheck-args" LINT_STUB_EXIT=0 \
+    "$lint" "$@" 2>&1) || status=$?
 }
 
 fail() {

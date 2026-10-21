@@ -49,6 +49,9 @@ fi
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # TF_PACKAGE_SKILL_DIR exists so tests can point at a fixture skill.
 skill_dir=${TF_PACKAGE_SKILL_DIR:-${repo_root}/skills/taskfactory}
+# TF_PACKAGE_TARGETS (space-separated os/arch pairs) exists so a test can build
+# one real target instead of all four. The release always uses the default.
+read -r -a targets <<< "${TF_PACKAGE_TARGETS:-darwin/arm64 darwin/amd64 linux/arm64 linux/amd64}"
 
 skill_md="${skill_dir}/SKILL.md"
 [[ -f "${skill_md}" ]] || die "missing ${skill_md}"
@@ -95,7 +98,7 @@ make_archive() {
   )
 }
 
-for target in darwin/arm64 darwin/amd64 linux/arm64 linux/amd64; do
+for target in "${targets[@]}"; do
   os=${target%/*}
   arch=${target#*/}
   stage="bin-${os}-${arch}"
@@ -118,13 +121,16 @@ make_archive "taskfactory-skill_${version}.tar.gz" skill taskfactory
 top=$(tar -tzf "${out}/taskfactory-skill_${version}.tar.gz" | awk -F/ '{print $1}' | sort -u)
 [[ "${top}" == "taskfactory" ]] || die "skill archive has unexpected top-level entries: ${top}"
 
+# The skill archive first, then the binary archives in name order.
+archives=("taskfactory-skill_${version}.tar.gz")
+for archive in "taskfactory_${version}_darwin_amd64.tar.gz" \
+  "taskfactory_${version}_darwin_arm64.tar.gz" \
+  "taskfactory_${version}_linux_amd64.tar.gz" \
+  "taskfactory_${version}_linux_arm64.tar.gz"; do
+  if [[ -e "${out}/${archive}" ]]; then archives+=("${archive}"); fi
+done
 (
   cd "${out}"
-  "${sums_cmd[@]}" \
-    "taskfactory-skill_${version}.tar.gz" \
-    "taskfactory_${version}_darwin_amd64.tar.gz" \
-    "taskfactory_${version}_darwin_arm64.tar.gz" \
-    "taskfactory_${version}_linux_amd64.tar.gz" \
-    "taskfactory_${version}_linux_arm64.tar.gz" > SHA256SUMS
+  "${sums_cmd[@]}" "${archives[@]}" > SHA256SUMS
 )
 printf 'packaged %s into %s\n' "${version}" "${out}"

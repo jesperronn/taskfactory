@@ -10,14 +10,37 @@ fixture=$(mktemp -d)
 trap 'rm -rf "$fixture"' EXIT
 
 # The fixture is a scratch copy of the module and task tree, so the validate
-# half runs against real contracts and real dependencies.
+# half runs against real contracts and real dependencies. Only the config and
+# the task folders are copied from .taskfactory, never its worktrees.
 project="$fixture/project"
-mkdir -p "$project"
-cp -R "$repo_dir/bin" "$repo_dir/cmd" "$repo_dir/internal" "$repo_dir/skills" \
+mkdir -p "$project/.taskfactory" "$project/bin"
+cp "$repo_dir/bin/lint" "$project/bin/lint"
+cp -R "$repo_dir/cmd" "$repo_dir/internal" "$repo_dir/skills" \
   "$repo_dir/go.mod" "$repo_dir/go.sum" "$repo_dir/.mdsmith.yml" "$project/"
-if [[ -d $repo_dir/.taskfactory ]]; then
-  cp -R "$repo_dir/.taskfactory" "$project/"
+if [[ -d $repo_dir/.taskfactory/tasks ]]; then
+  cp -R "$repo_dir/.taskfactory/config.toml" "$repo_dir/.taskfactory/tasks" "$project/.taskfactory/"
 fi
+
+# The first case runs the real mdsmith and the real `go run ./cmd/taskfactory
+# validate`, the end-to-end check for both tools. The other cases test what
+# bin/lint does with each half's result. They stub mdsmith (MD_STUB_EXIT sets
+# its exit status) and run validate through a binary built once from the same
+# sources, started in the background so it is ready when the second case needs it.
+stubs="$fixture/stubs"
+mkdir -p "$stubs"
+real_go=$(command -v go)
+cat > "$stubs/go" <<STUB
+#!/usr/bin/env bash
+if [[ -n "\${TASK_REAL:-}" ]]; then exec "$real_go" "\$@"; fi
+case "\$*" in
+  run\ github.com/jeduden/mdsmith/*) exit "\${MD_STUB_EXIT:-0}" ;;
+  run\ ./cmd/taskfactory\ *) shift 2; exec "$fixture/taskfactory" "\$@" ;;
+  *) exec "$real_go" "\$@" ;;
+esac
+STUB
+chmod +x "$stubs/go"
+(cd "$project" && "$real_go" build -trimpath -o "$fixture/taskfactory" ./cmd/taskfactory) &
+build_pid=$!
 # The validator needs a Git working tree; the fixture only needs the directory.
 git -C "$project" init -q
 
@@ -70,7 +93,7 @@ break_contract() {
 
 run_lint() {  # run_lint ARGS...: sets status and output
   status=0
-  output=$(cd "$project" && "$project/bin/lint" "$@" 2>&1) || status=$?
+  output=$(cd "$project" && PATH="$stubs:$PATH" "$project/bin/lint" "$@" 2>&1) || status=$?
 }
 
 fail() {
@@ -81,7 +104,7 @@ fail() {
 # Lint half fails: exit 1, the file is named as a Markdown failure, and the
 # validate half still ran and passed.
 misformat
-run_lint "$task_rel"
+TASK_REAL=1 run_lint "$task_rel"
 if (( status != 1 )) || [[ $output != *"FAIL markdown lint: $task_rel"* ]] \
   || [[ $output == *"FAIL task validation"* ]] \
   || [[ $output != *"1 task file(s) valid"* ]]; then
@@ -91,6 +114,7 @@ printf '[PASS] misformatted task fails the lint half and passes validation\n'
 
 # Validate half fails: exit 1, the file is named as a validation failure, and
 # the Markdown lint still ran and passed.
+wait "$build_pid"
 break_contract
 run_lint "$task_rel"
 if (( status != 1 )) || [[ $output != *"FAIL task validation: $task_rel"* ]] \
@@ -113,7 +137,7 @@ printf '[PASS] clean task passes both halves\n'
 break_contract
 { head -n 1 "$target"; printf '\n\n'; tail -n +2 "$target"; } > "$target.tmp"
 mv "$target.tmp" "$target"
-run_lint "$task_rel"
+MD_STUB_EXIT=1 run_lint "$task_rel"
 if (( status != 1 )) || [[ $output != *"FAIL markdown lint: $task_rel"* ]] \
   || [[ $output != *"FAIL task validation: $task_rel"* ]]; then
   fail "both halves broken"

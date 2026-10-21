@@ -62,10 +62,30 @@ cp "${repo_root}/bin/install" "${repo_root}/bin/build" "${fixture}/bin/"
 cp "${repo_root}/go.mod" "${repo_root}/go.sum" "${fixture}/"
 cp -R "${repo_root}/cmd" "${repo_root}/internal" "${repo_root}/skills" "${fixture}/"
 git -C "${fixture}" init --quiet
+printf '[commit]\n\tgpgsign = false\n[user]\n\tname = test\n\temail = test@example.invalid\n' >>"${fixture}/.git/config"
 git -C "${fixture}" add -A
-git -C "${fixture}" -c user.name=test -c user.email=test@example.invalid commit --quiet -m fixture
+git -C "${fixture}" commit --quiet -m fixture
 expected_version=dev-$(git -C "${fixture}" rev-parse --short HEAD)
-install_script="${fixture}/bin/install"
+real_install="${fixture}/bin/install"
+
+# A second fixture holds the same bin/install next to a stand-in bin/build, so
+# every case except the first skips the build and the process startups it costs.
+# The stand-in writes a small fake binary; bin/install's own logic (destination
+# precedence, the tf alias, the hints) runs for real. The first case in the
+# default scenario uses the real fixture above for one real bin/build and go
+# build.
+stub_fixture="${fixture_root}/stub-install"
+mkdir -p "${stub_fixture}/bin"
+cp "${repo_root}/bin/install" "${stub_fixture}/bin/"
+cat > "${stub_fixture}/bin/build" <<'STUB'
+#!/usr/bin/env bash
+out=${1:-dist/taskfactory}
+printf '#!/usr/bin/env bash\ncase "${1:-}" in\n  --version) echo "taskfactory version dev-stub" ;;\n  --help) echo "taskfactory stub help" ;;\nesac\n' > "${out}"
+chmod +x "${out}"
+printf 'built %s\n' "${out}"
+STUB
+chmod +x "${stub_fixture}/bin/build"
+install_script="${stub_fixture}/bin/install"
 
 # run_install runs bin/install from / with PREFIX, GOBIN and GOPATH cleared,
 # then applies the given NAME=value assignments.
@@ -78,7 +98,12 @@ dest_root="${fixture_root}/dest"
 if selected default; then
 
 prefix_dir="${dest_root}/prefix/nested"
-output=$(run_install PREFIX="${prefix_dir}")
+printf '[PASS] fixture with real sources is ready\n'
+# The one real go build in this file. -trimpath lets Go reuse compiled packages
+# across fixture copies, so only the link step is paid here.
+install_script="${real_install}"
+output=$(run_install PREFIX="${prefix_dir}" GOFLAGS=-trimpath)
+install_script="${stub_fixture}/bin/install"
 assert_contains "${output}" "installed ${prefix_dir}/taskfactory" 'PREFIX: prints the installed path'
 test -x "${prefix_dir}/taskfactory"
 printf '[PASS] PREFIX: installs an executable binary\n'
