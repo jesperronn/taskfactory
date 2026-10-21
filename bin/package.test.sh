@@ -128,10 +128,12 @@ if want refuse; then
     "${repo_root}/bin/package" "${bad}" "${tmp}/never" >/dev/null 2>&1 || status=$?
     assert_eq "${status}" 2 "unknown label or leading zero '${bad}' exits 2"
   done
+  # The acceptance runs check the version grammar and the output directory, not
+  # the target list, so they build one target each (TF_PACKAGE_TARGETS).
   mkdir "${tmp}/ok-rc" "${tmp}/ok-stable"
-  "${repo_root}/bin/package" v1.0.0-rc.1 "${tmp}/ok-rc" >/dev/null 2>&1 || fail "v1.0.0-rc.1 accepted"
+  TF_PACKAGE_TARGETS=linux/amd64 "${repo_root}/bin/package" v1.0.0-rc.1 "${tmp}/ok-rc" >/dev/null 2>&1 || fail "v1.0.0-rc.1 accepted"
   pass "v1.0.0-rc.1 accepted"
-  "${repo_root}/bin/package" v1.0.0 "${tmp}/ok-stable" >/dev/null 2>&1 || fail "v1.0.0 accepted"
+  TF_PACKAGE_TARGETS=linux/amd64 "${repo_root}/bin/package" v1.0.0 "${tmp}/ok-stable" >/dev/null 2>&1 || fail "v1.0.0 accepted"
   pass "v1.0.0 accepted"
   src_out=$(bash -c 'before=$(set +o); source "$1"; after=$(set +o); [[ "${before}" == "${after}" ]] || echo OPTIONS-CHANGED' _ "${repo_root}/bin/release.lib.sh" 2>&1)
   assert_eq "${src_out}" "" "sourcing release.lib.sh prints nothing and changes no shell options"
@@ -140,7 +142,7 @@ if want refuse; then
   "${repo_root}/bin/package" "${v}" "${out}" >/dev/null 2>&1 || status=$?
   assert_eq "${status}" 1 "non-empty out-dir is refused"
   mkdir "${tmp}/empty"
-  "${repo_root}/bin/package" v1.0.0 "${tmp}/empty" >/dev/null 2>&1 || fail "empty out-dir is accepted"
+  TF_PACKAGE_TARGETS=linux/amd64 "${repo_root}/bin/package" v1.0.0 "${tmp}/empty" >/dev/null 2>&1 || fail "empty out-dir is accepted"
   pass "empty out-dir is accepted"
 fi
 

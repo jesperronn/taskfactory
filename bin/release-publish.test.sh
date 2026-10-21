@@ -75,23 +75,32 @@ new_gh_state() { # sets FAKE_GH_DIR; arg: exists-prerelease value or empty
 calls() { cat "${FAKE_GH_DIR}/calls.log"; }
 
 # make_repo <dir>: bare origin + work clone on main with one commit, pushed.
+# The pair is built once with git and each call copies it and repoints the
+# origin URL, which costs three processes instead of about ten.
+repo_template="${tmp}/repo-template"
 make_repo() {
   local d=$1
+  if [[ ! -d "${repo_template}" ]]; then
+    mkdir -p "${repo_template}"
+    git init -q --bare -b main "${repo_template}/origin.git"
+    git init -q -b main "${repo_template}/work"
+    (
+      cd "${repo_template}/work"
+      git config user.name Test
+      git config user.email test@example.com
+      git config commit.gpgsign false
+      git config tag.gpgsign false
+      git remote add origin "${repo_template}/origin.git"
+      echo a > a.txt
+      git add a.txt
+      git commit -q -m "feat: one"
+      git push -q origin main
+    )
+  fi
   mkdir -p "${d}"
-  git init -q --bare -b main "${d}/origin.git"
-  git init -q -b main "${d}/work"
-  (
-    cd "${d}/work"
-    git config user.name Test
-    git config user.email test@example.com
-    git config commit.gpgsign false
-    git config tag.gpgsign false
-    git remote add origin "${d}/origin.git"
-    echo a > a.txt
-    git add a.txt
-    git commit -q -m "feat: one"
-    git push -q origin main
-  )
+  cp -R "${repo_template}/origin.git" "${d}/origin.git"
+  cp -R "${repo_template}/work" "${d}/work"
+  git -C "${d}/work" remote set-url origin "${d}/origin.git"
 }
 
 # verify <repo-dir> <tag>: runs --verify-tag; sets rc and out.

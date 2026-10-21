@@ -3,6 +3,7 @@ set -euo pipefail
 # shellcheck source=bin/testlib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/testlib.sh"
 testlib_verbose_wrap "${BASH_SOURCE[0]}" "$@"
+testlib_offline_modules
 
 # End-to-end tests for bin/lint with the real pinned mdsmith, gofmt and the
 # real linter for Bash. They are the real-tool cases for bin/lint, so each real

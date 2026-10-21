@@ -3,6 +3,7 @@ set -euo pipefail
 # shellcheck source=bin/testlib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/testlib.sh"
 testlib_verbose_wrap "${BASH_SOURCE[0]}" "$@"
+testlib_offline_modules
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 repo_dir=$PWD
@@ -31,7 +32,11 @@ mkdir -p "$stubs"
 real_go=$(command -v go)
 cat > "$stubs/go" <<STUB
 #!/usr/bin/env bash
-if [[ -n "\${TASK_REAL:-}" ]]; then exec "$real_go" "\$@"; fi
+if [[ -n "\${TASK_REAL:-}" ]]; then
+  # -trimpath lets Go reuse the compiled packages of the real checkout.
+  case "\$*" in run\ ./cmd/taskfactory\ *) GOFLAGS=-trimpath exec "$real_go" "\$@" ;; esac
+  exec "$real_go" "\$@"
+fi
 case "\$*" in
   run\ github.com/jeduden/mdsmith/*) exit "\${MD_STUB_EXIT:-0}" ;;
   run\ ./cmd/taskfactory\ *) shift 2; exec "$fixture/taskfactory" "\$@" ;;
@@ -39,6 +44,7 @@ case "\$*" in
 esac
 STUB
 chmod +x "$stubs/go"
+printf '[PASS] fixture project is ready\n'
 (cd "$project" && "$real_go" build -trimpath -o "$fixture/taskfactory" ./cmd/taskfactory) &
 build_pid=$!
 # The validator needs a Git working tree; the fixture only needs the directory.

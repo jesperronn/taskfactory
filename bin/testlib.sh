@@ -87,3 +87,16 @@ chmod +x "\${stub_out}"
 STUB
   chmod +x "${testlib_dir}/go"
 }
+
+# testlib_offline_modules: makes a real `go run module@version` skip the
+# network. Without it, go asks the module proxy about deprecations on every run,
+# which costs about a second and needs the network. When the module cache
+# already holds the pinned tool, the cache itself serves as the proxy. When it
+# does not, nothing changes and the first real run downloads the tool as before.
+testlib_offline_modules() {
+  local testlib_cache
+  testlib_cache=$(go env GOMODCACHE)/cache/download
+  if [[ -d "${testlib_cache}/github.com/jeduden/mdsmith/@v" ]]; then
+    export GOPROXY="file://${testlib_cache}" GOSUMDB=off
+  fi
+}
