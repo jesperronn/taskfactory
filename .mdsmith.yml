@@ -38,4 +38,8 @@ ignore:
   - testdata/markdown/**
   - node_modules/**
   - .claude/worktrees/**
-  - .taskfactory/**
+  # Runtime files only: Markdown under a tasks_dir inside .taskfactory is linted.
+  - .taskfactory/worktrees/**
+  - .taskfactory/logs/**
+  - .taskfactory/evidence/**
+  - .taskfactory/integration-evidence/**

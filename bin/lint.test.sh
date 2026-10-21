@@ -6,6 +6,88 @@ testlib_verbose_wrap "${BASH_SOURCE[0]}" "$@"
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 repo_dir=$PWD
+
+# tasksdir scenario: a project whose config sets tasks_dir under .taskfactory.
+# It runs the real, pinned mdsmith with the repository's .mdsmith.yml, so it
+# proves that Markdown under .taskfactory/tasks is linted while a worktree copy
+# under .taskfactory/worktrees stays ignored. Only the taskfactory and go vet
+# calls are recorded instead of run.
+run_tasksdir_scenario() {
+  local real_go dir project stubs status output tf_file
+  real_go=$(command -v go)
+  dir=$(mktemp -d)
+  stubs=$dir/stubs
+  project=$dir/project
+  tf_file=$dir/taskfactory
+  mkdir -p "$stubs" "$project/bin" "$project/.taskfactory/tasks/ready" \
+    "$project/.taskfactory/tasks/archive" "$project/.taskfactory/worktrees/TF-1/docs"
+  cat > "$stubs/go" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  run\ github.com/jeduden/mdsmith/*) exec "$real_go" "\$@" ;;
+  vet\ *) exit 0 ;;
+  run\ ./cmd/taskfactory\ *) printf '%s\n' "\$*" >> "$tf_file"; exit 0 ;;
+  *) echo "unexpected go call: \$*" >&2; exit 99 ;;
+esac
+EOF
+  chmod +x "$stubs/go"
+  cp "$repo_dir/bin/lint" "$project/bin/lint"
+  cp "$repo_dir/.mdsmith.yml" "$project/.mdsmith.yml"
+  : > "$project/go.mod"
+  printf 'tasks_dir = ".taskfactory/tasks"\n\n[workers]\nmax_parallel = 1\n' > "$project/.taskfactory/config.toml"
+  local task=.taskfactory/tasks/ready/TF-900-x.md
+  printf '# TF-900: x\n\n\nBad spacing.\n' > "$project/$task"
+  printf '# Title\n\n\nBad spacing.\n' > "$project/.taskfactory/worktrees/TF-1/docs/bad.md"
+  printf '# TF-901: old\n\nFine.\n' > "$project/.taskfactory/tasks/archive/TF-901-old.md"
+
+  lint_here() {  # lint_here ARGS...: sets status and output
+    status=0
+    output=$(cd "$project" && PATH="$stubs:$PATH" bin/lint "$@" 2>&1) || status=$?
+  }
+  tasksdir_fail() {
+    printf '[FAIL] tasksdir %s: exit=%s output=%s\n' "$1" "$status" "$output" >&2
+    rm -rf "$dir"
+    exit 1
+  }
+
+  lint_here
+  if (( status == 0 )) || [[ $output != *"$task"* ]]; then tasksdir_fail "whole project must lint $task"; fi
+  if [[ $output == *worktrees* ]]; then tasksdir_fail "worktree copy must stay ignored"; fi
+  printf '[PASS] tasksdir: whole-project lint reports Markdown under .taskfactory/tasks\n'
+
+  printf '# TF-900: x\n\nGood spacing.\n' > "$project/$task"
+  : > "$tf_file"
+  lint_here
+  if (( status != 0 )); then tasksdir_fail "whole project with a clean task file"; fi
+  if [[ $(cat "$tf_file") != "run ./cmd/taskfactory validate .taskfactory/tasks" ]]; then
+    tasksdir_fail "whole-tree validation args=$(cat "$tf_file")"
+  fi
+  printf '[PASS] tasksdir: worktree copies stay ignored and the whole tree validates .taskfactory/tasks\n'
+
+  printf '# TF-900: x\n\n\nBad spacing.\n' > "$project/$task"
+  : > "$tf_file"
+  lint_here "$task"
+  if (( status == 0 )) || [[ $output != *"FAIL markdown lint: $task"* ]]; then tasksdir_fail "task path markdown lint"; fi
+  if [[ $(cat "$tf_file") != "run ./cmd/taskfactory validate $task" ]]; then
+    tasksdir_fail "task path validation args=$(cat "$tf_file")"
+  fi
+  printf '[PASS] tasksdir: a task file path gets the Markdown lint and contract validation\n'
+
+  printf '# TF-901: old\n\n\nBad spacing.\n' > "$project/.taskfactory/tasks/archive/TF-901-old.md"
+  : > "$tf_file"
+  lint_here .taskfactory/tasks/archive/TF-901-old.md
+  if [[ -s $tf_file ]]; then tasksdir_fail "archive files must not be contract-checked"; fi
+  printf '[PASS] tasksdir: archived files are not contract-checked\n'
+  rm -rf "$dir"
+}
+
+scenario=${1:-all}
+case "$scenario" in
+  all) ;;
+  tasksdir) run_tasksdir_scenario; exit 0 ;;
+  *) echo "usage: bin/lint.test.sh [--verbose] [tasksdir]" >&2; exit 2 ;;
+esac
+
 stub_dir=$(mktemp -d)
 trap 'rm -rf "$stub_dir"' EXIT
 
@@ -122,3 +204,5 @@ printf '[PASS] unknown option exits 2\n'
 run_lint missing.md
 if (( status != 2 )); then fail "missing path"; fi
 printf '[PASS] missing path exits 2\n'
+
+run_tasksdir_scenario

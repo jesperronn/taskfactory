@@ -29,6 +29,10 @@ check archived contracts. The single-file form still checks tree-wide ID
 uniqueness and dependency references, while reporting only diagnostics for the
 selected task. `bin/test` runs the whole-tree form automatically.
 
+The task folders are `tasks/` unless `tasks_dir` in `.taskfactory/config.toml`
+names another directory, such as `.taskfactory/tasks`. Read that directory
+wherever this document says `tasks/`; `bin/lint` and `bin/test` do.
+
 ## Evidence and operational files
 
 Worker verification evidence is appended to `.taskfactory/evidence/<ID>.jsonl`.

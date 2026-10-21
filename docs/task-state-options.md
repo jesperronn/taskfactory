@@ -39,6 +39,11 @@ or archive addition (`lifecyclePaths` in `internal/fail/fail.go`, and the
 `.taskfactory/evidence/<ID>.jsonl` (`internal/verify/verify.go`) and does not
 stage or commit it. Integration evidence is likewise untracked.
 
+The task folders do not have to be named `tasks/`: the optional top-level
+`tasks_dir` key in `.taskfactory/config.toml` moves them to another directory
+under the state root, for example `.taskfactory/tasks` (see `docs/config-v1.md`).
+Everything below applies to that directory in the same way.
+
 ## Options
 
 Each option is described by its mechanics, its effect on every lifecycle

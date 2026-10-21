@@ -116,6 +116,12 @@ that exists today, including `requeue` for the failed branch.
    exists. When it does not, the prompt carries built-in worker instructions
    and says so; `init` does not write the file.
 
+   To keep the five task folders somewhere else under the state root, for
+   example `.taskfactory/tasks`, set the top-level `tasks_dir` key in
+   `.taskfactory/config.toml`; without it they are `tasks/`. `init` writes no
+   key and creates the folders where an existing config puts them. See
+   `docs/config-v1.md`.
+
    To keep task state outside the project, run
    `taskfactory init [path] --state-dir <dir>`. It writes the five `tasks/`
    directories and `.taskfactory/config.toml` (with `project_root` naming the

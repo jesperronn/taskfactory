@@ -201,9 +201,16 @@ fi
 # Whole-tree validation runs only for a full run, never for selected paths.
 if (( full_run )) && [[ -f go.mod ]]; then
   if [[ -f .taskfactory/config.toml ]]; then
-    printf '==> go run ./cmd/taskfactory validate tasks\n'
-    if ! go run ./cmd/taskfactory validate tasks; then
-      printf 'FAIL: task validation: go run ./cmd/taskfactory validate tasks\n' >&2
+    # The tasks directory is the top-level tasks_dir key, "tasks" by default.
+    tasks_dir=tasks
+    configured=$(sed -n 's/^[[:space:]]*tasks_dir[[:space:]]*=[[:space:]]*"\([^"]*\)".*$/\1/p;/^[[:space:]]*\[/q' \
+      .taskfactory/config.toml | head -n 1)
+    configured=${configured#./}
+    configured=${configured%/}
+    if [[ -n $configured ]]; then tasks_dir=$configured; fi
+    printf '==> go run ./cmd/taskfactory validate %s\n' "$tasks_dir"
+    if ! go run ./cmd/taskfactory validate "$tasks_dir"; then
+      printf 'FAIL: task validation: go run ./cmd/taskfactory validate %s\n' "$tasks_dir" >&2
       failed=1
     fi
   else

@@ -10,6 +10,19 @@ start_dir=$PWD
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 repo_root=$PWD
 
+# tasks_dir: where the task folders live, a slash path relative to the repository
+# root. It is the top-level tasks_dir key of .taskfactory/config.toml, or "tasks"
+# when the file or the key is absent. taskfactory validates the value; this is
+# only a read of it.
+tasks_dir=tasks
+if [[ -f .taskfactory/config.toml ]]; then
+  configured=$(sed -n 's/^[[:space:]]*tasks_dir[[:space:]]*=[[:space:]]*"\([^"]*\)".*$/\1/p;/^[[:space:]]*\[/q' \
+    .taskfactory/config.toml | head -n 1)
+  configured=${configured#./}
+  configured=${configured%/}
+  if [[ -n $configured ]]; then tasks_dir=$configured; fi
+fi
+
 # Pinned mdsmith; rules and conventions live in .mdsmith.yml.
 mdsmith_pkg=github.com/jeduden/mdsmith/cmd/mdsmith@v0.57.0
 
@@ -46,7 +59,7 @@ if (( tells )); then
     exit 2
   fi
   scope=()
-  for p in docs README.md tasks/inbox tasks/ready tasks/active tasks/failed; do
+  for p in docs README.md "$tasks_dir/inbox" "$tasks_dir/ready" "$tasks_dir/active" "$tasks_dir/failed"; do
     if [[ -e $p ]]; then scope+=("$p"); fi
   done
   report=$(go run "$mdsmith_pkg" check --no-color -c .mdsmith-tells.yml \
@@ -68,11 +81,12 @@ is_shell() {
   [[ $first =~ $re ]]
 }
 
-# is_task_file PATH: a Markdown task file under tasks/, outside tasks/archive.
+# is_task_file PATH: a Markdown task file under the tasks directory, outside its
+# archive.
 # The archive is history and is not contract-checked.
 is_task_file() {
   local p=${1#./}
-  [[ $p == tasks/*.md && $p != tasks/archive/* ]]
+  [[ $p == "$tasks_dir"/*.md && $p != "$tasks_dir"/archive/* ]]
 }
 
 # Collect Go, Bash, and Markdown targets. Directories are walked for Go and
@@ -156,8 +170,8 @@ done
 # needs the Go module, so it is skipped where there is none, as bin/test does.
 if (( whole_project )); then
   if [[ -f go.mod ]]; then
-    if ! go run ./cmd/taskfactory validate tasks; then
-      echo "bin/lint: FAIL task validation: tasks" >&2
+    if ! go run ./cmd/taskfactory validate "$tasks_dir"; then
+      echo "bin/lint: FAIL task validation: $tasks_dir" >&2
       failed=1
     fi
   else

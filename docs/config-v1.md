@@ -44,6 +44,7 @@ above.
 
 | TOML key                           | TOML type        | Default                             | Validation                                                                                                                 |
 | ---------------------------------- | ---------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `tasks_dir`                        | string           | `"tasks"`                           | Relative slash path inside the state directory; see "The tasks_dir key" below.                                             |
 | `protocol_version`                 | integer          | `1`                                 | Must equal `1`; any other integer is an unsupported protocol version.                                                      |
 | `workers.max_parallel`             | integer          | `4`                                 | Must be from `1` through `4`, inclusive.                                                                                   |
 | `git.use_worktrees`                | boolean          | `true`                              | Must be `true`; `false` is invalid because v1 requires isolated worker worktrees.                                          |
@@ -61,6 +62,28 @@ but v1 rejects `false`; all workers use isolated worktrees. An absent
 keeps main verification optional while preserving the technical-spec defaults
 for worker and integration verification.
 
+## The tasks_dir key
+
+`tasks_dir` is a top-level string key, next to `protocol_version` and
+`project_root`, not part of a table. It names the folder that holds the five
+task state directories (`inbox`, `ready`, `active`, `failed`, `archive`), as a
+slash path relative to the state root, which is the project unless
+`--state-dir` or `TF_STATE_DIR` names another directory. The default is
+`"tasks"`. A project without the key behaves exactly as before. Setting it to
+`.taskfactory/tasks` keeps the task folders beside the config while the config,
+evidence, locks, logs and worktrees stay in `.taskfactory/`.
+
+The config file itself stays at `<state>/.taskfactory/config.toml`. The value is
+cleaned (`./a//b/` becomes `a/b`). It is rejected when it is empty, absolute, `.`
+or contains a `..` element or a backslash, when it resolves to the state root or
+to `.taskfactory` itself, when it equals one of the runtime paths under
+`.taskfactory` (`evidence`, `integration-evidence`, `logs`, `worktrees`, the lock
+files, the stop marker, `config.toml`) or lies inside one, and when a symlink in
+the path leaves the state root. `.taskfactory/tasks` is not ignored by the
+`.gitignore` lines `init` writes, because those name only the runtime paths, so
+the task folders stay trackable. `init` never writes the key; when the config
+already sets it, `init` creates the state directories there.
+
 ## Validation and errors
 
 Loading fails before a command changes task, Git, or worktree state when any of
@@ -77,6 +100,9 @@ the following applies:
 - `git.use_worktrees` is `false`.
 - `git.worktree_root` is not a non-empty string path, or cannot be resolved to a
   usable absolute directory path.
+- `tasks_dir` breaks a rule in "The tasks_dir key". The error names the key and
+  the config file: `tasks_dir must be a relative path inside the state
+  directory`.
 - A configured verification array is empty or contains an empty string.
 - Any key or table is not listed in the schema above.
 
@@ -156,6 +182,7 @@ set, and is valid as written:
 
 ```toml
 protocol_version = 1
+tasks_dir = "tasks"
 
 [workers]
 max_parallel = 4
@@ -221,6 +248,15 @@ use_worktrees = "yes"
 ```
 
 Expected error: `git.use_worktrees must be a boolean`.
+
+A tasks_dir that leaves the state directory:
+
+```toml
+tasks_dir = "../elsewhere"
+```
+
+Expected error:
+`tasks_dir must be a relative path inside the state directory`.
 
 Disabled worker worktrees:
 

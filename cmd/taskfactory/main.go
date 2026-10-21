@@ -881,7 +881,7 @@ Validate task files. Inbox files are checked loosely, because inbox proposals
 are intentionally rough: "taskfactory promote" applies the full ready contract.
 In a ready task, Dependencies is None or lines of "- TF-NNN" and nothing else.
 With no arguments, validate every task file in tasks/inbox
-and tasks/ready. Each path is a task file or a folder inside the project's tasks
+and tasks/ready (under the tasks_dir of the config when it sets one). Each path is a task file or a folder inside the project's tasks
 directory; a folder selects the task files directly inside it. "tasks" selects
 every state except the archive: inbox, ready, active and failed. Relative paths
 are resolved from the project root. Task ID uniqueness and dependency references
@@ -1222,6 +1222,9 @@ creates .gitignore, or appends to it, with the TaskFactory runtime paths
 (locks, evidence, logs and worktrees) that are not already listed; other lines
 are left alone and .taskfactory/config.toml is never ignored. Commit the
 configuration and .gitignore together before the first claim.
+
+The task directories are tasks/ unless the config sets tasks_dir; init then
+creates them there and keeps the key.
 
 With --state-dir <dir> the task state lives outside the project: init writes
 the five tasks/ directories and .taskfactory/config.toml in <dir>, with
