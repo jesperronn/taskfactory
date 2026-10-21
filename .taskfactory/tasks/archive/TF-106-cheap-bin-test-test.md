@@ -57,3 +57,11 @@ Check: go run ./cmd/taskfactory validate .taskfactory/tasks
 
 Run `bin/test.test.sh`, each check, `bin/test` and `bin/lint` from the
 repository root and report each exit code and the wrapper's total time.
+
+## Claim
+
+Owner: sonnet-worker-106
+Branch: task/TF-106
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-106
+Base commit: d1eb4829340d01ba9b283be3a696f00b6d4c51a6
+Started at: 2026-10-21T21:12:44Z
