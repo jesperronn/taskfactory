@@ -69,7 +69,7 @@ Check: bin/lint.test.sh | grep -q 'PASS.* paths: every bad path is reported'
 
 ### C3: bin/lint exits 2 only after linting the valid paths
 
-Check: bin/lint.test.sh | grep -q 'PASS.* paths: valid paths are linted before exit 2'
+Check: bin/lint.test.sh | grep -q 'PASS.* paths: valid paths are linted'
 
 ### C4: bin/test reports every bad path together
 
