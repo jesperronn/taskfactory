@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"taskfactory/internal/config"
@@ -613,15 +615,41 @@ func equalTaskHashes(left, right map[string][32]byte) bool {
 	return true
 }
 
+// The CLI is built once per test binary and shared by every test that runs
+// it. Tests must not modify the binary.
+var (
+	cliOnce   sync.Once
+	cliDir    string
+	cliBinary string
+	cliErr    error
+)
+
+// TestMain removes the shared CLI build after every test has run.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if cliDir != "" {
+		os.RemoveAll(cliDir)
+	}
+	os.Exit(code)
+}
+
 func buildCLI(t *testing.T) string {
 	t.Helper()
-	binary := filepath.Join(t.TempDir(), "taskfactory")
-	cmd := exec.Command("go", "build", "-o", binary, ".")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("build taskfactory: %v\n%s", err, output)
+	cliOnce.Do(func() {
+		cliDir, cliErr = os.MkdirTemp("", "taskfactory-cli")
+		if cliErr != nil {
+			return
+		}
+		cliBinary = filepath.Join(cliDir, "taskfactory")
+		output, err := exec.Command("go", "build", "-o", cliBinary, ".").CombinedOutput()
+		if err != nil {
+			cliErr = fmt.Errorf("%w\n%s", err, output)
+		}
+	})
+	if cliErr != nil {
+		t.Fatalf("build taskfactory: %v", cliErr)
 	}
-	return binary
+	return cliBinary
 }
 
 func initGitProject(t *testing.T) string {
