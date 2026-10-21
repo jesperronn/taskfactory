@@ -24,12 +24,17 @@ Most Go package tests build a real git repository per test by running many
   `internal/fail/fail_test.go:141`, `internal/claim/operation_test.go:266,273`,
   `internal/workprompt/workprompt_test.go:40`, `internal/work/fixture_test.go:39`
   each have the same pattern.
+- `cmd/taskfactory/main_test.go:655` (`initGitProject`) and `stateFixture`
+  run the same `git init`, `config` and commit sequence per test, hundreds of
+  times, and are in scope as well. The CLI binary built there stays shared.
 
 Build one template repository per package in `TestMain` (or a `sync.Once`
 helper) with the config, task files and initial commit already made. Each test
 copies it with `cp -c` on APFS where available, or a plain recursive copy, and
 then makes only the commit or branch it needs. Keep the template outside every
-test's temp directory and delete it in `TestMain`.
+test's temp directory and delete it in `TestMain`. The template must contain
+no worktrees, and no claim line or other text with an absolute path of the
+template itself.
 
 Do not change what the tests assert. Only move setup that every test repeats.
 
@@ -45,7 +50,7 @@ Do not change what the tests assert. Only move setup that every test repeats.
 
 ### C1: The Go suite meets the time limit
 
-Check: bin/test --budget ./...
+Check: bin/test --budget ./internal/integrate
 
 ### C2: Fixture behavior is unchanged
 
@@ -53,6 +58,6 @@ Check: go test -count=1 ./internal/...
 
 ## Verification
 
-Run `bin/test --budget ./...` and `go test -count=1 ./...`, and report the per-package
-timing before and after, plus exit codes. Run `bin/test` and report its exit
-code.
+Run `bin/test --budget ./internal/integrate`, `go test -count=1 ./...`, and
+report the per-package timing before and after, plus exit codes. Run
+`bin/test` and report its exit code.
