@@ -69,7 +69,7 @@ Check: bin/lint.test.sh | grep -q 'PASS.* paths: every bad path is reported'
 
 ### C3: bin/lint exits 2 only after linting the valid paths
 
-Check: bin/lint.test.sh | grep -q 'PASS.* paths: valid paths are linted'
+Check: bin/lint.test.sh | grep -q 'PASS.* paths: valid paths are linted before exit 2'
 
 ### C4: bin/test reports every bad path together
 
@@ -96,3 +96,11 @@ Check: bin/test && bin/lint
 Run each check from the repository root and report each exit code. Report the
 output of `bin/lint README.md missing.md bin/test` and
 `bin/test missing bin/build.test.sh cmd/taskfactory` before and after.
+
+## Claim
+
+Owner: sonnet-worker-108
+Branch: task/TF-108
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-108
+Base commit: 0f45d202fa3fc9fde79243c573e2901be5ebbae1
+Started at: 2026-10-21T22:12:21Z
