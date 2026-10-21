@@ -37,3 +37,11 @@ dist/
 
 # Claude Code subagent worktrees
 .claude/worktrees/
+
+# TaskFactory runtime files
+.taskfactory/claim.lock
+.taskfactory/integration.lock
+.taskfactory/evidence/
+.taskfactory/integration-evidence/
+.taskfactory/logs/
+.taskfactory/worktrees/
