@@ -66,3 +66,11 @@ Check: bin/test
 
 Run each check, `bin/test` and `bin/lint` from the repository root and report
 each exit code.
+
+## Claim
+
+Owner: sonnet-worker-104
+Branch: task/TF-104
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-104
+Base commit: 8bed1a1174420a6f8dd9df1bb10b008a6cd7b2ae
+Started at: 2026-10-21T20:18:26Z
