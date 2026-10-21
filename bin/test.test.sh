@@ -102,6 +102,7 @@ new_fixture go-success
 : > "${fixture_root}/go-success/go.mod"
 mkdir -p "${fixture_root}/go-success/.taskfactory"
 : > "${fixture_root}/go-success/.taskfactory/config.toml"
+# shellcheck disable=SC2016
 install_go_stub "${fixture_root}/go-success" 'test\ ./...|test\ ./pkg|run\ ./cmd/taskfactory\ validate\ *' 'exit "${GO_STATUS}"'
 go_log=${fixture_root}/go-call
 output=$(cd / && PATH="${fixture_root}/go-success/stubs:${PATH}" GO_LOG="${go_log}" GO_STATUS=0 "${fixture_root}/go-success/bin/test" 2>&1)
