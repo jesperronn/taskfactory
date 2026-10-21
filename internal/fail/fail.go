@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 
+	"taskfactory/internal/paths"
 	"taskfactory/internal/taskvalidate"
 	"taskfactory/internal/verify"
 )
@@ -168,22 +169,25 @@ func FailWith(projectRoot, id string, opts Options, common CommonOptions) (strin
 	if err != nil {
 		return "", fmt.Errorf("resolve project root %s: %w", projectRoot, err)
 	}
-	staged, err := git(root, "diff", "--cached", "--name-only")
-	if err != nil {
-		return "", fmt.Errorf("inspect index: %w", err)
-	}
-	if strings.TrimSpace(staged) != "" {
-		return "", fmt.Errorf("refusing to fail %s: the index already has staged paths; unstage them first", id)
+	layout := paths.For(root)
+	if !layout.External() {
+		staged, err := git(root, "diff", "--cached", "--name-only")
+		if err != nil {
+			return "", fmt.Errorf("inspect index: %w", err)
+		}
+		if strings.TrimSpace(staged) != "" {
+			return "", fmt.Errorf("refusing to fail %s: the index already has staged paths; unstage them first", id)
+		}
 	}
 
 	name, err := findActiveFile(root, id)
 	if err != nil {
 		return "", err
 	}
-	activeRel := "tasks/active/" + name
-	failedRel := "tasks/failed/" + name
-	activeAbs := filepath.Join(root, filepath.FromSlash(activeRel))
-	failedAbs := filepath.Join(root, filepath.FromSlash(failedRel))
+	activeRel := paths.TaskFileRel("active", name)
+	failedRel := paths.TaskFileRel("failed", name)
+	activeAbs := layout.TaskFile("active", name)
+	failedAbs := layout.TaskFile("failed", name)
 
 	info, err := os.Lstat(activeAbs)
 	if err != nil {
@@ -204,9 +208,12 @@ func FailWith(projectRoot, id string, opts Options, common CommonOptions) (strin
 	if err := checkEvidence(root, id, opts); err != nil {
 		return "", err
 	}
-	stagePaths, err := lifecyclePaths(root, id, activeRel, failedRel)
-	if err != nil {
-		return "", err
+	var stagePaths []string
+	if !layout.External() {
+		stagePaths, err = lifecyclePaths(root, id, activeRel, failedRel)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	if common.DryRun {
@@ -214,8 +221,10 @@ func FailWith(projectRoot, id string, opts Options, common CommonOptions) (strin
 			return "", fmt.Errorf("task tree is invalid, so failing %s would be refused: %s", id, diagnostics[0])
 		}
 		if common.Would != nil {
-			common.Would("move task to tasks/failed")
-			common.Would("commit")
+			common.Would("move task to %s", paths.TaskDirRel("failed"))
+			if !layout.External() {
+				common.Would("commit")
+			}
 		}
 		return failedRel, nil
 	}
@@ -234,6 +243,9 @@ func FailWith(projectRoot, id string, opts Options, common CommonOptions) (strin
 		return "", restore(fmt.Errorf("task tree is invalid after failing %s: %s", id, diagnostics[0]))
 	}
 
+	if layout.External() {
+		return failedRel, nil
+	}
 	if err := commitPaths(root, id, stagePaths, opts); err != nil {
 		// Unstage only the moved paths so the index matches HEAD again.
 		if _, resetErr := git(root, append([]string{"reset", "-q", "--"}, stagePaths...)...); resetErr != nil {
@@ -277,7 +289,7 @@ func lifecyclePaths(root, id, activeRel, failedRel string) ([]string, error) {
 	if _, err := git(root, "ls-files", "--error-unmatch", "--", activeRel); err == nil {
 		return []string{activeRel, failedRel}, nil
 	}
-	readyRel := "tasks/ready/" + filepath.Base(activeRel)
+	readyRel := paths.TaskFileRel("ready", filepath.Base(activeRel))
 	if _, err := git(root, "ls-files", "--error-unmatch", "--", readyRel); err == nil {
 		return []string{readyRel, failedRel}, nil
 	}
@@ -290,7 +302,7 @@ func lifecyclePaths(root, id, activeRel, failedRel string) ([]string, error) {
 func findActiveFile(root, id string) (string, error) {
 	prefix := id + "-"
 	for _, state := range otherStates {
-		entries, err := os.ReadDir(filepath.Join(root, "tasks", state))
+		entries, err := os.ReadDir(paths.For(root).TaskDir(state))
 		if err != nil && !os.IsNotExist(err) {
 			return "", fmt.Errorf("read tasks/%s: %w", state, err)
 		}
@@ -300,7 +312,7 @@ func findActiveFile(root, id string) (string, error) {
 			}
 		}
 	}
-	entries, err := os.ReadDir(filepath.Join(root, "tasks", "active"))
+	entries, err := os.ReadDir(paths.For(root).TaskDir("active"))
 	if err != nil {
 		return "", fmt.Errorf("read tasks/active: %w", err)
 	}
@@ -322,15 +334,15 @@ func findActiveFile(root, id string) (string, error) {
 
 // commitPaths stages the given paths and commits only their contents with
 // --only. The reason, when given, becomes the body of the commit message.
-func commitPaths(root, id string, paths []string, opts Options) error {
-	if _, err := git(root, append([]string{"add", "--all", "--"}, paths...)...); err != nil {
+func commitPaths(root, id string, stage []string, opts Options) error {
+	if _, err := git(root, append([]string{"add", "--all", "--"}, stage...)...); err != nil {
 		return err
 	}
 	args := []string{"commit", "--quiet", "--only", "-m", fmt.Sprintf("docs: mark %s failed", id)}
 	if opts.ReasonSet {
 		args = append(args, "-m", opts.Reason)
 	}
-	_, err := git(root, append(append(args, "--"), paths...)...)
+	_, err := git(root, append(append(args, "--"), stage...)...)
 	return err
 }
 

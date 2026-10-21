@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"taskfactory/internal/config"
+	"taskfactory/internal/paths"
 	"taskfactory/internal/taskvalidate"
 )
 
@@ -22,7 +23,7 @@ func WithClaimLock(projectRoot string, fn func() error) error {
 	if fn == nil {
 		return errors.New("claim lock callback must not be nil")
 	}
-	lockPath := filepath.Join(projectRoot, ".taskfactory", "claim.lock")
+	lockPath := paths.For(projectRoot).ClaimLock()
 	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
 		return fmt.Errorf("create claim lock directory %s: %w", filepath.Dir(lockPath), err)
 	}
@@ -52,7 +53,7 @@ func CheckEligibility(projectRoot, id string) error {
 		return fmt.Errorf("task %s eligibility: %w", id, err)
 	}
 
-	readyDir := filepath.Join(projectRoot, "tasks", "ready")
+	readyDir := paths.For(projectRoot).TaskDir("ready")
 	entries, err := os.ReadDir(readyDir)
 	if err != nil {
 		return fmt.Errorf("task %s is not eligible: read ready tasks at %s: %w", id, readyDir, err)
@@ -71,7 +72,7 @@ func CheckEligibility(projectRoot, id string) error {
 		return fmt.Errorf("task %s is not eligible: no ready task file exists for this ID", id)
 	}
 
-	relPath, err := filepath.Rel(projectRoot, readyPath)
+	relPath, err := filepath.Rel(paths.For(projectRoot).State, readyPath)
 	if err != nil {
 		return fmt.Errorf("task %s is not eligible: resolve ready task path: %w", id, err)
 	}
@@ -80,7 +81,7 @@ func CheckEligibility(projectRoot, id string) error {
 	}
 
 	tracef("read %s", readyPath)
-	activeDir := filepath.Join(projectRoot, "tasks", "active")
+	activeDir := paths.For(projectRoot).TaskDir("active")
 	active, err := os.ReadDir(activeDir)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("task %s is not eligible: read active tasks at %s: %w", id, activeDir, err)
@@ -158,13 +159,13 @@ func ClaimWith(projectRoot, id, owner string, opts Options) error {
 		if err != nil {
 			return err
 		}
-		readyDir := filepath.Join(projectRoot, "tasks", "ready")
+		readyDir := paths.For(projectRoot).TaskDir("ready")
 		readyPath, err := findTaskPath(readyDir, id)
 		if err != nil {
 			return err
 		}
 		name := filepath.Base(readyPath)
-		activeDir := filepath.Join(projectRoot, "tasks", "active")
+		activeDir := paths.For(projectRoot).TaskDir("active")
 		activePath := filepath.Join(activeDir, name)
 		if _, err := os.Lstat(activePath); err == nil {
 			return fmt.Errorf("task %s active path %s already exists", id, activePath)
@@ -202,7 +203,7 @@ func ClaimWith(projectRoot, id, owner string, opts Options) error {
 		complete := append(append([]byte(nil), data...), []byte(metadata)...)
 		if opts.DryRun {
 			if opts.Would != nil {
-				opts.Would("move task to tasks/active")
+				opts.Would("move task to %s", paths.TaskDirRel("active"))
 				opts.Would("add worktree %s", worktree)
 			}
 			return nil
@@ -260,7 +261,7 @@ func ClaimWith(projectRoot, id, owner string, opts Options) error {
 			_ = os.Remove(tmpName)
 			return rollback(fmt.Errorf("write active task file: %w", err))
 		}
-		backup, err := os.CreateTemp(filepath.Join(projectRoot, ".taskfactory"), ".claim-backup-*.tmp")
+		backup, err := os.CreateTemp(paths.For(projectRoot).Runtime(), ".claim-backup-*.tmp")
 		if err != nil {
 			_ = os.Remove(tmpName)
 			return rollback(fmt.Errorf("prepare ready task rollback: %w", err))
@@ -303,7 +304,7 @@ func ClaimWith(projectRoot, id, owner string, opts Options) error {
 		if err := os.Rename(tmpName, activePath); err != nil {
 			return restoreReady(fmt.Errorf("write complete active task file: %w", err))
 		}
-		if diagnostics := taskvalidate.Validate(projectRoot, filepath.Join("tasks", "active", name)); len(diagnostics) > 0 {
+		if diagnostics := taskvalidate.Validate(projectRoot, paths.TaskFileRel("active", name)); len(diagnostics) > 0 {
 			return restoreReady(fmt.Errorf("validate active task: %s", diagnostics[0]))
 		}
 		if err := os.Remove(backupPath); err != nil {
@@ -314,15 +315,16 @@ func ClaimWith(projectRoot, id, owner string, opts Options) error {
 }
 
 func validateTaskStateDirectories(projectRoot string) error {
-	root, err := filepath.EvalSymlinks(projectRoot)
+	root, err := filepath.EvalSymlinks(paths.For(projectRoot).State)
 	if err != nil {
 		return fmt.Errorf("resolve project root %s: %w", projectRoot, err)
 	}
-	paths := []string{filepath.Join(root, "tasks")}
-	for _, state := range []string{"inbox", "ready", "active", "failed", "archive"} {
-		paths = append(paths, filepath.Join(root, "tasks", state))
+	layout := paths.Default(root)
+	dirs := []string{layout.Tasks()}
+	for _, state := range paths.States {
+		dirs = append(dirs, layout.TaskDir(state))
 	}
-	for _, path := range paths {
+	for _, path := range dirs {
 		info, err := os.Lstat(path)
 		if err != nil {
 			return fmt.Errorf("inspect task state directory %s: %w", path, err)

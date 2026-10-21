@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"taskfactory/internal/config"
+	"taskfactory/internal/paths"
 	"taskfactory/internal/taskvalidate"
 	"taskfactory/internal/ui"
 )
@@ -120,7 +121,7 @@ func VerifyWith(root, id string, opts Options) (result Result, runErr error) {
 	if err != nil {
 		return Result{}, err
 	}
-	rel, _ := filepath.Rel(root, taskPath)
+	rel, _ := filepath.Rel(paths.For(root).State, taskPath)
 	if ds := taskvalidate.Validate(root, filepath.ToSlash(rel)); len(ds) > 0 {
 		return Result{}, fmt.Errorf("active task %s is malformed: %s", id, ds[0])
 	}
@@ -164,7 +165,7 @@ func VerifyWith(root, id string, opts Options) (result Result, runErr error) {
 	for _, command := range cfg.Verification.Worker {
 		commands = append(commands, check{Source: "worker", Command: command})
 	}
-	path := filepath.Join(root, ".taskfactory", "evidence", id+".jsonl")
+	path := paths.For(root).Evidence(id)
 	if opts.DryRun {
 		tracef("read %s", path)
 		prior, err := os.ReadFile(path)
@@ -178,7 +179,7 @@ func VerifyWith(root, id string, opts Options) (result Result, runErr error) {
 			for _, c := range commands {
 				opts.Would("run %s", c.Command)
 			}
-			opts.Would("append evidence to %s", filepath.ToSlash(filepath.Join(".taskfactory", "evidence", id+".jsonl")))
+			opts.Would("append evidence to %s", paths.EvidenceRel(id))
 		}
 		return Result{}, nil
 	}
@@ -186,7 +187,7 @@ func VerifyWith(root, id string, opts Options) (result Result, runErr error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return Result{}, fmt.Errorf("create evidence directory: %w", err)
 	}
-	lockPath := filepath.Join(root, ".taskfactory", "evidence", id+".lock")
+	lockPath := filepath.Join(paths.For(root).EvidenceDir(), id+".lock")
 	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return Result{}, fmt.Errorf("open evidence lock: %w", err)
@@ -248,7 +249,7 @@ func VerifyWith(root, id string, opts Options) (result Result, runErr error) {
 // empty string when the evidence file is missing or empty. The file is checked
 // with the same rules Verify applies before it appends a record.
 func LastOutcome(root, id string) (string, error) {
-	data, err := os.ReadFile(filepath.Join(root, ".taskfactory", "evidence", id+".jsonl"))
+	data, err := os.ReadFile(paths.For(root).Evidence(id))
 	if os.IsNotExist(err) {
 		return "", nil
 	}
@@ -270,7 +271,7 @@ func LastOutcome(root, id string) (string, error) {
 }
 
 func activeTask(root, id string) (string, error) {
-	dir := filepath.Join(root, "tasks", "active")
+	dir := paths.For(root).TaskDir("active")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return "", fmt.Errorf("read active tasks: %w", err)

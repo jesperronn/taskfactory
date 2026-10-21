@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strings"
 
+	"taskfactory/internal/paths"
 	"taskfactory/internal/taskvalidate"
 	"taskfactory/internal/verify"
 )
@@ -141,7 +142,7 @@ func ParseOptions(args []string) (string, string, Options, error) {
 // ClaimedFailed returns the sorted IDs of failed task files that still carry a
 // Claim block.
 func ClaimedFailed(root string) ([]string, error) {
-	entries, err := os.ReadDir(filepath.Join(root, "tasks", "failed"))
+	entries, err := os.ReadDir(paths.For(root).TaskDir("failed"))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -154,7 +155,7 @@ func ClaimedFailed(root string) ([]string, error) {
 		if entry.IsDir() || !strings.HasSuffix(name, ".md") || len(name) < 7 || !idPattern.MatchString(name[:6]) {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(root, "tasks", "failed", name))
+		data, err := os.ReadFile(paths.For(root).TaskFile("failed", name))
 		if err != nil {
 			return nil, fmt.Errorf("read tasks/failed/%s: %w", name, err)
 		}
@@ -201,22 +202,25 @@ func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("resolve project root %s: %w", projectRoot, err)
 	}
-	staged, err := git(root, "diff", "--cached", "--name-only")
-	if err != nil {
-		return Result{}, fmt.Errorf("inspect index: %w", err)
-	}
-	if strings.TrimSpace(staged) != "" {
-		return Result{}, fmt.Errorf("refusing to requeue %s: the index already has staged paths; unstage them first", id)
+	layout := paths.For(root)
+	if !layout.External() {
+		staged, err := git(root, "diff", "--cached", "--name-only")
+		if err != nil {
+			return Result{}, fmt.Errorf("inspect index: %w", err)
+		}
+		if strings.TrimSpace(staged) != "" {
+			return Result{}, fmt.Errorf("refusing to requeue %s: the index already has staged paths; unstage them first", id)
+		}
 	}
 
 	name, err := findFailedFile(root, id)
 	if err != nil {
 		return Result{}, err
 	}
-	failedRel := "tasks/failed/" + name
-	targetRel := "tasks/" + target + "/" + name
-	failedAbs := filepath.Join(root, filepath.FromSlash(failedRel))
-	targetAbs := filepath.Join(root, filepath.FromSlash(targetRel))
+	failedRel := paths.TaskFileRel("failed", name)
+	targetRel := paths.TaskFileRel(target, name)
+	failedAbs := layout.TaskFile("failed", name)
+	targetAbs := layout.TaskFile(target, name)
 
 	info, err := os.Lstat(failedAbs)
 	if err != nil {
@@ -255,9 +259,11 @@ func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 		return Result{}, err
 	}
 
-	paths := []string{targetRel}
-	if _, err := git(root, "ls-files", "--error-unmatch", "--", failedRel); err == nil {
-		paths = []string{failedRel, targetRel}
+	stage := []string{targetRel}
+	if !layout.External() {
+		if _, err := git(root, "ls-files", "--error-unmatch", "--", failedRel); err == nil {
+			stage = []string{failedRel, targetRel}
+		}
 	}
 
 	if opts.DryRun {
@@ -293,8 +299,8 @@ func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 	}
 
 	if asideRel != "" {
-		evidenceAbs := filepath.Join(root, filepath.FromSlash(evidenceRel))
-		asideAbs := filepath.Join(root, filepath.FromSlash(asideRel))
+		evidenceAbs := filepath.Join(layout.State, filepath.FromSlash(evidenceRel))
+		asideAbs := filepath.Join(layout.State, filepath.FromSlash(asideRel))
 		if err := os.Rename(evidenceAbs, asideAbs); err != nil {
 			return Result{}, restore(fmt.Errorf("rename %s aside: %w", evidenceRel, err))
 		}
@@ -307,12 +313,14 @@ func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 		}
 	}
 
-	if err := commitPaths(root, id, target, paths, asideRel, attempts, discarded); err != nil {
-		// Unstage only the moved paths so the index matches HEAD again.
-		if _, resetErr := git(root, append([]string{"reset", "-q", "--"}, paths...)...); resetErr != nil {
-			err = errors.Join(err, fmt.Errorf("unstage requeued paths: %w", resetErr))
+	if !layout.External() {
+		if err := commitPaths(root, id, target, stage, asideRel, attempts, discarded); err != nil {
+			// Unstage only the moved paths so the index matches HEAD again.
+			if _, resetErr := git(root, append([]string{"reset", "-q", "--"}, stage...)...); resetErr != nil {
+				err = errors.Join(err, fmt.Errorf("unstage requeued paths: %w", resetErr))
+			}
+			return Result{}, restore(fmt.Errorf("commit requeue of %s: %w", id, err))
 		}
-		return Result{}, restore(fmt.Errorf("commit requeue of %s: %w", id, err))
 	}
 	res := Result{Path: targetRel, Aside: asideRel, Attempts: attempts, Discarded: discarded}
 	// The cleanup runs last, after the requeue commit succeeded.
@@ -340,7 +348,7 @@ func dryRun(root, id, target, targetRel string, plan cleanupPlan, newData []byte
 	}
 	name := filepath.Base(targetRel)
 	scratchTarget := filepath.Join(scratch, filepath.FromSlash(targetRel))
-	if err := os.Remove(filepath.Join(scratch, "tasks", "failed", name)); err != nil {
+	if err := os.Remove(paths.Default(scratch).TaskFile("failed", name)); err != nil {
 		return Result{}, fmt.Errorf("prepare scratch copy: %w", err)
 	}
 	if err := os.WriteFile(scratchTarget, newData, 0o644); err != nil {
@@ -357,14 +365,16 @@ func dryRun(root, id, target, targetRel string, plan cleanupPlan, newData []byte
 		return Result{}, fmt.Errorf("task tree is invalid after requeueing %s: %s", id, diagnostics[0])
 	}
 	if opts.Would != nil {
-		opts.Would("move task to tasks/%s", target)
+		opts.Would("move task to %s", paths.TaskDirRel(target))
 		if discarded != "" {
 			opts.Would("remove the Claim block")
 		}
 		if asideRel != "" {
 			opts.Would("rename evidence aside to %s", asideRel)
 		}
-		opts.Would("commit")
+		if !paths.For(root).External() {
+			opts.Would("commit")
+		}
 		if plan.hasDir {
 			opts.Would("remove worktree %s", plan.worktree)
 		}
@@ -378,8 +388,9 @@ func dryRun(root, id, target, targetRel string, plan cleanupPlan, newData []byte
 // copyTasks copies every regular file below root/tasks, and the configuration
 // when present, into dst. It only reads root.
 func copyTasks(root, dst string) error {
-	for _, top := range []string{"tasks", ".taskfactory/config.toml"} {
-		src := filepath.Join(root, filepath.FromSlash(top))
+	state := paths.For(root).State
+	for _, top := range []string{paths.TasksRel(), paths.ConfigRel()} {
+		src := filepath.Join(state, filepath.FromSlash(top))
 		err := filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
 				if os.IsNotExist(err) {
@@ -387,7 +398,7 @@ func copyTasks(root, dst string) error {
 				}
 				return err
 			}
-			rel, _ := filepath.Rel(root, path)
+			rel, _ := filepath.Rel(state, path)
 			target := filepath.Join(dst, rel)
 			if entry.IsDir() {
 				return os.MkdirAll(target, 0o755)
@@ -436,8 +447,8 @@ func claimedRefusal(root, id string) error {
 // both paths are empty. It refuses an invalid evidence file or an aside path
 // that already exists.
 func planEvidence(root, id string) (evidenceRel, asideRel string, attempts int, err error) {
-	evidenceRel = ".taskfactory/evidence/" + id + ".jsonl"
-	evidenceAbs := filepath.Join(root, filepath.FromSlash(evidenceRel))
+	evidenceRel = paths.EvidenceRel(id)
+	evidenceAbs := paths.For(root).Evidence(id)
 	data, err := os.ReadFile(evidenceAbs)
 	if os.IsNotExist(err) {
 		return "", "", 0, nil
@@ -459,8 +470,8 @@ func planEvidence(root, id string) (evidenceRel, asideRel string, attempts int, 
 		return "", "", 0, fmt.Errorf("refusing to requeue %s: evidence has an unreadable last attempt number", id)
 	}
 	attempts = last.Attempt
-	asideRel = fmt.Sprintf(".taskfactory/evidence/%s.attempts-%d.jsonl", id, attempts)
-	if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(asideRel))); err == nil {
+	asideRel = fmt.Sprintf("%s/%s.attempts-%d.jsonl", paths.EvidenceDirRel(), id, attempts)
+	if _, err := os.Lstat(filepath.Join(paths.For(root).State, filepath.FromSlash(asideRel))); err == nil {
 		return "", "", 0, fmt.Errorf("refusing to requeue %s: %s already exists; it is never overwritten", id, asideRel)
 	} else if !os.IsNotExist(err) {
 		return "", "", 0, fmt.Errorf("inspect %s: %w", asideRel, err)
@@ -474,7 +485,7 @@ func planEvidence(root, id string) (evidenceRel, asideRel string, attempts int, 
 func findFailedFile(root, id string) (string, error) {
 	prefix := id + "-"
 	for _, state := range otherStates {
-		entries, err := os.ReadDir(filepath.Join(root, "tasks", state))
+		entries, err := os.ReadDir(paths.For(root).TaskDir(state))
 		if err != nil && !os.IsNotExist(err) {
 			return "", fmt.Errorf("read tasks/%s: %w", state, err)
 		}
@@ -484,7 +495,7 @@ func findFailedFile(root, id string) (string, error) {
 			}
 		}
 	}
-	entries, err := os.ReadDir(filepath.Join(root, "tasks", "failed"))
+	entries, err := os.ReadDir(paths.For(root).TaskDir("failed"))
 	if err != nil {
 		return "", fmt.Errorf("read tasks/failed: %w", err)
 	}
@@ -506,8 +517,8 @@ func findFailedFile(root, id string) (string, error) {
 
 // commitPaths stages the given paths and commits only their contents with
 // --only. When the counter was reset, the body names the aside file.
-func commitPaths(root, id, target string, paths []string, asideRel string, attempts int, discarded string) error {
-	if _, err := git(root, append([]string{"add", "--all", "--"}, paths...)...); err != nil {
+func commitPaths(root, id, target string, stage []string, asideRel string, attempts int, discarded string) error {
+	if _, err := git(root, append([]string{"add", "--all", "--"}, stage...)...); err != nil {
 		return err
 	}
 	args := []string{"commit", "--quiet", "--only", "-m", fmt.Sprintf("docs: requeue %s to %s", id, target)}
@@ -517,7 +528,7 @@ func commitPaths(root, id, target string, paths []string, asideRel string, attem
 	if discarded != "" {
 		args = append(args, "-m", "Discarded claim (removed from the task file; the worktree and branch were not touched):\n\n"+discarded)
 	}
-	_, err := git(root, append(append(args, "--"), paths...)...)
+	_, err := git(root, append(append(args, "--"), stage...)...)
 	return err
 }
 

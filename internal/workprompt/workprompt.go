@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"taskfactory/internal/paths"
 	"taskfactory/internal/taskvalidate"
 	"taskfactory/internal/verify"
 )
@@ -46,7 +47,7 @@ const (
 
 var (
 	taskIDPattern  = regexp.MustCompile(`^TF-[0-9]{3}$`)
-	logPathPattern = regexp.MustCompile(`(?:^|/)\.taskfactory/logs/(TF-[0-9]{3})/(omp|pi|claude)-[0-9]{8}T[0-9]{6}Z\.log$`)
+	logPathPattern = regexp.MustCompile(`(?:^|/)` + regexp.QuoteMeta(paths.LogsRel()) + `/(TF-[0-9]{3})/(omp|pi|claude)-[0-9]{8}T[0-9]{6}Z\.log$`)
 )
 
 // Build returns the prompt for the single active task file for id. The text is,
@@ -68,7 +69,7 @@ func Build(projectRoot, id string) (Prompt, error) {
 	if err != nil {
 		return Prompt{}, err
 	}
-	rel := filepath.ToSlash(strings.TrimPrefix(activeAbs, root+string(filepath.Separator)))
+	rel := filepath.ToSlash(strings.TrimPrefix(activeAbs, paths.For(root).State+string(filepath.Separator)))
 	if diagnostics := taskvalidate.Validate(root, rel); len(diagnostics) > 0 {
 		return Prompt{}, fmt.Errorf("refusing to build prompt for %s: %s", id, diagnostics[0])
 	}
@@ -153,7 +154,7 @@ func rules(worktree string) string {
 
 // findActive returns the path of the only active task file for id.
 func findActive(root, id string) (string, error) {
-	dir := filepath.Join(root, "tasks", "active")
+	dir := paths.For(root).TaskDir("active")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return "", fmt.Errorf("read tasks/active: %w", err)
@@ -178,7 +179,7 @@ func findActive(root, id string) (string, error) {
 // where <UTC> is at in UTC as 20060102T150405Z.
 func LogPath(projectRoot, id, adapter string, at time.Time) string {
 	name := adapter + "-" + at.UTC().Format(logTimeLayout) + ".log"
-	return filepath.Join(projectRoot, ".taskfactory", "logs", id, name)
+	return filepath.Join(paths.For(projectRoot).LogDir(id), name)
 }
 
 // OpenLog creates the log for path with mode 0644, writes the header block and

@@ -93,7 +93,7 @@ func TestCompletionTableMatchesCommands(t *testing.T) {
 		for _, f := range spec.allFlags() {
 			got = append(got, f.Name)
 		}
-		if name == "status" && strings.Join(got, " ") != "--verbose --dry-run --help" {
+		if name == "status" && strings.Join(got, " ") != "--verbose --dry-run --state-dir --help" {
 			t.Errorf("status flags = %v", got)
 		}
 	}
@@ -245,8 +245,8 @@ func TestBashCompletion(t *testing.T) {
 		{[]string{"taskfactory", "work", "TF-001", "--adapter", ""}, "omp pi claude"},
 		{[]string{"taskfactory", "fail", "TF-001", "--outcome", ""}, "FAILED BLOCKED"},
 		{[]string{"taskfactory", "requeue", "TF-001", "--to", ""}, "ready inbox"},
-		{[]string{"tf", "status", "--"}, "--verbose --dry-run --help"},
-		{[]string{"tf", "status", "--verbose", "--"}, "--dry-run --help"},
+		{[]string{"tf", "status", "--"}, "--verbose --dry-run --state-dir --help"},
+		{[]string{"tf", "status", "--verbose", "--"}, "--dry-run --state-dir --help"},
 		{[]string{"tf", "claim", "--owner", ""}, ""},
 		{[]string{"tf", "claim", "--owner", "bob", ""}, "TF-001 TF-002"},
 		{[]string{"tf", "claim", "--", "--"}, ""},
@@ -378,6 +378,9 @@ func completionDrift(command, help string, spec completionSpec, hidden []string)
 	known := map[string]bool{"--help": true}
 	for _, f := range completionCommonFlags {
 		known[f] = true
+	}
+	if acceptsStateDir(command) {
+		known[completionStateDirFlag] = true
 	}
 	for _, f := range spec.Flags {
 		known[f.Name] = true
@@ -511,6 +514,46 @@ func TestBashCompletionAddedFlags(t *testing.T) {
 		got := strings.Join(bashComplete(t, binary, root, c.words...), " ")
 		if got != c.want {
 			t.Errorf("%q: COMPREPLY = %q, want %q", c.words, got, c.want)
+		}
+	}
+}
+
+// TestCompletionStateDir pins that --state-dir is in the completion table for
+// every command that takes it, with a free value, and for no other command.
+func TestCompletionStateDir(t *testing.T) {
+	for _, c := range commandSummaries {
+		spec, ok := findCompletionSpec(c.name)
+		if !ok {
+			t.Fatalf("command %q has no completion entry", c.name)
+		}
+		var flag *completionFlag
+		for _, f := range spec.allFlags() {
+			if f.Name == "--state-dir" {
+				f := f
+				flag = &f
+			}
+		}
+		want := c.name != "completion" && c.name != "init" && c.name != "skill"
+		if (flag != nil) != want {
+			t.Errorf("%s: --state-dir in completion table = %v, want %v", c.name, flag != nil, want)
+			continue
+		}
+		if flag != nil {
+			if !flag.takesValue() {
+				t.Errorf("%s: --state-dir must take a value", c.name)
+			}
+			if !strings.Contains(commandHelps[c.name], "--state-dir") {
+				t.Errorf("%s: help does not document --state-dir", c.name)
+			}
+		}
+	}
+	for _, shell := range []string{"bash", "zsh"} {
+		script, err := renderCompletionScript(shell)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(script, "--state-dir") {
+			t.Errorf("%s script does not complete --state-dir", shell)
 		}
 	}
 }

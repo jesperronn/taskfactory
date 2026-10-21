@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 
+	"taskfactory/internal/paths"
 	"taskfactory/internal/taskvalidate"
 )
 
@@ -68,22 +69,25 @@ func PromoteWith(projectRoot, id string, opts Options) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve project root %s: %w", projectRoot, err)
 	}
-	staged, err := git(root, "diff", "--cached", "--name-only")
-	if err != nil {
-		return "", fmt.Errorf("inspect index: %w", err)
-	}
-	if strings.TrimSpace(staged) != "" {
-		return "", fmt.Errorf("refusing to promote %s: the index already has staged paths; unstage them first", id)
+	layout := paths.For(root)
+	if !layout.External() {
+		staged, err := git(root, "diff", "--cached", "--name-only")
+		if err != nil {
+			return "", fmt.Errorf("inspect index: %w", err)
+		}
+		if strings.TrimSpace(staged) != "" {
+			return "", fmt.Errorf("refusing to promote %s: the index already has staged paths; unstage them first", id)
+		}
 	}
 
 	name, err := findInboxFile(root, id)
 	if err != nil {
 		return "", err
 	}
-	inboxRel := "tasks/inbox/" + name
-	readyRel := "tasks/ready/" + name
-	inboxAbs := filepath.Join(root, filepath.FromSlash(inboxRel))
-	readyAbs := filepath.Join(root, filepath.FromSlash(readyRel))
+	inboxRel := paths.TaskFileRel("inbox", name)
+	readyRel := paths.TaskFileRel("ready", name)
+	inboxAbs := layout.TaskFile("inbox", name)
+	readyAbs := layout.TaskFile("ready", name)
 
 	info, err := os.Lstat(inboxAbs)
 	if err != nil {
@@ -103,8 +107,10 @@ func PromoteWith(projectRoot, id string, opts Options) (string, error) {
 			return "", err
 		}
 		if opts.Would != nil {
-			opts.Would("move task to tasks/ready")
-			opts.Would("commit")
+			opts.Would("move task to %s", paths.TaskDirRel("ready"))
+			if !layout.External() {
+				opts.Would("commit")
+			}
 		}
 		return readyRel, nil
 	}
@@ -126,13 +132,16 @@ func PromoteWith(projectRoot, id string, opts Options) (string, error) {
 		return "", restore(fmt.Errorf("task tree is invalid after promoting %s: %s", id, diagnostics[0]))
 	}
 
-	paths := []string{readyRel}
-	if _, err := git(root, "ls-files", "--error-unmatch", "--", inboxRel); err == nil {
-		paths = []string{inboxRel, readyRel}
+	if layout.External() {
+		return readyRel, nil
 	}
-	if err := commitPaths(root, id, paths); err != nil {
+	stage := []string{readyRel}
+	if _, err := git(root, "ls-files", "--error-unmatch", "--", inboxRel); err == nil {
+		stage = []string{inboxRel, readyRel}
+	}
+	if err := commitPaths(root, id, stage); err != nil {
 		// Unstage only the promoted paths so the index matches HEAD again.
-		if _, resetErr := git(root, append([]string{"reset", "-q", "--"}, paths...)...); resetErr != nil {
+		if _, resetErr := git(root, append([]string{"reset", "-q", "--"}, stage...)...); resetErr != nil {
 			err = errors.Join(err, fmt.Errorf("unstage promoted paths: %w", resetErr))
 		}
 		return "", restore(fmt.Errorf("commit promotion of %s: %w", id, err))
@@ -171,8 +180,9 @@ func dryValidate(root, id, inboxRel, readyRel string) error {
 // copyTasks copies every regular file below root/tasks, and the configuration
 // when present, into dst. It only reads root.
 func copyTasks(root, dst string) error {
-	for _, top := range []string{"tasks", ".taskfactory/config.toml"} {
-		src := filepath.Join(root, filepath.FromSlash(top))
+	state := paths.For(root).State
+	for _, top := range []string{paths.TasksRel(), paths.ConfigRel()} {
+		src := filepath.Join(state, filepath.FromSlash(top))
 		err := filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
 				if os.IsNotExist(err) {
@@ -180,7 +190,7 @@ func copyTasks(root, dst string) error {
 				}
 				return err
 			}
-			rel, _ := filepath.Rel(root, path)
+			rel, _ := filepath.Rel(state, path)
 			target := filepath.Join(dst, rel)
 			if entry.IsDir() {
 				return os.MkdirAll(target, 0o755)
@@ -215,7 +225,7 @@ func refusal(id string, diagnostics []taskvalidate.Diagnostic) error {
 func findInboxFile(root, id string) (string, error) {
 	prefix := id + "-"
 	for _, state := range otherStates {
-		entries, err := os.ReadDir(filepath.Join(root, "tasks", state))
+		entries, err := os.ReadDir(paths.For(root).TaskDir(state))
 		if err != nil && !os.IsNotExist(err) {
 			return "", fmt.Errorf("read tasks/%s: %w", state, err)
 		}
@@ -225,7 +235,7 @@ func findInboxFile(root, id string) (string, error) {
 			}
 		}
 	}
-	entries, err := os.ReadDir(filepath.Join(root, "tasks", "inbox"))
+	entries, err := os.ReadDir(paths.For(root).TaskDir("inbox"))
 	if err != nil {
 		return "", fmt.Errorf("read tasks/inbox: %w", err)
 	}
@@ -247,12 +257,12 @@ func findInboxFile(root, id string) (string, error) {
 
 // commitPaths stages the given paths and commits only their contents with
 // --only, so nothing else in the index or working tree is recorded.
-func commitPaths(root, id string, paths []string) error {
-	if _, err := git(root, append([]string{"add", "--all", "--"}, paths...)...); err != nil {
+func commitPaths(root, id string, stage []string) error {
+	if _, err := git(root, append([]string{"add", "--all", "--"}, stage...)...); err != nil {
 		return err
 	}
 	message := fmt.Sprintf("docs: promote %s to ready", id)
-	_, err := git(root, append([]string{"commit", "--quiet", "--only", "-m", message, "--"}, paths...)...)
+	_, err := git(root, append([]string{"commit", "--quiet", "--only", "-m", message, "--"}, stage...)...)
 	return err
 }
 

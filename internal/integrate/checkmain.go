@@ -9,13 +9,14 @@ import (
 	"syscall"
 
 	"taskfactory/internal/config"
+	"taskfactory/internal/paths"
 )
 
 // acquireIntegrationLock takes the repository-local integration lock and
 // returns a function that releases it. Callers must invoke the function exactly
 // once.
 func acquireIntegrationLock(root string) (func(), error) {
-	lockPath := filepath.Join(root, ".taskfactory/integration.lock")
+	lockPath := paths.For(root).IntegrationLock()
 	if err := os.MkdirAll(filepath.Dir(lockPath), 0755); err != nil {
 		return nil, err
 	}
@@ -137,7 +138,7 @@ type stopState struct {
 // loadStopState validates the canonical stop record or a lone temporary sibling.
 // Both files present, or any malformed or non-regular file, is an error.
 func loadStopState(root string) (stopState, error) {
-	canonical := filepath.Join(root, ".taskfactory/integration-stop.json")
+	canonical := paths.For(root).IntegrationStop()
 	temp := canonical + ".tmp"
 	cInfo, cErr := os.Lstat(canonical)
 	tInfo, tErr := os.Lstat(temp)
@@ -185,7 +186,7 @@ func requireMainAt(root, want string) error {
 // persistStop atomically writes the canonical stop record through the sibling
 // temporary path, replacing any existing canonical record or valid temp file.
 func persistStop(root string, rec stopRecord) error {
-	canonical := filepath.Join(root, ".taskfactory/integration-stop.json")
+	canonical := paths.For(root).IntegrationStop()
 	temp := canonical + ".tmp"
 	b, err := json.MarshalIndent(rec, "", "  ")
 	if err != nil {
@@ -214,7 +215,7 @@ func persistStop(root string, rec stopRecord) error {
 // clearStop removes the canonical record and any lone temp sibling. It is only
 // called after loadStopState validated them and all checks passed on main.
 func clearStop(root string) error {
-	canonical := filepath.Join(root, ".taskfactory/integration-stop.json")
+	canonical := paths.For(root).IntegrationStop()
 	removed := false
 	for _, p := range []string{canonical, canonical + ".tmp"} {
 		if _, err := os.Lstat(p); err == nil {

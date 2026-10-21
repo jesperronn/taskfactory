@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"taskfactory/internal/config"
+	"taskfactory/internal/paths"
 )
 
 var (
@@ -23,7 +24,7 @@ var (
 	inlineCodePattern     = regexp.MustCompile("`[^`]*`")
 )
 
-var states = []string{"inbox", "ready", "active", "failed", "archive"}
+var states = paths.States
 
 // Diagnostic is one stable, file-and-field-specific validation error.
 type Diagnostic struct{ Path, Field, Message string }
@@ -42,14 +43,15 @@ type task struct {
 func Validate(root, selected string) []Diagnostic {
 	root, _ = filepath.Abs(root)
 	if selected == "" {
-		archive := filepath.Join(root, "tasks", "archive")
+		layout := paths.For(root)
+		archive := layout.TaskDir("archive")
 		return validateTree(root, func(path string) bool { return filepath.Dir(path) != archive })
 	}
 	selectedAbs := ""
 	if filepath.IsAbs(selected) {
 		selectedAbs, _ = filepath.Abs(selected)
 	} else {
-		selectedAbs, _ = filepath.Abs(filepath.Join(root, selected))
+		selectedAbs, _ = filepath.Abs(filepath.Join(paths.For(root).State, selected))
 	}
 	return validateTree(root, func(path string) bool { return path == selectedAbs })
 }
@@ -62,7 +64,7 @@ func ValidateFiles(root string, files []string) []Diagnostic {
 	root, _ = filepath.Abs(root)
 	selected := make(map[string]bool, len(files))
 	for _, file := range files {
-		selected[filepath.Join(root, filepath.FromSlash(file))] = true
+		selected[filepath.Join(paths.For(root).State, filepath.FromSlash(file))] = true
 	}
 	return validateTree(root, func(path string) bool { return selected[path] })
 }
@@ -72,17 +74,19 @@ func ValidateFiles(root string, files []string) []Diagnostic {
 // always kept. An archived file's contract is checked only when report accepts
 // it, and its dependencies join the graph only then.
 func validateTree(root string, report func(path string) bool) []Diagnostic {
+	layout := paths.For(root)
+	base := layout.State
 	var diagnostics []Diagnostic
 	var always []Diagnostic
 	var tasksFound []task
 	validStates := map[string]bool{}
 	for _, state := range states {
 		validStates[state] = true
-		dir := filepath.Join(root, "tasks", state)
+		dir := layout.TaskDir(state)
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			if !os.IsNotExist(err) {
-				diagnostics = append(diagnostics, Diagnostic{filepath.Join("tasks", state), "directory", err.Error()})
+				diagnostics = append(diagnostics, Diagnostic{filepath.FromSlash(paths.TaskDirRel(state)), "directory", err.Error()})
 			}
 			continue
 		}
@@ -90,7 +94,7 @@ func validateTree(root string, report func(path string) bool) []Diagnostic {
 			path := filepath.Join(dir, entry.Name())
 			info, err := entry.Info()
 			if err != nil {
-				diagnostics = append(diagnostics, Diagnostic{relPath(root, path), "file", err.Error()})
+				diagnostics = append(diagnostics, Diagnostic{relPath(base, path), "file", err.Error()})
 				continue
 			}
 			if info.IsDir() {
@@ -98,7 +102,7 @@ func validateTree(root string, report func(path string) bool) []Diagnostic {
 			}
 			data, err := os.ReadFile(path)
 			if err != nil {
-				diagnostics = append(diagnostics, Diagnostic{relPath(root, path), "file", err.Error()})
+				diagnostics = append(diagnostics, Diagnostic{relPath(base, path), "file", err.Error()})
 				continue
 			}
 			if entry.Name() == ".gitkeep" && len(data) == 0 {
@@ -106,15 +110,15 @@ func validateTree(root string, report func(path string) bool) []Diagnostic {
 			}
 			if state == "archive" {
 				if problem := archiveProblem(entry.Name(), data); problem != "" {
-					always = append(always, Diagnostic{relPath(root, path), "archive read", problem})
+					always = append(always, Diagnostic{relPath(base, path), "archive read", problem})
 					continue
 				}
 			}
 			if len(data) == 0 {
-				diagnostics = append(diagnostics, Diagnostic{relPath(root, path), "heading", "empty task file must contain # TF-NNN: title"})
+				diagnostics = append(diagnostics, Diagnostic{relPath(base, path), "heading", "empty task file must contain # TF-NNN: title"})
 				continue
 			}
-			item := task{rel: relPath(root, path), state: state}
+			item := task{rel: relPath(base, path), state: state}
 			if !utf8.Valid(data) {
 				diagnostics = append(diagnostics, Diagnostic{item.rel, "encoding", "file is not valid UTF-8"})
 				continue
@@ -152,12 +156,12 @@ func validateTree(root string, report func(path string) bool) []Diagnostic {
 			tasksFound = append(tasksFound, item)
 		}
 	}
-	if entries, err := os.ReadDir(filepath.Join(root, "tasks")); err == nil {
+	if entries, err := os.ReadDir(layout.Tasks()); err == nil {
 		for _, entry := range entries {
 			if !entry.IsDir() || validStates[entry.Name()] {
 				continue
 			}
-			dir := filepath.Join(root, "tasks", entry.Name())
+			dir := filepath.Join(layout.Tasks(), entry.Name())
 			children, _ := os.ReadDir(dir)
 			for _, child := range children {
 				if child.IsDir() {
@@ -167,7 +171,7 @@ func validateTree(root string, report func(path string) bool) []Diagnostic {
 				if child.Name() == ".gitkeep" && e == nil && len(data) == 0 {
 					continue
 				}
-				path := filepath.ToSlash(filepath.Join("tasks", entry.Name(), child.Name()))
+				path := paths.TasksRel() + "/" + entry.Name() + "/" + child.Name()
 				if e != nil {
 					diagnostics = append(diagnostics, Diagnostic{path, "file", e.Error()})
 					continue
@@ -202,7 +206,7 @@ func validateTree(root string, report func(path string) bool) []Diagnostic {
 				continue
 			}
 			if targets[0].state != "archive" {
-				diagnostics = append(diagnostics, Diagnostic{item.rel, "dependency", fmt.Sprintf("%s is unresolved; dependency must be in tasks/archive", dep)})
+				diagnostics = append(diagnostics, Diagnostic{item.rel, "dependency", fmt.Sprintf("%s is unresolved; dependency must be in %s", dep, paths.TaskDirRel("archive"))})
 			}
 			graph[item.id] = append(graph[item.id], dep)
 		}
@@ -214,7 +218,7 @@ func validateTree(root string, report func(path string) bool) []Diagnostic {
 	}
 	filtered := diagnostics[:0]
 	for _, d := range diagnostics {
-		if report(filepath.Join(root, filepath.FromSlash(d.Path))) {
+		if report(filepath.Join(base, filepath.FromSlash(d.Path))) {
 			filtered = append(filtered, d)
 		}
 	}

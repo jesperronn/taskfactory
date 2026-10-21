@@ -7,10 +7,11 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+
+	"taskfactory/internal/paths"
 )
 
 const (
-	configPath       = ".taskfactory/config.toml"
 	protocolVersion  = 1
 	maxParallelLimit = 4
 )
@@ -18,10 +19,13 @@ const (
 // Config is the validated project configuration used by TaskFactory.
 type Config struct {
 	ProtocolVersion int
-	Workers         Workers
-	Git             Git
-	Integration     Integration
-	Verification    Verification
+	// ProjectRoot is the code repository named by project_root. It is empty
+	// unless the config sets it; it is required when state is external.
+	ProjectRoot  string
+	Workers      Workers
+	Git          Git
+	Integration  Integration
+	Verification Verification
 }
 
 // Workers contains worker execution policy.
@@ -51,7 +55,8 @@ type Verification struct {
 // Load reads .taskfactory/config.toml from projectRoot and returns its
 // validated configuration. WorktreeRoot is normalized to an absolute path.
 func Load(projectRoot string) (Config, error) {
-	path := filepath.Join(projectRoot, configPath)
+	layout := paths.For(projectRoot)
+	path := layout.Config()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -78,7 +83,7 @@ func Load(projectRoot string) (Config, error) {
 		Workers:         Workers{MaxParallel: maxParallelLimit},
 		Git: Git{
 			UseWorktrees:        true,
-			WorktreeRoot:        ".taskfactory/worktrees",
+			WorktreeRoot:        paths.WorktreesRel(),
 			IntegrationStrategy: "ff-only",
 		},
 		Integration: Integration{StopOnMainFailure: true},
@@ -86,6 +91,12 @@ func Load(projectRoot string) (Config, error) {
 			Worker:      []string{"go test ./..."},
 			Integration: []string{"go test ./...", "go vet ./..."},
 		},
+	}
+	if metadata.IsDefined("project_root") {
+		config.ProjectRoot = parsed.ProjectRoot
+	}
+	if layout.External() && config.ProjectRoot == "" {
+		return Config{}, fmt.Errorf("configuration file %s: project_root is required when the state directory is outside the project; set project_root to the code repository", path)
 	}
 	if metadata.IsDefined("protocol_version") {
 		config.ProtocolVersion = parsed.ProtocolVersion
@@ -146,7 +157,7 @@ func Load(projectRoot string) (Config, error) {
 		}
 	}
 
-	root, err := resolveWorktreeRoot(projectRoot, config.Git.WorktreeRoot)
+	root, err := resolveWorktreeRoot(layout.State, config.Git.WorktreeRoot)
 	if err != nil {
 		return Config{}, fmt.Errorf("configuration file %s: git.worktree_root: %w", path, err)
 	}
@@ -155,7 +166,8 @@ func Load(projectRoot string) (Config, error) {
 }
 
 type fileConfig struct {
-	ProtocolVersion int `toml:"protocol_version"`
+	ProjectRoot     string `toml:"project_root"`
+	ProtocolVersion int    `toml:"protocol_version"`
 	Workers         struct {
 		MaxParallel int `toml:"max_parallel"`
 	} `toml:"workers"`
@@ -172,6 +184,34 @@ type fileConfig struct {
 		Integration []string `toml:"integration"`
 		Main        []string `toml:"main"`
 	} `toml:"verification"`
+}
+
+// ProjectRootOf reads only project_root from the config in stateRoot, for
+// discovery when state is outside the project. It errors, naming the key,
+// when the file does not set it.
+func ProjectRootOf(stateRoot string) (string, error) {
+	path := paths.Default(stateRoot).Config()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("configuration file %s is missing; project_root must name the code repository", path)
+		}
+		return "", fmt.Errorf("read configuration file %s: %w", path, err)
+	}
+	var parsed struct {
+		ProjectRoot string `toml:"project_root"`
+	}
+	if _, err := toml.Decode(string(data), &parsed); err != nil {
+		return "", fmt.Errorf("parse configuration file %s: %w", path, err)
+	}
+	if parsed.ProjectRoot == "" {
+		return "", fmt.Errorf("configuration file %s: project_root is required when the state directory is outside the project; set project_root to the code repository", path)
+	}
+	root := parsed.ProjectRoot
+	if !filepath.IsAbs(root) {
+		root = filepath.Join(stateRoot, root)
+	}
+	return filepath.Clean(root), nil
 }
 
 func validateCommands(key string, commands []string) error {

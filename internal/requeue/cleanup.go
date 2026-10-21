@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"taskfactory/internal/paths"
 )
 
 // CleanupError reports that the task WAS requeued and committed but removing
@@ -34,7 +36,7 @@ type worktreeEntry struct {
 // that removing them loses nothing. claimBlock is the Claim block text, or
 // empty when the task has none. A refusal is returned as an error.
 func planCleanup(root, id, claimBlock string) (cleanupPlan, error) {
-	wtRoot := resolvePath(filepath.Join(root, ".taskfactory", "worktrees"))
+	wtRoot := resolvePath(paths.For(root).DefaultWorktreeRoot())
 	worktree := filepath.Join(wtRoot, id)
 	branch := "task/" + id
 	if claimBlock != "" {

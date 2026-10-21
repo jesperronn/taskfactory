@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"taskfactory/internal/config"
+	"taskfactory/internal/paths"
 	"taskfactory/internal/taskvalidate"
 )
 
@@ -136,7 +137,7 @@ func RunWith(root, id string, opts Options) (retErr error) {
 			retErr = errors.Join(retErr, fmt.Errorf("append integration evidence: %w", e))
 		}
 	}()
-	if _, e := os.Lstat(filepath.Join(root, ".taskfactory/integration-stop.json")); e == nil {
+	if _, e := os.Lstat(paths.For(root).IntegrationStop()); e == nil {
 		stopErr := describeStop(root)
 		fail = &failure{outcome: "BLOCKED", stage: "eligibility", note: stopErr.Error()}
 		return stopErr
@@ -144,9 +145,9 @@ func RunWith(root, id string, opts Options) (retErr error) {
 		fail = &failure{outcome: "BLOCKED", stage: "eligibility", err: e}
 		return e
 	}
-	if _, e := os.Lstat(filepath.Join(root, ".taskfactory/integration-stop.json.tmp")); e == nil {
-		fail = &failure{outcome: "BLOCKED", stage: "eligibility", note: "integration stopped by .taskfactory/integration-stop.json.tmp; inspect and repair main"}
-		return fmt.Errorf("integration stopped: inspect .taskfactory/integration-stop.json.tmp and repair main")
+	if _, e := os.Lstat(paths.For(root).IntegrationStop() + ".tmp"); e == nil {
+		fail = &failure{outcome: "BLOCKED", stage: "eligibility", note: "integration stopped by " + paths.IntegrationStopRel() + ".tmp; inspect and repair main"}
+		return fmt.Errorf("integration stopped: inspect %s.tmp and repair main", paths.IntegrationStopRel())
 	}
 	cfg, e := config.Load(root)
 	if e != nil {
@@ -206,8 +207,10 @@ func RunWith(root, id string, opts Options) (retErr error) {
 			for _, command := range cfg.Verification.Main {
 				opts.Would("run %s", command)
 			}
-			opts.Would("archive %s", filepath.ToSlash(filepath.Join("tasks/archive", filepath.Base(taskPath))))
-			opts.Would("commit")
+			opts.Would("archive %s", paths.TaskFileRel("archive", filepath.Base(taskPath)))
+			if !paths.For(root).External() {
+				opts.Would("commit")
+			}
 			opts.Would("append integration evidence")
 		}
 		return nil
@@ -291,7 +294,8 @@ func RunWith(root, id string, opts Options) (retErr error) {
 		fail = &failure{outcome: "FAILED", stage: "archive", err: fmt.Errorf("main advanced; configuration changed before archive: %w", e)}
 		return fail.err
 	}
-	archive := filepath.Join(root, "tasks/archive", filepath.Base(taskPath))
+	layout := paths.For(root)
+	archive := layout.TaskFile("archive", filepath.Base(taskPath))
 	if _, e = os.Lstat(archive); e == nil {
 		fail = &failure{outcome: "FAILED", stage: "archive", err: fmt.Errorf("archive task path already exists: %s", archive)}
 		return fail.err
@@ -300,8 +304,12 @@ func RunWith(root, id string, opts Options) (retErr error) {
 		fail = &failure{outcome: "FAILED", stage: "archive", err: e}
 		return fmt.Errorf("move task to archive: %w", e)
 	}
-	archiveRel := filepath.ToSlash(filepath.Join("tasks/archive", filepath.Base(taskPath)))
-	activeRel := filepath.ToSlash(filepath.Join("tasks/active", filepath.Base(taskPath)))
+	if layout.External() {
+		// State is outside the project, so the archive move is a plain rename.
+		return finishPass(root, id, &entry, &appended, &fail, &retErr)
+	}
+	archiveRel := paths.TaskFileRel("archive", filepath.Base(taskPath))
+	activeRel := paths.TaskFileRel("active", filepath.Base(taskPath))
 	stagePaths := []string{archiveRel}
 	if _, trackedErr := git(root, "ls-files", "--error-unmatch", activeRel); trackedErr == nil {
 		stagePaths = append(stagePaths, activeRel)
@@ -309,7 +317,7 @@ func RunWith(root, id string, opts Options) (retErr error) {
 		// Claims are deliberately uncommitted. When active is untracked, the
 		// committed lifecycle transition is the tracked ready deletion plus the
 		// archive addition; the claimed active file is operational state.
-		readyRel := filepath.ToSlash(filepath.Join("tasks/ready", filepath.Base(taskPath)))
+		readyRel := paths.TaskFileRel("ready", filepath.Base(taskPath))
 		if _, readyErr := git(root, "ls-files", "--error-unmatch", readyRel); readyErr == nil {
 			stagePaths = append(stagePaths, readyRel)
 		} else {
@@ -331,6 +339,12 @@ func RunWith(root, id string, opts Options) (retErr error) {
 		fail = &failure{outcome: "FAILED", stage: "archive", output: out, err: err}
 		return fmt.Errorf("commit archive transition: %w", err)
 	}
+	return finishPass(root, id, &entry, &appended, &fail, &retErr)
+}
+
+// finishPass records the PASS attempt after the archive move (and, in the
+// default layout, its commit) and suppresses the deferred failure record.
+func finishPass(root, id string, entry *attempt, appended *bool, fail **failure, retErr *error) error {
 	entry.Outcome = "PASS"
 	entry.Stage = "archive"
 	entry.MainAfter, _ = git(root, "rev-parse", "HEAD")
@@ -339,18 +353,21 @@ func RunWith(root, id string, opts Options) (retErr error) {
 	entry.Output = ""
 	entry.Error = ""
 	entry.Note = "Integration checks passed; lifecycle archive commit followed the feature commit."
-	appended = true
-	if e = appendRecord(root, id, entry); e != nil {
+	if paths.For(root).External() {
+		entry.Note = "Integration checks passed; the task was archived in the external state directory."
+	}
+	*appended = true
+	if e := appendRecord(root, id, *entry); e != nil {
 		return fmt.Errorf("archive committed but append PASS integration evidence failed: %w", e)
 	}
 	// The deferred failure record is suppressed after the explicit PASS append.
-	fail = nil
-	retErr = nil
+	*fail = nil
+	*retErr = nil
 	return nil
 }
 
 func candidateDetails(root, id string) (branch, base, worktree, path string, err error) {
-	dir := filepath.Join(root, "tasks/active")
+	dir := paths.For(root).TaskDir("active")
 	es, e := os.ReadDir(dir)
 	if e != nil {
 		return "", "", "", "", e
@@ -365,7 +382,7 @@ func candidateDetails(root, id string) (branch, base, worktree, path string, err
 		return "", "", "", "", fmt.Errorf("task %s must have exactly one active task file", id)
 	}
 	path = matches[0]
-	if ds := taskvalidate.Validate(root, filepath.ToSlash(strings.TrimPrefix(path, root+string(filepath.Separator)))); len(ds) > 0 {
+	if ds := taskvalidate.Validate(root, filepath.ToSlash(strings.TrimPrefix(path, paths.For(root).State+string(filepath.Separator)))); len(ds) > 0 {
 		return "", "", "", "", fmt.Errorf("active task %s is malformed: %s", id, ds[0])
 	}
 	b, e := os.ReadFile(path)
@@ -434,7 +451,7 @@ func candidateDetails(root, id string) (branch, base, worktree, path string, err
 
 func latestWorker(root, id, branch, base string) (workerRecord, error) {
 	var last workerRecord
-	p := filepath.Join(root, ".taskfactory/evidence", id+".jsonl")
+	p := paths.For(root).Evidence(id)
 	b, e := os.ReadFile(p)
 	if e != nil {
 		return last, fmt.Errorf("worker evidence for %s: %w", id, e)
@@ -499,15 +516,20 @@ func validUTC(value string) bool {
 }
 
 func cleanConfig(root string) error {
-	tracked, e := git(root, "ls-files", "--error-unmatch", ".taskfactory/config.toml")
+	if paths.For(root).External() {
+		// The config lives in the state directory, outside project history.
+		return nil
+	}
+	cfg := paths.ConfigRel()
+	tracked, e := git(root, "ls-files", "--error-unmatch", cfg)
 	if e != nil || tracked == "" {
-		return fmt.Errorf(".taskfactory/config.toml must be tracked in HEAD")
+		return fmt.Errorf("%s must be tracked in HEAD", cfg)
 	}
-	if _, e = git(root, "diff", "--quiet", "HEAD", "--", ".taskfactory/config.toml"); e != nil {
-		return fmt.Errorf(".taskfactory/config.toml differs from HEAD")
+	if _, e = git(root, "diff", "--quiet", "HEAD", "--", cfg); e != nil {
+		return fmt.Errorf("%s differs from HEAD", cfg)
 	}
-	if _, e = git(root, "diff", "--cached", "--quiet", "HEAD", "--", ".taskfactory/config.toml"); e != nil {
-		return fmt.Errorf(".taskfactory/config.toml is staged")
+	if _, e = git(root, "diff", "--cached", "--quiet", "HEAD", "--", cfg); e != nil {
+		return fmt.Errorf("%s is staged", cfg)
 	}
 	return nil
 }
@@ -537,8 +559,10 @@ func cleanMainRuntime(root, id, worktreeRoot string) error {
 		statuses[strings.TrimSpace(line[3:])] = line[:2]
 	}
 	worktreeRel, _ := filepath.Rel(root, worktreeRoot)
+	layout := paths.For(root)
+	activeDir, readyDir := paths.TaskDirRel("active")+"/", paths.TaskDirRel("ready")+"/"
 	for path := range statuses {
-		if path == ".taskfactory/integration.lock" || path == ".taskfactory/claim.lock" || isEvidenceRuntimePath(path) || isWorkLogPath(path) || strings.HasPrefix(path, ".taskfactory/.claim-backup-") && strings.HasSuffix(path, ".tmp") {
+		if path == paths.IntegrationLockRel() || path == paths.ClaimLockRel() || isEvidenceRuntimePath(path) || isWorkLogPath(path) || strings.HasPrefix(path, paths.RuntimeRel()+"/.claim-backup-") && strings.HasSuffix(path, ".tmp") {
 			continue
 		}
 		if strings.HasPrefix(path, filepath.ToSlash(worktreeRel)+"/") {
@@ -549,21 +573,21 @@ func cleanMainRuntime(root, id, worktreeRoot string) error {
 			}
 			continue
 		}
-		if strings.HasPrefix(path, "tasks/active/.claim-") && strings.HasSuffix(path, ".tmp") {
+		if strings.HasPrefix(path, activeDir+".claim-") && strings.HasSuffix(path, ".tmp") {
 			continue
 		}
-		if strings.HasPrefix(path, "tasks/ready/") && statuses[path] == " D" {
+		if strings.HasPrefix(path, readyDir) && statuses[path] == " D" {
 			name := filepath.Base(path)
-			activePath := filepath.Join(root, "tasks/active", name)
-			if statuses[filepath.ToSlash(filepath.Join("tasks/active", name))] != "??" || !validClaimFile(root, activePath) {
+			activePath := layout.TaskFile("active", name)
+			if statuses[paths.TaskFileRel("active", name)] != "??" || !validClaimFile(root, activePath) {
 				return fmt.Errorf("unrelated main worktree change blocks integration: %s", path)
 			}
 			continue
 		}
-		if strings.HasPrefix(path, "tasks/active/") && statuses[path] == "??" {
+		if strings.HasPrefix(path, activeDir) && statuses[path] == "??" {
 			name := filepath.Base(path)
-			readyPath := filepath.ToSlash(filepath.Join("tasks/ready", name))
-			if statuses[readyPath] != " D" || !validClaimFile(root, filepath.Join(root, path)) {
+			readyPath := paths.TaskFileRel("ready", name)
+			if statuses[readyPath] != " D" || !validClaimFile(root, filepath.Join(layout.State, filepath.FromSlash(path))) {
 				return fmt.Errorf("unrelated main worktree change blocks integration: %s", path)
 			}
 			continue
@@ -574,7 +598,7 @@ func cleanMainRuntime(root, id, worktreeRoot string) error {
 }
 
 func validClaimFile(root, path string) bool {
-	if ds := taskvalidate.Validate(root, filepath.ToSlash(strings.TrimPrefix(path, root+string(filepath.Separator)))); len(ds) > 0 {
+	if ds := taskvalidate.Validate(root, filepath.ToSlash(strings.TrimPrefix(path, paths.For(root).State+string(filepath.Separator)))); len(ds) > 0 {
 		return false
 	}
 	b, e := os.ReadFile(path)
@@ -628,7 +652,7 @@ func registeredClaimWorktree(root, path string) bool {
 	return false
 }
 func checkRuntimeInventory(root, configuredWorktreeRoot string) error {
-	dir := filepath.Join(root, ".taskfactory")
+	dir := paths.For(root).Runtime()
 	configuredWorktreeRoot = filepath.Clean(configuredWorktreeRoot)
 	entries, e := os.ReadDir(dir)
 	if e != nil {
@@ -709,14 +733,14 @@ func checkRuntimeInventory(root, configuredWorktreeRoot string) error {
 // isWorkLogPath reports whether path is the work log directory or inside it.
 // A sibling that merely shares the prefix, such as .taskfactory/logsx, is not.
 func isWorkLogPath(path string) bool {
-	return path == ".taskfactory/logs" || strings.HasPrefix(path, ".taskfactory/logs/")
+	return path == paths.LogsRel() || strings.HasPrefix(path, paths.LogsRel()+"/")
 }
 func isEvidenceRuntimePath(path string) bool {
-	for _, name := range []string{".taskfactory/evidence/", ".taskfactory/integration-evidence/"} {
+	for _, name := range []string{paths.EvidenceDirRel() + "/", paths.IntegrationEvidenceDirRel() + "/"} {
 		if strings.HasPrefix(path, name) {
 			base := strings.TrimPrefix(path, name)
 			suffix := ".jsonl"
-			if strings.HasPrefix(name, ".taskfactory/evidence/") && strings.HasSuffix(base, ".lock") {
+			if name == paths.EvidenceDirRel()+"/" && strings.HasSuffix(base, ".lock") {
 				suffix = ".lock"
 			}
 			return strings.HasSuffix(base, suffix) && idPattern.MatchString(strings.TrimSuffix(base, suffix))
@@ -726,13 +750,13 @@ func isEvidenceRuntimePath(path string) bool {
 }
 func retainedClaim(root, id string) bool {
 	for _, state := range []string{"active", "failed", "archive"} {
-		entries, e := os.ReadDir(filepath.Join(root, "tasks", state))
+		entries, e := os.ReadDir(paths.For(root).TaskDir(state))
 		if e != nil {
 			continue
 		}
 		for _, entry := range entries {
 			if !entry.IsDir() && strings.HasPrefix(entry.Name(), id+"-") && strings.HasSuffix(entry.Name(), ".md") {
-				b, e := os.ReadFile(filepath.Join(root, "tasks", state, entry.Name()))
+				b, e := os.ReadFile(paths.For(root).TaskFile(state, entry.Name()))
 				if e == nil && strings.Contains(string(b), "## Claim") {
 					return true
 				}
@@ -778,14 +802,14 @@ func gitOutputErr(dir string, args ...string) (string, error) {
 	return string(out), e
 }
 func nextAttempt(root, id string) int {
-	b, e := os.ReadFile(filepath.Join(root, ".taskfactory/integration-evidence", id+".jsonl"))
+	b, e := os.ReadFile(paths.For(root).IntegrationEvidence(id))
 	if e != nil {
 		return 1
 	}
 	return bytes.Count(b, []byte{'\n'}) + 1
 }
 func appendRecord(root, id string, r attempt) error {
-	p := filepath.Join(root, ".taskfactory/integration-evidence", id+".jsonl")
+	p := paths.For(root).IntegrationEvidence(id)
 	if e := os.MkdirAll(filepath.Dir(p), 0755); e != nil {
 		return e
 	}
@@ -832,7 +856,7 @@ func parseStop(b []byte) (stopRecord, error) {
 }
 
 func describeStop(root string) error {
-	path := filepath.Join(root, ".taskfactory/integration-stop.json")
+	path := paths.For(root).IntegrationStop()
 	b, e := os.ReadFile(path)
 	if e != nil {
 		return fmt.Errorf("integration stopped: inspect %s and repair main: %w", path, e)
@@ -844,7 +868,7 @@ func describeStop(root string) error {
 	return fmt.Errorf("integration stopped: main %s failed command %q; repair main and inspect %s", rec.Main, rec.Command, path)
 }
 func writeStop(root, main, command string, code *int, out string, startErr error) error {
-	p := filepath.Join(root, ".taskfactory/integration-stop.json")
+	p := paths.For(root).IntegrationStop()
 	if _, e := os.Lstat(p); e == nil {
 		return fmt.Errorf("stop record already exists")
 	}

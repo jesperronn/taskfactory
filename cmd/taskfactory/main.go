@@ -19,6 +19,7 @@ import (
 	"taskfactory/internal/config"
 	"taskfactory/internal/fail"
 	"taskfactory/internal/integrate"
+	"taskfactory/internal/paths"
 	"taskfactory/internal/promote"
 	"taskfactory/internal/requeue"
 	"taskfactory/internal/taskvalidate"
@@ -190,7 +191,7 @@ worker = ["go test ./..."]
 integration = ["go test ./...", "go vet ./..."]
 `
 
-var taskStates = []string{"inbox", "ready", "active", "failed", "archive"}
+var taskStates = paths.States
 
 // verifyHelp is printed by "verify --help" and "verify -h".
 const verifyHelp = `Usage: taskfactory verify <ID>
@@ -208,6 +209,8 @@ Next step: taskfactory integrate <ID> after a passing verify.
 Flags:
   --verbose   write detail lines starting "verbose: " to stderr
   --dry-run   print what would change as "would: " lines and change nothing
+  --state-dir <path>  keep task state in this directory (default: the project;
+                      TF_STATE_DIR is used when the flag is absent)
   --help, -h  print this help and exit successfully
 
 Exit codes:
@@ -231,6 +234,8 @@ Next step: taskfactory status after a successful integrate.
 Flags:
   --verbose   write detail lines starting "verbose: " to stderr
   --dry-run   print what would change as "would: " lines and change nothing
+  --state-dir <path>  keep task state in this directory (default: the project;
+                      TF_STATE_DIR is used when the flag is absent)
   --help, -h  print this help and exit successfully
 
 Exit codes:
@@ -252,6 +257,8 @@ Next step: taskfactory integrate <ID> once main passes.
 Flags:
   --verbose   write detail lines starting "verbose: " to stderr
   --dry-run   print what would change as "would: " lines and change nothing
+  --state-dir <path>  keep task state in this directory (default: the project;
+                      TF_STATE_DIR is used when the flag is absent)
   --help, -h  print this help and exit successfully
 
 Exit codes:
@@ -278,6 +285,8 @@ Next step: taskfactory claim <ID> --owner <name> after a promote.
 Flags:
   --verbose   write detail lines starting "verbose: " to stderr
   --dry-run   print what would change as "would: " lines and change nothing
+  --state-dir <path>  keep task state in this directory (default: the project;
+                      TF_STATE_DIR is used when the flag is absent)
   --help, -h  print this help and exit successfully
 
 Exit codes:
@@ -308,6 +317,8 @@ Flags:
   --reason <text>             single-line reason, only when no evidence exists
   --verbose   write detail lines starting "verbose: " to stderr
   --dry-run   print what would change as "would: " lines and change nothing
+  --state-dir <path>  keep task state in this directory (default: the project;
+                      TF_STATE_DIR is used when the flag is absent)
   --help, -h                  print this help and exit successfully
 
 Exit codes:
@@ -368,6 +379,8 @@ Flags:
   --discard-claim     remove the Claim block of a claimed failed task first
   --verbose   write detail lines starting "verbose: " to stderr
   --dry-run   print what would change as "would: " lines and change nothing
+  --state-dir <path>  keep task state in this directory (default: the project;
+                      TF_STATE_DIR is used when the flag is absent)
   --help, -h          print this help and exit successfully
 
 Exit codes:
@@ -405,6 +418,8 @@ Flags:
   --endpoint <host:port>     oMLX server address (default 127.0.0.1:8000)
   --verbose   write detail lines starting "verbose: " to stderr
   --dry-run   print what would change as "would: " lines and change nothing
+  --state-dir <path>  keep task state in this directory (default: the project;
+                      TF_STATE_DIR is used when the flag is absent)
   --help, -h                 print this help and exit successfully
 
 Exit codes:
@@ -603,8 +618,13 @@ func main() {
 				fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory "+args[0], err.Error()))
 				os.Exit(exitUsage)
 			}
+			if flags.StateDir != "" && !acceptsStateDir(args[0]) {
+				fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory "+args[0], "--state-dir is not supported by this command"))
+				os.Exit(exitUsage)
+			}
 			args = append([]string{args[0]}, rest...)
 			common = flags
+			stateDirFlag = flags.StateDir
 			verboseOn = flags.Verbose
 			hintsOff = flags.DryRun
 		}
@@ -811,6 +831,8 @@ Flags:
   --owner <name>  worker identifier (required)
   --verbose   write detail lines starting "verbose: " to stderr
   --dry-run   print what would change as "would: " lines and change nothing
+  --state-dir <path>  keep task state in this directory (default: the project;
+                      TF_STATE_DIR is used when the flag is absent)
   --help, -h      print this help and exit successfully
 
 Exit codes:
@@ -874,6 +896,8 @@ Next step: taskfactory promote <ID> or claim <ID> after a clean validate.
 Flags:
   --verbose   write detail lines starting "verbose: " to stderr
   --dry-run   print what would change as "would: " lines and change nothing
+  --state-dir <path>  keep task state in this directory (default: the project;
+                      TF_STATE_DIR is used when the flag is absent)
   --help, -h  print this help and exit successfully
 
 Exit codes:
@@ -895,7 +919,8 @@ func validateProject(args []string) error {
 	if _, err := config.Load(root); err != nil {
 		return err
 	}
-	files, err := selectValidateFiles(root, args)
+	state := paths.For(root).State
+	files, err := selectValidateFiles(state, args)
 	if err != nil {
 		return err
 	}
@@ -911,8 +936,8 @@ func validateProject(args []string) error {
 		fmt.Fprintln(os.Stdout, style.Green("inbox and ready tasks are valid"))
 	} else {
 		fmt.Fprintln(os.Stdout, style.Green(fmt.Sprintf("%d task file(s) valid", len(files))))
-		if len(args) == 1 && len(files) == 1 && strings.HasPrefix(filepath.ToSlash(files[0]), "tasks/inbox/") {
-			if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(files[0]))); err == nil && info.Mode().IsRegular() && !isDirArg(root, args[0]) {
+		if len(args) == 1 && len(files) == 1 && strings.HasPrefix(filepath.ToSlash(files[0]), paths.TaskDirRel("inbox")+"/") {
+			if info, err := os.Stat(filepath.Join(state, filepath.FromSlash(files[0]))); err == nil && info.Mode().IsRegular() && !isDirArg(state, args[0]) {
 				fmt.Fprintln(os.Stdout, "note: inbox files are checked loosely; promote applies the full ready contract")
 			}
 		}
@@ -927,7 +952,7 @@ func selectValidateFiles(root string, args []string) ([]string, error) {
 	if len(args) == 0 {
 		var files []string
 		for _, state := range []string{"inbox", "ready"} {
-			listed, err := listDirectoryFiles(root, filepath.Join("tasks", state))
+			listed, err := listDirectoryFiles(root, paths.TaskDirRel(state))
 			if err != nil {
 				return nil, err
 			}
@@ -985,7 +1010,7 @@ func resolveValidateArg(root, arg string) ([]string, error) {
 		return nil, usageError{fmt.Sprintf("task path %s cannot be read", arg)}
 	}
 	if info.IsDir() {
-		if rel == "tasks" {
+		if rel == paths.TasksRel() {
 			// The archive is read for IDs and dependencies but is not a
 			// contract-checked selection; name tasks/archive to check it.
 			files, err := listTreeFiles(resolvedRoot, rel)
@@ -994,7 +1019,7 @@ func resolveValidateArg(root, arg string) ([]string, error) {
 			}
 			var kept []string
 			for _, file := range files {
-				if !strings.HasPrefix(file, "tasks/archive/") {
+				if !strings.HasPrefix(file, paths.TaskDirRel("archive")+"/") {
 					kept = append(kept, file)
 				}
 			}
@@ -1015,7 +1040,7 @@ func insideTasks(root, path string) bool {
 		return false
 	}
 	rel = filepath.ToSlash(rel)
-	return rel == "tasks" || strings.HasPrefix(rel, "tasks/")
+	return rel == paths.TasksRel() || strings.HasPrefix(rel, paths.TasksRel()+"/")
 }
 
 // listDirectoryFiles returns the regular files directly inside the directory
@@ -1078,6 +1103,8 @@ Next step: taskfactory validate after the counts are printed.
 Flags:
   --verbose   write detail lines starting "verbose: " to stderr
   --dry-run   print what would change as "would: " lines and change nothing
+  --state-dir <path>  keep task state in this directory (default: the project;
+                      TF_STATE_DIR is used when the flag is absent)
   --help, -h  print this help and exit successfully
 
 Exit codes:
@@ -1095,7 +1122,7 @@ func statusProject() error {
 		return err
 	}
 	for _, state := range taskStates {
-		dir := filepath.Join(root, "tasks", state)
+		dir := paths.For(root).TaskDir(state)
 		info, err := os.Stat(dir)
 		if err != nil {
 			return fmt.Errorf("task state directory %s: %w", dir, err)
@@ -1113,9 +1140,9 @@ func statusProject() error {
 	}
 	counts := make(map[string]int, len(taskStates))
 	for _, state := range taskStates {
-		entries, err := os.ReadDir(filepath.Join(root, "tasks", state))
+		entries, err := os.ReadDir(paths.For(root).TaskDir(state))
 		if err != nil {
-			return fmt.Errorf("read task state directory %s: %w", filepath.Join(root, "tasks", state), err)
+			return fmt.Errorf("read task state directory %s: %w", paths.For(root).TaskDir(state), err)
 		}
 		for _, entry := range entries {
 			if entry.IsDir() || entry.Name() == ".gitkeep" {
@@ -1132,6 +1159,9 @@ func statusProject() error {
 }
 
 func projectRoot() (string, error) {
+	if dir, source := resolveStateDir(stateDirFlag, os.Getenv); dir != "" {
+		return externalProjectRoot(dir, source)
+	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("determine current directory: %w", err)
@@ -1262,14 +1292,7 @@ func initializeAt(root string, plan *initDryRun) error {
 // .gitignore. config.toml is deliberately absent: it must stay trackable.
 const gitignoreComment = "# TaskFactory runtime files"
 
-var runtimeIgnorePaths = []string{
-	".taskfactory/claim.lock",
-	".taskfactory/integration.lock",
-	".taskfactory/evidence/",
-	".taskfactory/integration-evidence/",
-	".taskfactory/logs/",
-	".taskfactory/worktrees/",
-}
+var runtimeIgnorePaths = paths.RuntimeIgnoreLines()
 
 // ensureGitignore appends the missing runtime paths to the project .gitignore,
 // creating it when absent. Existing lines are never changed or reordered, and a
@@ -1344,7 +1367,7 @@ func ensureGitignore(root string, plan *initDryRun) error {
 }
 
 func initializeConfigAt(root string, plan *initDryRun) error {
-	configPath := filepath.Join(root, ".taskfactory", "config.toml")
+	configPath := paths.Default(root).Config()
 	if _, err := os.Stat(configPath); err == nil {
 		if _, err := config.Load(root); err != nil {
 			return fmt.Errorf("existing configuration conflicts with protocol v1: %w", err)
@@ -1389,7 +1412,7 @@ func initializeConfigAt(root string, plan *initDryRun) error {
 }
 
 func createTaskStateDirectories(root string, plan *initDryRun) error {
-	tasksDir := filepath.Join(root, "tasks")
+	tasksDir := paths.Default(root).Tasks()
 	if err := ensureProjectDirectory(root, tasksDir, plan); err != nil {
 		return fmt.Errorf("create task directory: %w", err)
 	}
@@ -1446,4 +1469,34 @@ func isDirArg(root, arg string) bool {
 	}
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+// externalProjectRoot resolves the roots when the state directory is named by
+// --state-dir or TF_STATE_DIR. The code repository is the config key
+// project_root in the state directory's .taskfactory/config.toml; it is
+// required, and the error names it when absent. The layout is registered so
+// every package finds state under the state directory.
+func externalProjectRoot(dir, source string) (string, error) {
+	state, err := filepath.Abs(dir)
+	if err == nil {
+		state, err = filepath.EvalSymlinks(state)
+	}
+	if err != nil {
+		return "", fmt.Errorf("resolve state directory %s (%s): %w", dir, source, err)
+	}
+	verbosef("state directory %s (from %s)", state, source)
+	project, err := config.ProjectRootOf(state)
+	if err != nil {
+		return "", err
+	}
+	if resolved, e := filepath.EvalSymlinks(project); e == nil {
+		project = resolved
+	} else {
+		return "", fmt.Errorf("project_root %s in the state config: %w", project, e)
+	}
+	verbosef("project root %s", project)
+	if project != state {
+		paths.Register(paths.Layout{Project: project, State: state})
+	}
+	return project, nil
 }

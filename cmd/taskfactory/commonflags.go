@@ -15,6 +15,25 @@ import (
 type commonFlags struct {
 	Verbose bool
 	DryRun  bool
+	// StateDir is the value of --state-dir, empty when the flag is absent.
+	StateDir string
+}
+
+// stateDirFlag is the --state-dir value of the running command. main sets it
+// once, before any command resolves the project root.
+var stateDirFlag string
+
+// resolveStateDir returns the state directory in discovery order: the
+// --state-dir flag value, then TF_STATE_DIR, then "" for the default layout
+// (state inside the project). The second result names the source.
+func resolveStateDir(flagValue string, getenv func(string) string) (dir, source string) {
+	if flagValue != "" {
+		return flagValue, "--state-dir"
+	}
+	if v := getenv("TF_STATE_DIR"); v != "" {
+		return v, "TF_STATE_DIR"
+	}
+	return "", "default"
 }
 
 // extractCommonFlags removes --verbose and --dry-run from args, wherever they
@@ -23,9 +42,22 @@ type commonFlags struct {
 func extractCommonFlags(args []string) ([]string, commonFlags, error) {
 	var flags commonFlags
 	rest := make([]string, 0, len(args))
-	for _, arg := range args {
-		name, _, hasValue := strings.Cut(arg, "=")
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		name, value, hasValue := strings.Cut(arg, "=")
 		switch name {
+		case "--state-dir":
+			if !hasValue {
+				if i+1 >= len(args) {
+					return nil, commonFlags{}, fmt.Errorf("--state-dir needs a directory")
+				}
+				i++
+				value = args[i]
+			}
+			if value == "" {
+				return nil, commonFlags{}, fmt.Errorf("--state-dir needs a directory")
+			}
+			flags.StateDir = value
 		case "--verbose", "--dry-run":
 			if hasValue {
 				return nil, commonFlags{}, fmt.Errorf("%s takes no value, got %q", name, arg)

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/template"
 
+	"taskfactory/internal/paths"
 	"taskfactory/internal/ui"
 )
 
@@ -71,6 +72,15 @@ var completionSpecs = []completionSpec{
 // completionCommonFlags are offered for every command except completion.
 var completionCommonFlags = []string{"--verbose", "--dry-run"}
 
+// completionStateDirFlag is offered, with a free value, for every command that
+// reads task state: all but completion, init and skill.
+const completionStateDirFlag = "--state-dir"
+
+// acceptsStateDir reports whether the command takes --state-dir.
+func acceptsStateDir(command string) bool {
+	return command != "completion" && command != "init" && command != "skill"
+}
+
 // completionHiddenFlags lists, per command, flags that are real but deliberately
 // not completed. The drift test requires each entry to appear in the command help.
 var completionHiddenFlags = map[string][]string{}
@@ -91,6 +101,9 @@ func (s completionSpec) allFlags() []completionFlag {
 	if s.Command != "completion" {
 		for _, name := range completionCommonFlags {
 			flags = append(flags, completionFlag{Name: name})
+		}
+		if acceptsStateDir(s.Command) {
+			flags = append(flags, completionFlag{Name: completionStateDirFlag, Free: true})
 		}
 	}
 	return append(flags, completionFlag{Name: "--help"})
@@ -440,11 +453,23 @@ func completeHelper(args []string, out io.Writer) int {
 	if err != nil {
 		return 0
 	}
-	root, ok := findRepoRoot(cwd)
-	if !ok {
-		return 0
+	// Completion reads only the state directory, so an external state
+	// directory from TF_STATE_DIR is used without reading its config.
+	var layout paths.Layout
+	if dir, _ := resolveStateDir("", os.Getenv); dir != "" {
+		abs, err := filepath.Abs(dir)
+		if err != nil {
+			return 0
+		}
+		layout = paths.Default(abs)
+	} else {
+		root, ok := findRepoRoot(cwd)
+		if !ok {
+			return 0
+		}
+		layout = paths.Default(root)
 	}
-	entries, err := os.ReadDir(filepath.Join(root, "tasks", state))
+	entries, err := os.ReadDir(layout.TaskDir(state))
 	if err != nil {
 		return 0
 	}
@@ -455,7 +480,7 @@ func completeHelper(args []string, out io.Writer) int {
 			continue
 		}
 		if needEvidence {
-			if _, err := os.Stat(filepath.Join(root, ".taskfactory", "evidence", m[1]+".jsonl")); err != nil {
+			if _, err := os.Stat(layout.Evidence(m[1])); err != nil {
 				continue
 			}
 		}
