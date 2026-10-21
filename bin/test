@@ -7,6 +7,17 @@ cd "${repo_root}"
 
 export LC_ALL=C
 
+verbose=0
+for arg in "$@"; do
+  case "${arg}" in
+    --verbose) verbose=1 ;;
+    *)
+      printf 'Usage: bin/test [--verbose]\n' >&2
+      exit 2
+      ;;
+  esac
+done
+
 failed=0
 test_files=()
 
@@ -26,7 +37,11 @@ for test_file in "${test_files[@]}"; do
   else
     printf '==> %s\n' "${test_file}"
   fi
-  if ! "./${test_file}"; then
+  test_args=()
+  if (( verbose )); then
+    test_args+=(--verbose)
+  fi
+  if ! "./${test_file}" ${test_args[@]+"${test_args[@]}"}; then
     printf 'FAIL: shell test: %s (rerun with: ./%s)\n' "${test_file}" "${test_file}" >&2
     failed=1
   fi

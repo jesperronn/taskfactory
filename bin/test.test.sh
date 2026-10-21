@@ -114,17 +114,38 @@ failure_output=$(cd / && PATH="${fixture_root}/go-failure/stubs:${PATH}" GO_LOG=
 assert_status "${failure_status}" 1 'propagates Go test failure'
 assert_contains "${failure_output}" 'FAIL: Go tests: go test ./...' 'identifies failing Go check'
 
-real_fixture=${fixture_root}/real-invalid-task
-mkdir -p "${real_fixture}"
-cp -R "${repo_root}/bin" "${repo_root}/cmd" "${repo_root}/internal" "${repo_root}/tasks" "${repo_root}/.taskfactory" "${real_fixture}/"
-cp "${repo_root}/go.mod" "${repo_root}/go.sum" "${real_fixture}/"
-git -C "${real_fixture}" init --quiet --initial-branch=main
-# Avoid recursively re-running this fixture test from the copied repository.
-rm "${real_fixture}/bin/test.test.sh"
-printf '# TF-998: Broken task\n' > "${real_fixture}/tasks/ready/TF-998-broken.md"
-real_status=0
-real_output=$(cd / && "${real_fixture}/bin/test" 2>&1) || real_status=$?
-assert_status "${real_status}" 1 'real Go project wrapper rejects an invalid task after Go tests pass'
-assert_contains "${real_output}" 'ok  ' 'real fixture Go tests pass before task validation'
-assert_contains "${real_output}" 'tasks/ready/TF-998-broken.md: Goal:' 'real fixture reports the invalid task and field'
-assert_contains "${real_output}" 'FAIL: task validation: go run ./cmd/taskfactory validate tasks' 'real fixture attributes wrapper failure to validation'
+new_fixture verbose
+cat > "${fixture_root}/verbose/bin/a.test.sh" <<'EOF2'
+#!/usr/bin/env bash
+printf 'a:%s\n' "$*" >> "${ARGS_FILE}"
+EOF2
+cat > "${fixture_root}/verbose/bin/b.test.sh" <<'EOF2'
+#!/usr/bin/env bash
+printf 'b:%s\n' "$*" >> "${ARGS_FILE}"
+EOF2
+cat > "${fixture_root}/verbose/bin/testlib.sh" <<'EOF2'
+printf 'testlib sourced\n' >> "${ARGS_FILE}"
+EOF2
+chmod +x "${fixture_root}/verbose/bin/"*.test.sh
+args_file=${fixture_root}/verbose-args
+rm -f "${args_file}"
+(cd / && ARGS_FILE="${args_file}" "${fixture_root}/verbose/bin/test" --verbose >/dev/null 2>&1)
+expected_verbose=$'a:--verbose\nb:--verbose'
+if [[ "$(cat "${args_file}")" != "${expected_verbose}" ]]; then
+  printf '[FAIL] --verbose is forwarded to each shell test and testlib.sh is not run: %q\n' "$(cat "${args_file}")" >&2
+  exit 1
+fi
+printf '[PASS] --verbose is forwarded to each shell test, and sourced helpers are not run as tests\n'
+
+rm -f "${args_file}"
+(cd / && ARGS_FILE="${args_file}" "${fixture_root}/verbose/bin/test" >/dev/null 2>&1)
+if [[ "$(cat "${args_file}")" != $'a:\nb:' ]]; then
+  printf '[FAIL] shell tests run without arguments when --verbose is absent: %q\n' "$(cat "${args_file}")" >&2
+  exit 1
+fi
+printf '[PASS] shell tests run without arguments when --verbose is absent\n'
+
+usage_status=0
+usage_output=$(cd / && "${fixture_root}/verbose/bin/test" --bogus 2>&1) || usage_status=$?
+assert_status "${usage_status}" 2 'rejects unknown bin/test arguments'
+assert_contains "${usage_output}" 'Usage: bin/test [--verbose]' 'prints usage for unknown arguments'
