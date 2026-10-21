@@ -43,15 +43,26 @@ func acquireIntegrationLock(root string) (func(), error) {
 // records, fails closed without any change and without running checks. Main
 // must not move while checks run; if it does, no stop state is changed.
 func CheckMain(root string) (retErr error) {
+	return CheckMainWith(root, Options{})
+}
+
+// CheckMainWith is CheckMain with options. A dry run reads the stop state and
+// applies the same guards without taking the lock, then reports the checks it
+// would run; it runs none and changes no stop state.
+func CheckMainWith(root string, opts Options) (retErr error) {
+	trace = opts.Verbose
+	defer func() { trace = nil }()
 	root, retErr = filepath.EvalSymlinks(root)
 	if retErr != nil {
 		return retErr
 	}
-	unlock, err := acquireIntegrationLock(root)
-	if err != nil {
-		return err
+	if !opts.DryRun {
+		unlock, err := acquireIntegrationLock(root)
+		if err != nil {
+			return err
+		}
+		defer unlock()
 	}
-	defer unlock()
 
 	cfg, err := config.Load(root)
 	if err != nil {
@@ -74,6 +85,17 @@ func CheckMain(root string) (retErr error) {
 	mainCommit, err := git(root, "rev-parse", "--verify", "refs/heads/main^{commit}")
 	if err != nil {
 		return fmt.Errorf("local refs/heads/main is unavailable: %w", err)
+	}
+	if opts.DryRun {
+		if opts.Would != nil {
+			for _, command := range checks {
+				opts.Would("run %s", command)
+			}
+			if stop.present {
+				opts.Would("clear the integration stop record when every check passes")
+			}
+		}
+		return nil
 	}
 	for _, command := range checks {
 		if err = requireMainAt(root, mainCommit); err != nil {

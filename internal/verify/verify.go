@@ -72,6 +72,25 @@ func (r Result) Summary(p ui.Painter) string {
 	return ""
 }
 
+// Options are the common flags of the verify command. Verbose, when non-nil,
+// receives one line per Git command run and per path touched. With DryRun,
+// Would receives each planned action; no check runs and no evidence, lock file
+// or directory is written.
+type Options struct {
+	DryRun  bool
+	Verbose func(format string, args ...any)
+	Would   func(format string, args ...any)
+}
+
+// trace is the verbose sink of the running call; it is nil unless Options.Verbose is set.
+var trace func(format string, args ...any)
+
+func tracef(format string, args ...any) {
+	if trace != nil {
+		trace(format, args...)
+	}
+}
+
 // Run verifies an active claimed task in its worktree and appends one attempt.
 func Run(root, id string) error {
 	_, err := Verify(root, id)
@@ -81,6 +100,15 @@ func Run(root, id string) error {
 // Verify is Run with a result describing the recorded attempt. The result is
 // returned with a non-nil error when the attempt is recorded but not PASS.
 func Verify(root, id string) (result Result, runErr error) {
+	return VerifyWith(root, id, Options{})
+}
+
+// VerifyWith is Verify with options. A dry run applies every refusal check of
+// the real command, including the existing evidence file's validity, and stops
+// before the first check runs.
+func VerifyWith(root, id string, opts Options) (result Result, runErr error) {
+	trace = opts.Verbose
+	defer func() { trace = nil }()
 	if !taskID.MatchString(id) {
 		return Result{}, fmt.Errorf("%q is not a valid task ID (expected TF-NNN)", id)
 	}
@@ -137,6 +165,24 @@ func Verify(root, id string) (result Result, runErr error) {
 		commands = append(commands, check{Source: "worker", Command: command})
 	}
 	path := filepath.Join(root, ".taskfactory", "evidence", id+".jsonl")
+	if opts.DryRun {
+		tracef("read %s", path)
+		prior, err := os.ReadFile(path)
+		if err != nil && !os.IsNotExist(err) {
+			return Result{}, fmt.Errorf("read evidence: %w", err)
+		}
+		if _, err := validateEvidence(prior, id); err != nil {
+			return Result{}, err
+		}
+		if opts.Would != nil {
+			for _, c := range commands {
+				opts.Would("run %s", c.Command)
+			}
+			opts.Would("append evidence to %s", filepath.ToSlash(filepath.Join(".taskfactory", "evidence", id+".jsonl")))
+		}
+		return Result{}, nil
+	}
+	tracef("write %s", path)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return Result{}, fmt.Errorf("create evidence directory: %w", err)
 	}
@@ -285,6 +331,7 @@ func parseCriteria(lines []string) []struct{ id, command string } {
 	return out
 }
 func git(dir string, args ...string) (string, error) {
+	tracef("git %s", strings.Join(args, " "))
 	b, e := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
 	if e != nil {
 		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), e, strings.TrimSpace(string(b)))
@@ -315,6 +362,8 @@ func ensureClaimedWorktree(root, path, branch string) error {
 	return fmt.Errorf("claimed path %s and branch %s are not a registered worktree", path, branch)
 }
 func changedFiles(dir, base string) ([]string, error) {
+	tracef("git diff --name-only -z %s --", base)
+	tracef("git ls-files --others --exclude-standard -z")
 	a, e := exec.Command("git", "-C", dir, "diff", "--name-only", "-z", base, "--").Output()
 	if e != nil {
 		return nil, fmt.Errorf("list changed files: %w", e)
@@ -339,6 +388,7 @@ func changedFiles(dir, base string) ([]string, error) {
 	return out, nil
 }
 func runShell(dir, command string) (string, *int, error) {
+	tracef("sh -c %s (in %s)", command, dir)
 	shell, err := exec.LookPath("sh")
 	if err != nil {
 		return "", nil, fmt.Errorf("start sh: %w", err)

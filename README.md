@@ -914,6 +914,22 @@ after the error. Usage errors print no hint, and exit codes and
 machine-readable lines are unchanged. Each command's `--help` has a `Next step:`
 line.
 
+Every command accepts `--verbose` and `--dry-run`, before or after its other
+arguments. `--verbose` adds `verbose: ` lines on stderr (the Git commands run,
+the paths touched, the project root) and never changes stdout or the exit code;
+credential values from the environment are redacted. `--dry-run` prints each
+action as a `would: ` line, ends with `dry run: nothing changed`, and changes
+nothing: no move, commit, worktree, evidence write or adapter launch. It
+refuses what the real command refuses, with the same exit code.
+
+```sh
+taskfactory claim TF-001 --owner me --dry-run
+# would: move task to tasks/active
+# would: add worktree /path/to/project/.taskfactory/worktrees/TF-001
+# dry run: nothing changed
+taskfactory verify TF-001 --verbose   # same stdout, plus verbose: lines on stderr
+```
+
 `taskfactory fail` moves a claimed active task to `tasks/failed` and commits
 only that move. Its last attempt evidence must have the same outcome, or pass
 `--reason` when no evidence exists. `taskfactory requeue` returns an unclaimed

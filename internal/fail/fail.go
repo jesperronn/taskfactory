@@ -41,6 +41,24 @@ type Options struct {
 	ReasonSet bool
 }
 
+// CommonOptions are the common flags of the fail command. Verbose, when
+// non-nil, receives one line per Git command run and per path touched. With
+// DryRun, Would receives each planned action and nothing is moved or committed.
+type CommonOptions struct {
+	DryRun  bool
+	Verbose func(format string, args ...any)
+	Would   func(format string, args ...any)
+}
+
+// trace is the verbose sink of the running call; it is nil unless Verbose is set.
+var trace func(format string, args ...any)
+
+func tracef(format string, args ...any) {
+	if trace != nil {
+		trace(format, args...)
+	}
+}
+
 // ParseArgs parses the arguments after "fail": one task ID, a required
 // --outcome and an optional --reason. Both "--flag value" and "--flag=value"
 // are accepted, and flags may appear before or after the ID. Unknown, repeated
@@ -124,6 +142,17 @@ func checkReason(reason string) error {
 // Any refusal or failure restores the file to tasks/active and changes nothing
 // else.
 func Fail(projectRoot, id string, opts Options) (string, error) {
+	return FailWith(projectRoot, id, opts, CommonOptions{})
+}
+
+// FailWith is Fail with the common flags. A dry run runs every refusal check of
+// the real command and the whole-tree validation of the current tree, then
+// stops before the move: validating the tree after the move would need the
+// file in tasks/failed, and the Claim block is checked against the project
+// root, so a scratch copy cannot stand in for it.
+func FailWith(projectRoot, id string, opts Options, common CommonOptions) (string, error) {
+	trace = common.Verbose
+	defer func() { trace = nil }()
 	if !idPattern.MatchString(id) {
 		return "", usagef("task %q is not a valid task ID (expected TF-NNN)", id)
 	}
@@ -180,6 +209,17 @@ func Fail(projectRoot, id string, opts Options) (string, error) {
 		return "", err
 	}
 
+	if common.DryRun {
+		if diagnostics := taskvalidate.Validate(root, ""); len(diagnostics) > 0 {
+			return "", fmt.Errorf("task tree is invalid, so failing %s would be refused: %s", id, diagnostics[0])
+		}
+		if common.Would != nil {
+			common.Would("move task to tasks/failed")
+			common.Would("commit")
+		}
+		return failedRel, nil
+	}
+	tracef("move %s to %s", activeRel, failedRel)
 	if err := os.Rename(activeAbs, failedAbs); err != nil {
 		return "", fmt.Errorf("move %s to %s: %w", activeRel, failedRel, err)
 	}
@@ -296,6 +336,7 @@ func commitPaths(root, id string, paths []string, opts Options) error {
 
 // git runs git with -C root and returns its stdout. Failures include stderr.
 func git(root string, args ...string) (string, error) {
+	tracef("git %s", strings.Join(args, " "))
 	cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

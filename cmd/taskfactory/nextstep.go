@@ -76,12 +76,18 @@ func nextOnFailure(p ui.Painter, command, id string) string {
 }
 
 func printNextOnSuccess(w io.Writer, p ui.Painter, command, id string) {
+	if hintsOff {
+		return
+	}
 	if line := nextOnSuccess(p, command, id); line != "" {
 		fmt.Fprintln(w, line)
 	}
 }
 
 func printNextOnFailure(w io.Writer, p ui.Painter, command, id string) {
+	if hintsOff {
+		return
+	}
 	if line := nextOnFailure(p, command, id); line != "" {
 		fmt.Fprintln(w, line)
 	}

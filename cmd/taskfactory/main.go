@@ -197,9 +197,13 @@ summary line on stdout, such as "verify TF-001: PASS (3 checks)" or
 "verify TF-001: FAIL (1 of 3 checks failed)". The command exits 1 when any
 check fails.
 
+With --dry-run nothing changes.
+
 Next step: taskfactory integrate <ID> after a passing verify.
 
 Flags:
+  --verbose   write detail lines starting "verbose: " to stderr
+  --dry-run   print what would change as "would: " lines and change nothing
   --help, -h  print this help and exit successfully
 
 Exit codes:
@@ -216,9 +220,13 @@ strategy, after running the integration verification commands. On success it
 prints "integrated <ID>". A failed check or fast-forward stops integration and
 is reported on stderr.
 
+With --dry-run nothing changes.
+
 Next step: taskfactory status after a successful integrate.
 
 Flags:
+  --verbose   write detail lines starting "verbose: " to stderr
+  --dry-run   print what would change as "would: " lines and change nothing
   --help, -h  print this help and exit successfully
 
 Exit codes:
@@ -233,9 +241,13 @@ const checkMainHelp = `Usage: taskfactory check-main
 Recheck main after integration has stopped it by running the integration
 verification commands again. It prints "check-main: ok" when they pass.
 
+With --dry-run nothing changes.
+
 Next step: taskfactory integrate <ID> once main passes.
 
 Flags:
+  --verbose   write detail lines starting "verbose: " to stderr
+  --dry-run   print what would change as "would: " lines and change nothing
   --help, -h  print this help and exit successfully
 
 Exit codes:
@@ -255,9 +267,13 @@ paths are committed. Any refusal or failure restores the file to tasks/inbox.
 The commit runs as a plain git commit and follows your own Git signing
 configuration. TaskFactory never disables or overrides signing.
 
+With --dry-run nothing changes.
+
 Next step: taskfactory claim <ID> --owner <name> after a promote.
 
 Flags:
+  --verbose   write detail lines starting "verbose: " to stderr
+  --dry-run   print what would change as "would: " lines and change nothing
   --help, -h  print this help and exit successfully
 
 Exit codes:
@@ -279,11 +295,15 @@ The command never archives a task and never changes the evidence file.
 The commit runs as a plain git commit and follows your own Git signing
 configuration. TaskFactory never disables or overrides signing.
 
+With --dry-run nothing changes.
+
 Next step: taskfactory requeue <ID> --to ready after a fail.
 
 Flags:
   --outcome <FAILED|BLOCKED>  outcome that must match the last evidence record
   --reason <text>             single-line reason, only when no evidence exists
+  --verbose   write detail lines starting "verbose: " to stderr
+  --dry-run   print what would change as "would: " lines and change nothing
   --help, -h                  print this help and exit successfully
 
 Exit codes:
@@ -335,10 +355,14 @@ message body name the new path.
 The commit runs as a plain git commit and follows your own Git signing
 configuration. TaskFactory never disables or overrides signing.
 
+With --dry-run nothing changes.
+
 Next step: taskfactory claim <ID> --owner <name> after a requeue to ready.
 
 Flags:
   --to <ready|inbox>  target state, ready by default
+  --verbose   write detail lines starting "verbose: " to stderr
+  --dry-run   print what would change as "would: " lines and change nothing
   --help, -h          print this help and exit successfully
 
 Exit codes:
@@ -364,6 +388,8 @@ of 0 is a claim only: run "taskfactory verify <ID>" next. A blocked or stalled
 run prints a "taskfactory fail <ID> --outcome BLOCKED --reason ..." suggestion
 that you may run yourself; work does not run it.
 
+With --dry-run nothing changes.
+
 Next step: taskfactory verify <ID> after the worker exits.
 
 Flags:
@@ -372,6 +398,8 @@ Flags:
   --haiku-model <id>         haiku-tier model id (required for claude only)
   --timeout <duration>       wall-clock bound, at least 1s (default 10m)
   --endpoint <host:port>     oMLX server address (default 127.0.0.1:8000)
+  --verbose   write detail lines starting "verbose: " to stderr
+  --dry-run   print what would change as "would: " lines and change nothing
   --help, -h                 print this help and exit successfully
 
 Exit codes:
@@ -380,12 +408,13 @@ Exit codes:
   2  invalid usage
 `
 
-func workTask(args []string, stderrStyle ui.Painter) int {
+func workTask(args []string, stderrStyle ui.Painter, common commonFlags, dry dryRun) int {
 	id, opts, err := work.ParseArgs(args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory work", err.Error()))
 		return exitUsage
 	}
+	opts.DryRun, opts.Verbose, opts.Would = common.DryRun, verboseFunc(), dry.would
 	root, err := projectRoot()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory work", err.Error()))
@@ -397,10 +426,13 @@ func workTask(args []string, stderrStyle ui.Painter) int {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory work", err.Error()))
 	}
+	if common.DryRun && err == nil && code == 0 {
+		dry.done()
+	}
 	return code
 }
 
-func failTask(args []string) error {
+func failTask(args []string, common commonFlags, dry dryRun) error {
 	id, opts, err := fail.ParseArgs(args)
 	if err != nil {
 		return err
@@ -409,16 +441,20 @@ func failTask(args []string) error {
 	if err != nil {
 		return err
 	}
-	failed, err := fail.Fail(root, id, opts)
+	failed, err := fail.FailWith(root, id, opts, fail.CommonOptions{DryRun: common.DryRun, Verbose: verboseFunc(), Would: dry.would})
 	if err != nil {
 		return err
+	}
+	if common.DryRun {
+		dry.done()
+		return nil
 	}
 	fmt.Fprintf(os.Stdout, "failed %s to %s\n", id, failed)
 	printNextOnSuccess(os.Stdout, ui.For(os.Stdout), "fail", id)
 	return nil
 }
 
-func requeueTask(args []string) error {
+func requeueTask(args []string, common commonFlags, dry dryRun) error {
 	id, target, opts, err := requeue.ParseOptions(args)
 	if err != nil {
 		return err
@@ -427,7 +463,12 @@ func requeueTask(args []string) error {
 	if err != nil {
 		return err
 	}
+	opts.DryRun, opts.Verbose, opts.Would = common.DryRun, verboseFunc(), dry.would
 	res, err := requeue.RequeueWith(root, id, target, opts)
+	if err == nil && common.DryRun {
+		dry.done()
+		return nil
+	}
 	if err != nil {
 		var cleanup requeue.CleanupError
 		if errors.As(err, &cleanup) {
@@ -486,14 +527,18 @@ func requeueHelpText() string {
 	return requeueHelp + "\nClaimed failed tasks in this project (human decision needed): " + strings.Join(ids, ", ") + "\n"
 }
 
-func promoteTask(args []string) error {
+func promoteTask(args []string, common commonFlags, dry dryRun) error {
 	root, err := projectRoot()
 	if err != nil {
 		return err
 	}
-	ready, err := promote.Promote(root, args[0])
+	ready, err := promote.PromoteWith(root, args[0], promote.Options{DryRun: common.DryRun, Verbose: verboseFunc(), Would: dry.would})
 	if err != nil {
 		return err
+	}
+	if common.DryRun {
+		dry.done()
+		return nil
 	}
 	fmt.Fprintf(os.Stdout, "promoted %s to %s\n", args[0], ready)
 	printNextOnSuccess(os.Stdout, ui.For(os.Stdout), "promote", args[0])
@@ -528,6 +573,7 @@ func main() {
 	}
 
 	args := fs.Args()
+	var common commonFlags
 	if len(args) > 0 && wantsHelp(args[1:]) {
 		if args[0] == "requeue" {
 			fmt.Fprint(os.Stdout, styleHelp(stdoutStyle, requeueHelpText()))
@@ -538,6 +584,20 @@ func main() {
 			return
 		}
 	}
+	if len(args) > 0 {
+		if _, known := commandHelps[args[0]]; known {
+			rest, flags, err := extractCommonFlags(args[1:])
+			if err != nil {
+				fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory "+args[0], err.Error()))
+				os.Exit(exitUsage)
+			}
+			args = append([]string{args[0]}, rest...)
+			common = flags
+			verboseOn = flags.Verbose
+			hintsOff = flags.DryRun
+		}
+	}
+	dry := dryRun{out: os.Stdout}
 	if len(args) >= 1 && args[0] == "init" {
 		if len(args) > 2 {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory init", fmt.Sprintf("unexpected extra argument %q; usage: taskfactory init [path]", args[2])))
@@ -551,9 +611,13 @@ func main() {
 				os.Exit(exitUsage)
 			}
 		}
-		if err := initializeProject(target); err != nil {
+		if err := initializeProject(target, common.DryRun, dry); err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory init", err.Error()))
 			os.Exit(1)
+		}
+		if common.DryRun {
+			dry.done()
+			return
 		}
 		printNextOnSuccess(os.Stdout, stdoutStyle, "init", target)
 		return
@@ -568,6 +632,9 @@ func main() {
 			printNextOnFailure(os.Stderr, stderrStyle, "validate", "")
 			os.Exit(1)
 		}
+		if common.DryRun {
+			dry.done()
+		}
 		return
 	}
 	if len(args) == 1 && args[0] == "status" {
@@ -576,10 +643,13 @@ func main() {
 			printNextOnFailure(os.Stderr, stderrStyle, "status", "")
 			os.Exit(1)
 		}
+		if common.DryRun {
+			dry.done()
+		}
 		return
 	}
 	if len(args) > 0 && args[0] == "claim" {
-		if err := claimTask(args[1:]); err != nil {
+		if err := claimTask(args[1:], common, dry); err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory claim", err.Error()))
 			printNextOnFailure(os.Stderr, stderrStyle, "claim", "")
 			os.Exit(1)
@@ -598,7 +668,7 @@ func main() {
 		root, err := projectRoot()
 		var result verify.Result
 		if err == nil {
-			result, err = verify.Verify(root, args[1])
+			result, err = verify.VerifyWith(root, args[1], verify.Options{DryRun: common.DryRun, Verbose: verboseFunc(), Would: dry.would})
 		}
 		if result.Outcome != "" {
 			fmt.Fprintln(os.Stdout, result.Summary(stdoutStyle))
@@ -607,6 +677,10 @@ func main() {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory verify", err.Error()))
 			printNextOnFailure(os.Stderr, stderrStyle, "verify", args[1])
 			os.Exit(1)
+		}
+		if common.DryRun {
+			dry.done()
+			return
 		}
 		printNextOnSuccess(os.Stdout, stdoutStyle, "verify", args[1])
 		return
@@ -618,12 +692,16 @@ func main() {
 		}
 		root, err := projectRoot()
 		if err == nil {
-			err = integrate.Run(root, args[1])
+			err = integrate.RunWith(root, args[1], integrate.Options{DryRun: common.DryRun, Verbose: verboseFunc(), Would: dry.would})
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory integrate", err.Error()))
 			printNextOnFailure(os.Stderr, stderrStyle, "integrate", args[1])
 			os.Exit(1)
+		}
+		if common.DryRun {
+			dry.done()
+			return
 		}
 		fmt.Fprintf(os.Stdout, "integrated %s\n", args[1])
 		printNextOnSuccess(os.Stdout, stdoutStyle, "integrate", args[1])
@@ -634,7 +712,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory promote", "usage: taskfactory promote <ID>"))
 			os.Exit(exitUsage)
 		}
-		if err := promoteTask(args[1:]); err != nil {
+		if err := promoteTask(args[1:], common, dry); err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory promote", err.Error()))
 			var usage promote.UsageError
 			if errors.As(err, &usage) {
@@ -646,7 +724,7 @@ func main() {
 		return
 	}
 	if len(args) > 0 && args[0] == "fail" {
-		if err := failTask(args[1:]); err != nil {
+		if err := failTask(args[1:], common, dry); err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory fail", err.Error()))
 			var usage fail.UsageError
 			if errors.As(err, &usage) {
@@ -658,7 +736,7 @@ func main() {
 		return
 	}
 	if len(args) > 0 && args[0] == "requeue" {
-		if err := requeueTask(args[1:]); err != nil {
+		if err := requeueTask(args[1:], common, dry); err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory requeue", err.Error()))
 			var usage requeue.UsageError
 			if errors.As(err, &usage) {
@@ -670,7 +748,7 @@ func main() {
 		return
 	}
 	if len(args) > 0 && args[0] == "work" {
-		code := workTask(args[1:], stderrStyle)
+		code := workTask(args[1:], stderrStyle, common, dry)
 		os.Exit(code)
 	}
 	if len(args) > 0 && args[0] == "check-main" {
@@ -680,12 +758,16 @@ func main() {
 		}
 		root, err := projectRoot()
 		if err == nil {
-			err = integrate.CheckMain(root)
+			err = integrate.CheckMainWith(root, integrate.Options{DryRun: common.DryRun, Verbose: verboseFunc(), Would: dry.would})
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, errorLine(stderrStyle, "taskfactory check-main", err.Error()))
 			printNextOnFailure(os.Stderr, stderrStyle, "check-main", "")
 			os.Exit(1)
+		}
+		if common.DryRun {
+			dry.done()
+			return
 		}
 		fmt.Fprintln(os.Stdout, "check-main: ok")
 		printNextOnSuccess(os.Stdout, stdoutStyle, "check-main", "")
@@ -703,10 +785,14 @@ Claim the ready task <ID> for the named worker. The task file moves from
 tasks/ready to tasks/active and records the claim details, including the owner.
 The owner must be non-empty.
 
+With --dry-run nothing changes.
+
 Next step: taskfactory work <ID> --adapter <name> --model <id> after a claim.
 
 Flags:
   --owner <name>  worker identifier (required)
+  --verbose   write detail lines starting "verbose: " to stderr
+  --dry-run   print what would change as "would: " lines and change nothing
   --help, -h      print this help and exit successfully
 
 Exit codes:
@@ -714,7 +800,7 @@ Exit codes:
   1  the claim was refused or the arguments were invalid
 `
 
-func claimTask(args []string) error {
+func claimTask(args []string, common commonFlags, dry dryRun) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: taskfactory claim <ID> --owner <name>")
 	}
@@ -735,8 +821,12 @@ func claimTask(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := claim.Claim(root, id, *owner); err != nil {
+	if err := claim.ClaimWith(root, id, *owner, claim.Options{DryRun: common.DryRun, Verbose: verboseFunc(), Would: dry.would}); err != nil {
 		return err
+	}
+	if common.DryRun {
+		dry.done()
+		return nil
 	}
 	fmt.Fprintf(os.Stdout, "claimed %s for %s\n", id, *owner)
 	printNextOnSuccess(os.Stdout, ui.For(os.Stdout), "claim", id)
@@ -759,9 +849,13 @@ for the selected files are reported. Archived files are not contract-checked
 unless named, but an archived file whose task ID cannot be read, or that is
 empty or not UTF-8, is always reported as an archive read error.
 
+--dry-run is accepted and has no effect, because this command only reads.
+
 Next step: taskfactory promote <ID> or claim <ID> after a clean validate.
 
 Flags:
+  --verbose   write detail lines starting "verbose: " to stderr
+  --dry-run   print what would change as "would: " lines and change nothing
   --help, -h  print this help and exit successfully
 
 Exit codes:
@@ -959,9 +1053,13 @@ archive. The inbox, ready, active and failed task files are validated first,
 while the archive is read for task IDs and dependencies only; any diagnostics
 are printed to stderr and no task file is changed.
 
+--dry-run is accepted and has no effect, because this command only reads.
+
 Next step: taskfactory validate after the counts are printed.
 
 Flags:
+  --verbose   write detail lines starting "verbose: " to stderr
+  --dry-run   print what would change as "would: " lines and change nothing
   --help, -h  print this help and exit successfully
 
 Exit codes:
@@ -1020,6 +1118,7 @@ func projectRoot() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("determine current directory: %w", err)
 	}
+	verbosef("git -C %s rev-parse --path-format=absolute --show-toplevel", cwd)
 	command := exec.Command("git", "-C", cwd, "rev-parse", "--path-format=absolute", "--show-toplevel")
 	output, err := command.Output()
 	if err != nil {
@@ -1033,6 +1132,7 @@ func projectRoot() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve Git project root: %w", err)
 	}
+	verbosef("project root %s", root)
 	return root, nil
 }
 
@@ -1049,6 +1149,8 @@ creates .gitignore, or appends to it, with the TaskFactory runtime paths
 are left alone and .taskfactory/config.toml is never ignored. Commit the
 configuration and .gitignore together before the first claim.
 
+With --dry-run nothing changes.
+
 Next step: the Next steps block that init prints leads to promote and claim.
 
 Arguments:
@@ -1056,6 +1158,8 @@ Arguments:
               (default: the current directory)
 
 Flags:
+  --verbose   write detail lines starting "verbose: " to stderr
+  --dry-run   print what would change as "would: " lines and change nothing
   --help, -h  print this help and exit successfully
 
 Exit codes:
@@ -1064,7 +1168,29 @@ Exit codes:
   2  invalid usage
 `
 
-func initializeProject(target string) error {
+// initDryRun is the plan of an init dry run: every would line goes to out, and
+// nothing is created. A nil *initDryRun means a real run.
+type initDryRun struct {
+	out  dryRun
+	root string
+	seen map[string]bool
+}
+
+// wouldCreate reports one action once, naming the path relative to the root.
+func (p *initDryRun) wouldCreate(path string) {
+	rel, err := filepath.Rel(p.root, path)
+	if err != nil {
+		rel = path
+	}
+	rel = filepath.ToSlash(rel)
+	if p.seen[rel] {
+		return
+	}
+	p.seen[rel] = true
+	p.out.would("create %s", rel)
+}
+
+func initializeProject(target string, dryRunOn bool, out dryRun) error {
 	dir := target
 	if target == "" {
 		cwd, err := os.Getwd()
@@ -1081,6 +1207,7 @@ func initializeProject(target string) error {
 			return fmt.Errorf("path %s is not a directory", target)
 		}
 	}
+	verbosef("git -C %s rev-parse --path-format=absolute --show-toplevel", dir)
 	command := exec.Command("git", "-C", dir, "rev-parse", "--path-format=absolute", "--show-toplevel")
 	output, err := command.Output()
 	if err != nil {
@@ -1098,14 +1225,19 @@ func initializeProject(target string) error {
 	if err != nil {
 		return fmt.Errorf("resolve Git project root: %w", err)
 	}
-	return initializeAt(root)
+	verbosef("project root %s", root)
+	var plan *initDryRun
+	if dryRunOn {
+		plan = &initDryRun{out: out, root: root, seen: map[string]bool{}}
+	}
+	return initializeAt(root, plan)
 }
 
-func initializeAt(root string) error {
-	if err := initializeConfigAt(root); err != nil {
+func initializeAt(root string, plan *initDryRun) error {
+	if err := initializeConfigAt(root, plan); err != nil {
 		return err
 	}
-	return ensureGitignore(root)
+	return ensureGitignore(root, plan)
 }
 
 // gitignoreComment and runtimeIgnorePaths are what init keeps in the project
@@ -1124,9 +1256,10 @@ var runtimeIgnorePaths = []string{
 // ensureGitignore appends the missing runtime paths to the project .gitignore,
 // creating it when absent. Existing lines are never changed or reordered, and a
 // rerun with every path present writes nothing.
-func ensureGitignore(root string) error {
+func ensureGitignore(root string, plan *initDryRun) error {
 	path := filepath.Join(root, ".gitignore")
 	var existing []byte
+	verbosef("read %s", path)
 	info, err := os.Lstat(path)
 	switch {
 	case err == nil:
@@ -1168,6 +1301,16 @@ func ensureGitignore(root string) error {
 	for _, p := range missing {
 		add.WriteString(p + "\n")
 	}
+	if plan != nil {
+		if len(existing) == 0 && info == nil {
+			plan.out.would("create .gitignore")
+		}
+		for _, p := range missing {
+			plan.out.would("create ignore line %s in .gitignore", p)
+		}
+		return nil
+	}
+	verbosef("write %s", path)
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", path, err)
@@ -1182,28 +1325,33 @@ func ensureGitignore(root string) error {
 	return nil
 }
 
-func initializeConfigAt(root string) error {
+func initializeConfigAt(root string, plan *initDryRun) error {
 	configPath := filepath.Join(root, ".taskfactory", "config.toml")
 	if _, err := os.Stat(configPath); err == nil {
 		if _, err := config.Load(root); err != nil {
 			return fmt.Errorf("existing configuration conflicts with protocol v1: %w", err)
 		}
-		return createTaskStateDirectories(root)
+		return createTaskStateDirectories(root, plan)
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("inspect configuration file %s: %w", configPath, err)
 	}
 
-	if err := ensureProjectDirectory(root, filepath.Dir(configPath)); err != nil {
+	if err := ensureProjectDirectory(root, filepath.Dir(configPath), plan); err != nil {
 		return fmt.Errorf("create configuration directory: %w", err)
 	}
-	if err := createTaskStateDirectories(root); err != nil {
+	if err := createTaskStateDirectories(root, plan); err != nil {
 		return err
 	}
+	if plan != nil {
+		plan.wouldCreate(configPath)
+		return nil
+	}
+	verbosef("write %s", configPath)
 	file, err := os.OpenFile(configPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		if os.IsExist(err) {
 			if _, loadErr := config.Load(root); loadErr == nil {
-				return createTaskStateDirectories(root)
+				return createTaskStateDirectories(root, nil)
 			} else {
 				return fmt.Errorf("existing configuration conflicts with protocol v1: %w", loadErr)
 			}
@@ -1222,21 +1370,21 @@ func initializeConfigAt(root string) error {
 	return nil
 }
 
-func createTaskStateDirectories(root string) error {
+func createTaskStateDirectories(root string, plan *initDryRun) error {
 	tasksDir := filepath.Join(root, "tasks")
-	if err := ensureProjectDirectory(root, tasksDir); err != nil {
+	if err := ensureProjectDirectory(root, tasksDir, plan); err != nil {
 		return fmt.Errorf("create task directory: %w", err)
 	}
 	for _, state := range taskStates {
 		path := filepath.Join(tasksDir, state)
-		if err := ensureProjectDirectory(root, path); err != nil {
+		if err := ensureProjectDirectory(root, path, plan); err != nil {
 			return fmt.Errorf("create task state directory %s: %w", path, err)
 		}
 	}
 	return nil
 }
 
-func ensureProjectDirectory(root, path string) error {
+func ensureProjectDirectory(root, path string, plan *initDryRun) error {
 	relative, err := filepath.Rel(root, path)
 	if err != nil {
 		return err
@@ -1260,6 +1408,11 @@ func ensureProjectDirectory(root, path string) error {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("inspect %s: %w", current, err)
 		}
+		if plan != nil {
+			plan.wouldCreate(current)
+			continue
+		}
+		verbosef("create directory %s", current)
 		if err := os.Mkdir(current, 0o755); err != nil {
 			return fmt.Errorf("create %s: %w", current, err)
 		}

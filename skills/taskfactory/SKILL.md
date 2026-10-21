@@ -38,9 +38,13 @@ name is still preferred in docs and generated prompts.
 Each command prints a `next:` hint after its output (`init` prints a `Next steps:`
 block); follow it.
 
+Every command also accepts `--verbose` (detail on stderr) and `--dry-run`
+(prints `would: ` lines and changes nothing). When unsure, run `--dry-run`
+before `claim`, `integrate` and `requeue`.
+
 Any subcommand not in this table is **not implemented**. Flags that exist are
-the ones in a command's `--help` and in this skill, such as `requeue
---discard-claim` below. Do not invent others.
+the ones in a command's `--help` and in this skill, such as `--dry-run` above
+and `requeue --discard-claim` below. Do not invent others.
 
 ## Not yet implemented
 

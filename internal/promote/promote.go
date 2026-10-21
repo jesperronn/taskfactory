@@ -33,6 +33,34 @@ func (e UsageError) Error() string { return e.msg }
 // Any refusal or failure restores the file to tasks/inbox and changes nothing
 // else.
 func Promote(projectRoot, id string) (string, error) {
+	return PromoteWith(projectRoot, id, Options{})
+}
+
+// Options are the common flags of the promote command. Verbose, when non-nil,
+// receives one line per Git command run and per path touched. With DryRun,
+// Would receives each planned action and nothing is moved or committed.
+type Options struct {
+	DryRun  bool
+	Verbose func(format string, args ...any)
+	Would   func(format string, args ...any)
+}
+
+// trace is the verbose sink of the running call; it is nil unless Options.Verbose is set.
+var trace func(format string, args ...any)
+
+func tracef(format string, args ...any) {
+	if trace != nil {
+		trace(format, args...)
+	}
+}
+
+// PromoteWith is Promote with options. A dry run runs every refusal check of
+// the real command; the contract checks that need the file in tasks/ready run
+// on a scratch copy of the task tree outside the project, so nothing in the
+// project is moved, not even briefly.
+func PromoteWith(projectRoot, id string, opts Options) (string, error) {
+	trace = opts.Verbose
+	defer func() { trace = nil }()
 	if !idPattern.MatchString(id) {
 		return "", UsageError{fmt.Sprintf("task %q is not a valid task ID (expected TF-NNN)", id)}
 	}
@@ -70,6 +98,17 @@ func Promote(projectRoot, id string) (string, error) {
 		return "", fmt.Errorf("inspect ready path %s: %w", readyRel, err)
 	}
 
+	if opts.DryRun {
+		if err := dryValidate(root, id, inboxRel, readyRel); err != nil {
+			return "", err
+		}
+		if opts.Would != nil {
+			opts.Would("move task to tasks/ready")
+			opts.Would("commit")
+		}
+		return readyRel, nil
+	}
+	tracef("move %s to %s", inboxRel, readyRel)
 	if err := os.Rename(inboxAbs, readyAbs); err != nil {
 		return "", fmt.Errorf("move %s to %s: %w", inboxRel, readyRel, err)
 	}
@@ -99,6 +138,70 @@ func Promote(projectRoot, id string) (string, error) {
 		return "", restore(fmt.Errorf("commit promotion of %s: %w", id, err))
 	}
 	return readyRel, nil
+}
+
+// dryValidate applies the same two contract checks as the real command to a
+// scratch copy of the task tree in which the task has already moved.
+func dryValidate(root, id, inboxRel, readyRel string) error {
+	scratch, err := os.MkdirTemp("", "taskfactory-dryrun-")
+	if err != nil {
+		return fmt.Errorf("create scratch directory: %w", err)
+	}
+	defer os.RemoveAll(scratch)
+	tracef("scratch copy of tasks/ in %s", scratch)
+	if err := copyTasks(root, scratch); err != nil {
+		return err
+	}
+	if err := os.Rename(filepath.Join(scratch, filepath.FromSlash(inboxRel)), filepath.Join(scratch, filepath.FromSlash(readyRel))); err != nil {
+		return fmt.Errorf("prepare scratch copy: %w", err)
+	}
+	if diagnostics := taskvalidate.ValidateFiles(scratch, []string{readyRel}); len(diagnostics) > 0 {
+		return refusal(id, diagnostics)
+	}
+	// Claim blocks of other tasks are checked against the project root, which
+	// the scratch copy does not share, so the rest of the tree is validated in
+	// place. The moved file's own diagnostics above include the tree-wide
+	// ID and dependency checks.
+	if diagnostics := taskvalidate.Validate(root, ""); len(diagnostics) > 0 {
+		return fmt.Errorf("task tree is invalid after promoting %s: %s", id, diagnostics[0])
+	}
+	return nil
+}
+
+// copyTasks copies every regular file below root/tasks, and the configuration
+// when present, into dst. It only reads root.
+func copyTasks(root, dst string) error {
+	for _, top := range []string{"tasks", ".taskfactory/config.toml"} {
+		src := filepath.Join(root, filepath.FromSlash(top))
+		err := filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				if os.IsNotExist(err) {
+					return nil
+				}
+				return err
+			}
+			rel, _ := filepath.Rel(root, path)
+			target := filepath.Join(dst, rel)
+			if entry.IsDir() {
+				return os.MkdirAll(target, 0o755)
+			}
+			if !entry.Type().IsRegular() {
+				return nil
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(target, data, 0o644)
+		})
+		if err != nil {
+			return fmt.Errorf("prepare scratch copy: %w", err)
+		}
+	}
+	return nil
 }
 
 // refusal formats the first contract diagnostic for a task that is not ready.
@@ -155,6 +258,7 @@ func commitPaths(root, id string, paths []string) error {
 
 // git runs git with -C root and returns its stdout. Failures include stderr.
 func git(root string, args ...string) (string, error) {
+	tracef("git %s", strings.Join(args, " "))
 	cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

@@ -79,6 +79,7 @@ func CheckEligibility(projectRoot, id string) error {
 		return fmt.Errorf("task %s is not eligible: %s", id, diagnostics[0])
 	}
 
+	tracef("read %s", readyPath)
 	activeDir := filepath.Join(projectRoot, "tasks", "active")
 	active, err := os.ReadDir(activeDir)
 	if err != nil && !os.IsNotExist(err) {
@@ -103,9 +104,36 @@ func CheckEligibility(projectRoot, id string) error {
 	return nil
 }
 
+// Options are the common flags of the claim command. Verbose, when non-nil,
+// receives one line per Git command run and per path touched. With DryRun,
+// Would receives each planned action and nothing is written: no lock file, no
+// branch, no worktree and no task file move.
+type Options struct {
+	DryRun  bool
+	Verbose func(format string, args ...any)
+	Would   func(format string, args ...any)
+}
+
+// trace is the verbose sink of the running call; it is nil unless Options.Verbose is set.
+var trace func(format string, args ...any)
+
+func tracef(format string, args ...any) {
+	if trace != nil {
+		trace(format, args...)
+	}
+}
+
 // Claim creates a task branch and worktree, then atomically moves its contract
 // from ready to active with the protocol's claim metadata.
 func Claim(projectRoot, id, owner string) error {
+	return ClaimWith(projectRoot, id, owner, Options{})
+}
+
+// ClaimWith is Claim with options. A dry run runs the same eligibility and
+// state checks and stops before the first write.
+func ClaimWith(projectRoot, id, owner string, opts Options) error {
+	trace = opts.Verbose
+	defer func() { trace = nil }()
 	if strings.TrimSpace(owner) == "" {
 		return errors.New("claim owner must be non-empty")
 	}
@@ -114,7 +142,12 @@ func Claim(projectRoot, id, owner string) error {
 		return fmt.Errorf("resolve project root %s: %w", projectRoot, err)
 	}
 	projectRoot = canonicalRoot
-	return WithClaimLock(projectRoot, func() error {
+	lock := WithClaimLock
+	if opts.DryRun {
+		// A dry run writes nothing, not even the lock file.
+		lock = func(_ string, fn func() error) error { return fn() }
+	}
+	return lock(projectRoot, func() error {
 		if err := validateTaskStateDirectories(projectRoot); err != nil {
 			return err
 		}
@@ -167,6 +200,14 @@ func Claim(projectRoot, id, owner string) error {
 			return errors.New("claim owner must be a single line")
 		}
 		complete := append(append([]byte(nil), data...), []byte(metadata)...)
+		if opts.DryRun {
+			if opts.Would != nil {
+				opts.Would("move task to tasks/active")
+				opts.Would("add worktree %s", worktree)
+			}
+			return nil
+		}
+		tracef("write %s", activePath)
 		if err := os.MkdirAll(filepath.Dir(worktree), 0o755); err != nil {
 			return fmt.Errorf("create worktree root %s: %w", filepath.Dir(worktree), err)
 		}
@@ -326,6 +367,7 @@ func findTaskPath(directory, id string) (string, error) {
 }
 
 func runGit(root string, args ...string) (string, error) {
+	tracef("git %s", strings.Join(args, " "))
 	command := exec.Command("git", append([]string{"-C", root}, args...)...)
 	output, err := command.CombinedOutput()
 	if err != nil {

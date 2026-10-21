@@ -35,6 +35,14 @@ type Options struct {
 	HaikuModel string // required for the claude adapter only
 	Endpoint   string // host:port, DefaultEndpoint when not given
 	Timeout    time.Duration
+
+	// DryRun, Verbose and Would are the common flags, set by the CLI after
+	// ParseArgs. With DryRun, Execute reports each planned action to Would and
+	// launches nothing, runs no preflight and writes no log. Verbose, when
+	// non-nil, receives one line per Git command run and path touched.
+	DryRun  bool
+	Verbose func(format string, args ...any)
+	Would   func(format string, args ...any)
 }
 
 // ParseArgs parses the arguments after "work": one task ID, a required

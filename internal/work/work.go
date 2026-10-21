@@ -73,6 +73,9 @@ func Execute(ctx context.Context, root, id string, opts Options, deps Deps) (int
 		run = realRun
 	}
 
+	trace = opts.Verbose
+	defer func() { trace = nil }()
+	tracef("read task %s and worker instructions under %s", id, root)
 	prompt, err := workprompt.Build(root, id)
 	if err != nil {
 		return 1, err
@@ -87,6 +90,14 @@ func Execute(ctx context.Context, root, id string, opts Options, deps Deps) (int
 		Prompt: prompt.Text,
 	}
 
+	if opts.DryRun {
+		if opts.Would != nil {
+			opts.Would("run the %s preflight", opts.Adapter)
+			opts.Would("launch %s with model %s in %s", opts.Adapter, opts.Model, worktree)
+			opts.Would("write log %s", workprompt.LogPath(root, id, opts.Adapter, now()))
+		}
+		return 0, nil
+	}
 	if pf := preflight(ctx, req); pf.Err() != nil {
 		var b strings.Builder
 		fmt.Fprintf(&b, "preflight refused %s for %s; nothing was launched and nothing changed", opts.Adapter, id)
@@ -143,6 +154,15 @@ func Execute(ctx context.Context, root, id string, opts Options, deps Deps) (int
 	return exit, nil
 }
 
+// trace is the verbose sink of the running call; it is nil unless Options.Verbose is set.
+var trace func(format string, args ...any)
+
+func tracef(format string, args ...any) {
+	if trace != nil {
+		trace(format, args...)
+	}
+}
+
 // oneLine collapses s to a single line.
 func oneLine(s string) string {
 	return strings.Join(strings.Fields(s), " ")
@@ -163,10 +183,14 @@ func reportHead(out io.Writer, worktree, base string) {
 }
 
 func gitOut(dir string, args ...string) (string, error) {
+	tracef("git -C %s %s", dir, strings.Join(args, " "))
 	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
 	data, err := cmd.Output()
 	return strings.TrimSpace(string(data)), err
 }
+
+// Redact is redact for callers outside this package, such as --verbose output.
+func Redact(s string, environ []string) string { return redact(s, environ) }
 
 // credentialNames marks environment variable names whose values are secrets.
 var credentialNames = []string{"TOKEN", "KEY", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL"}

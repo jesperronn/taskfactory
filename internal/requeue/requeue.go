@@ -42,6 +42,21 @@ func usagef(format string, args ...any) error {
 // block from a claimed failed task and records it in the commit message.
 type Options struct {
 	DiscardClaim bool
+	// DryRun makes RequeueWith stop before the first write and report each
+	// planned action to Would. Verbose, when non-nil, receives one line per
+	// Git command run and per path touched.
+	DryRun  bool
+	Verbose func(format string, args ...any)
+	Would   func(format string, args ...any)
+}
+
+// trace is the verbose sink of the running call; it is nil unless Verbose is set.
+var trace func(format string, args ...any)
+
+func tracef(format string, args ...any) {
+	if trace != nil {
+		trace(format, args...)
+	}
 }
 
 // Result describes a successful requeue. Aside is the slash-separated path the
@@ -174,6 +189,8 @@ func Requeue(projectRoot, id, target string) (Result, error) {
 // are removed after the commit; otherwise requeue refuses before any change.
 // Without the flag, a claimed task is refused as before.
 func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
+	trace = opts.Verbose
+	defer func() { trace = nil }()
 	if !idPattern.MatchString(id) {
 		return Result{}, usagef("task %q is not a valid task ID (expected TF-NNN)", id)
 	}
@@ -243,6 +260,10 @@ func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 		paths = []string{failedRel, targetRel}
 	}
 
+	if opts.DryRun {
+		return dryRun(root, id, target, targetRel, plan, newData, discarded, asideRel, attempts, opts)
+	}
+	tracef("move %s to %s", failedRel, targetRel)
 	if err := os.Rename(failedAbs, targetAbs); err != nil {
 		return Result{}, fmt.Errorf("move %s to %s: %w", failedRel, targetRel, err)
 	}
@@ -301,6 +322,93 @@ func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 		return res, cleanupFailure(id, targetRel, plan, removedWorktree, err)
 	}
 	return res, nil
+}
+
+// dryRun runs the contract checks of the real command on a scratch copy of the
+// task tree outside the project, in which the task has already moved, and then
+// reports each action the real command would take. It writes nothing in the
+// project.
+func dryRun(root, id, target, targetRel string, plan cleanupPlan, newData []byte, discarded, asideRel string, attempts int, opts Options) (Result, error) {
+	scratch, err := os.MkdirTemp("", "taskfactory-dryrun-")
+	if err != nil {
+		return Result{}, fmt.Errorf("create scratch directory: %w", err)
+	}
+	defer os.RemoveAll(scratch)
+	tracef("scratch copy of tasks/ in %s", scratch)
+	if err := copyTasks(root, scratch); err != nil {
+		return Result{}, err
+	}
+	name := filepath.Base(targetRel)
+	scratchTarget := filepath.Join(scratch, filepath.FromSlash(targetRel))
+	if err := os.Remove(filepath.Join(scratch, "tasks", "failed", name)); err != nil {
+		return Result{}, fmt.Errorf("prepare scratch copy: %w", err)
+	}
+	if err := os.WriteFile(scratchTarget, newData, 0o644); err != nil {
+		return Result{}, fmt.Errorf("prepare scratch copy: %w", err)
+	}
+	if target == "ready" {
+		if diagnostics := taskvalidate.ValidateFiles(scratch, []string{targetRel}); len(diagnostics) > 0 {
+			return Result{}, fmt.Errorf("refusing to requeue %s: %s", id, diagnostics[0])
+		}
+	}
+	// Claim blocks of other tasks are checked against the project root, which
+	// the scratch copy does not share, so the tree is validated in place.
+	if diagnostics := taskvalidate.Validate(root, ""); len(diagnostics) > 0 {
+		return Result{}, fmt.Errorf("task tree is invalid after requeueing %s: %s", id, diagnostics[0])
+	}
+	if opts.Would != nil {
+		opts.Would("move task to tasks/%s", target)
+		if discarded != "" {
+			opts.Would("remove the Claim block")
+		}
+		if asideRel != "" {
+			opts.Would("rename evidence aside to %s", asideRel)
+		}
+		opts.Would("commit")
+		if plan.hasDir {
+			opts.Would("remove worktree %s", plan.worktree)
+		}
+		if plan.hasBranch {
+			opts.Would("remove branch %s", plan.branch)
+		}
+	}
+	return Result{Path: targetRel, Aside: asideRel, Attempts: attempts, Discarded: discarded}, nil
+}
+
+// copyTasks copies every regular file below root/tasks, and the configuration
+// when present, into dst. It only reads root.
+func copyTasks(root, dst string) error {
+	for _, top := range []string{"tasks", ".taskfactory/config.toml"} {
+		src := filepath.Join(root, filepath.FromSlash(top))
+		err := filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				if os.IsNotExist(err) {
+					return nil
+				}
+				return err
+			}
+			rel, _ := filepath.Rel(root, path)
+			target := filepath.Join(dst, rel)
+			if entry.IsDir() {
+				return os.MkdirAll(target, 0o755)
+			}
+			if !entry.Type().IsRegular() {
+				return nil
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(target, data, 0o644)
+		})
+		if err != nil {
+			return fmt.Errorf("prepare scratch copy: %w", err)
+		}
+	}
+	return nil
 }
 
 // claimBlockOf returns the Claim block text of data, or "" when it has none.
@@ -445,6 +553,7 @@ func stripClaim(data []byte) ([]byte, string) {
 
 // git runs git with -C root and returns its stdout. Failures include stderr.
 func git(root string, args ...string) (string, error) {
+	tracef("git %s", strings.Join(args, " "))
 	cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

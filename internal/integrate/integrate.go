@@ -63,9 +63,37 @@ type failure struct {
 	err                                   error
 }
 
+// Options are the common flags of the integrate and check-main commands.
+// Verbose, when non-nil, receives one line per Git command and shell command
+// run. With DryRun, Would receives each planned action and nothing changes: no
+// lock file, no rebase, no check run, no fast-forward, no archive and no
+// evidence record.
+type Options struct {
+	DryRun  bool
+	Verbose func(format string, args ...any)
+	Would   func(format string, args ...any)
+}
+
+// trace is the verbose sink of the running call; it is nil unless Options.Verbose is set.
+var trace func(format string, args ...any)
+
+func tracef(format string, args ...any) {
+	if trace != nil {
+		trace(format, args...)
+	}
+}
+
 // Run integrates one active task. All state inspection and changes occur under
 // the repository-local integration lock.
 func Run(root, id string) (retErr error) {
+	return RunWith(root, id, Options{})
+}
+
+// RunWith is Run with options. A dry run applies every eligibility check of the
+// real command, without taking the lock, and stops before the rebase.
+func RunWith(root, id string, opts Options) (retErr error) {
+	trace = opts.Verbose
+	defer func() { trace = nil }()
 	if !idPattern.MatchString(id) {
 		return fmt.Errorf("task %q is not a valid task ID (expected TF-NNN)", id)
 	}
@@ -73,16 +101,18 @@ func Run(root, id string) (retErr error) {
 	if retErr != nil {
 		return retErr
 	}
-	unlock, err := acquireIntegrationLock(root)
-	if err != nil {
-		return err
+	if !opts.DryRun {
+		unlock, err := acquireIntegrationLock(root)
+		if err != nil {
+			return err
+		}
+		defer unlock()
 	}
-	defer unlock()
 	entry := attempt{TaskID: id, Attempt: nextAttempt(root, id), RecordedAt: time.Now().UTC().Format(time.RFC3339), Outcome: "FAILED", Stage: "eligibility", ExitCode: nil}
 	var fail *failure
 	appended := false
 	defer func() {
-		if appended {
+		if appended || opts.DryRun {
 			return
 		}
 		if fail != nil {
@@ -165,6 +195,22 @@ func Run(root, id string) (retErr error) {
 	if e = checkRuntimeInventory(root, cfg.Git.WorktreeRoot); e != nil {
 		fail = &failure{outcome: "FAILED", stage: "eligibility", err: e}
 		return e
+	}
+	if opts.DryRun {
+		if opts.Would != nil {
+			opts.Would("rebase %s onto main", branch)
+			for _, command := range cfg.Verification.Integration {
+				opts.Would("run %s", command)
+			}
+			opts.Would("fast-forward main")
+			for _, command := range cfg.Verification.Main {
+				opts.Would("run %s", command)
+			}
+			opts.Would("archive %s", filepath.ToSlash(filepath.Join("tasks/archive", filepath.Base(taskPath))))
+			opts.Would("commit")
+			opts.Would("append integration evidence")
+		}
+		return nil
 	}
 	for {
 		if output, rebaseErr := gitOutputErr(candidate, "rebase", main); rebaseErr != nil {
@@ -696,6 +742,7 @@ func retainedClaim(root, id string) bool {
 	return false
 }
 func runCommand(dir, command string) (string, *int, error) {
+	tracef("sh -c %s (in %s)", command, dir)
 	sh, e := exec.LookPath("sh")
 	if e != nil {
 		return "", nil, e
@@ -725,6 +772,7 @@ func git(dir string, args ...string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 func gitOutputErr(dir string, args ...string) (string, error) {
+	tracef("git -C %s %s", dir, strings.Join(args, " "))
 	c := exec.Command("git", append([]string{"-C", dir}, args...)...)
 	out, e := c.CombinedOutput()
 	return string(out), e
