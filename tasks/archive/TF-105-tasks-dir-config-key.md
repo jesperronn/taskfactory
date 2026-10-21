@@ -170,3 +170,11 @@ Check: go run ./cmd/taskfactory validate tasks
 Run each check, `bin/test` and `bin/lint` from the repository root and report
 each exit code. Also report `go test ./... -count=1` and the paste of the
 end-to-end test's `git log --stat` assertions passing.
+
+## Claim
+
+Owner: sonnet-worker-105
+Branch: task/TF-105
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-105
+Base commit: 295a79a6377721e54f23112dfeefc52bcf6c25cb
+Started at: 2026-10-21T15:42:23Z
