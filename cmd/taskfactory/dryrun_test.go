@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -30,6 +31,10 @@ func runWithEnv(t *testing.T, binary, dir string, env []string, args ...string) 
 	err := cmd.Run()
 	return cliResult{stdout.String(), stderr.String(), processExitCode(err)}
 }
+
+// sharedFixtureDir holds fixtures shared across tests; TestMain removes it.
+// sharedFixtureBase, while set, redirects initGitProject into it.
+var sharedFixtureDir, sharedFixtureBase string
 
 // fixtureConfig is the project configuration the dry-run fixtures commit.
 const fixtureConfig = "protocol_version = 1\n\n[workers]\nmax_parallel = 4\n\n[git]\nuse_worktrees = true\nworktree_root = \".taskfactory/worktrees\"\nintegration_strategy = \"ff-only\"\n\n[integration]\nstop_on_main_failure = true\n\n[verification]\nworker = [\"true\"]\nintegration = [\"true\"]\nmain = [\"touch main.ran\"]\n"
@@ -83,20 +88,16 @@ func stateFixture(t *testing.T, binary, state, id, check string) string {
 // worktrees, every ref, and every file outside .git with its content hash.
 func snapshot(t *testing.T, root string) []string {
 	t.Helper()
-	var out []string
-	for _, args := range [][]string{
-		{"status", "--short", "--untracked-files=all"},
-		{"worktree", "list"},
-		{"for-each-ref"},
-	} {
-		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
-		data, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, data)
-		}
-		out = append(out, "git "+strings.Join(args, " ")+"\n"+string(data))
+	// One git process per snapshot: status, worktrees and refs together.
+	script := `git status --short --untracked-files=all && echo --worktrees && git worktree list && echo --refs && git for-each-ref`
+	cmd := exec.Command("sh", "-c", script)
+	cmd.Dir = root
+	data, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git snapshot: %v\n%s", err, data)
 	}
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+	out := []string{"git\n" + string(data)}
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -118,7 +119,7 @@ func snapshot(t *testing.T, root string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sort.Strings(out[3:])
+	sort.Strings(out[1:])
 	return out
 }
 
@@ -129,6 +130,38 @@ func gitOutput(t *testing.T, root string, args ...string) string {
 		t.Fatalf("git %v: %v\n%s", args, err, data)
 	}
 	return string(data)
+}
+
+// Dry-run scenarios only read their fixture (every test asserts a dry run
+// changes nothing), so each scenario's fixture is built once per test binary.
+var (
+	scenarioMu    sync.Mutex
+	scenarioRoots = map[string]string{}
+)
+
+func scenarioRoot(t *testing.T, binary string, sc dryScenario) string {
+	t.Helper()
+	scenarioMu.Lock()
+	defer scenarioMu.Unlock()
+	if root, ok := scenarioRoots[sc.name]; ok {
+		return root
+	}
+	if sharedFixtureDir == "" {
+		dir, err := os.MkdirTemp("", "taskfactory-dry")
+		if err != nil {
+			t.Fatal(err)
+		}
+		sharedFixtureDir = dir
+	}
+	base, err := os.MkdirTemp(sharedFixtureDir, "s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sharedFixtureBase = base
+	defer func() { sharedFixtureBase = "" }()
+	root := sc.setup(t, binary)
+	scenarioRoots[sc.name] = root
+	return root
 }
 
 // dryScenario is one mutating command run with --dry-run on a fixture.
@@ -169,7 +202,7 @@ func dryScenarios() []dryScenario {
 // returns the result of the last run after checking that nothing changed.
 func runDryScenario(t *testing.T, binary string, sc dryScenario) cliResult {
 	t.Helper()
-	root := sc.setup(t, binary)
+	root := scenarioRoot(t, binary, sc)
 	// A fake adapter that records any launch, put first on PATH.
 	bin := t.TempDir()
 	marker := filepath.Join(bin, "adapter-launched")
@@ -390,7 +423,7 @@ func TestDryRunFailRequeueChangeNothing(t *testing.T) {
 func TestDryRunVerifyWritesNoEvidence(t *testing.T) {
 	binary := buildCLI(t)
 	sc := scenarioNamed(t, "verify")
-	root := sc.setup(t, binary)
+	root := scenarioRoot(t, binary, sc)
 	res := runSplit(t, binary, root, "verify", "TF-915", "--dry-run")
 	if res.code != 0 {
 		t.Fatalf("verify --dry-run: %+v", res)
@@ -411,7 +444,7 @@ func TestDryRunVerifyWritesNoEvidence(t *testing.T) {
 func TestDryRunIntegrateCheckMainChangeNothing(t *testing.T) {
 	binary := buildCLI(t)
 	sc := scenarioNamed(t, "integrate")
-	root := sc.setup(t, binary)
+	root := scenarioRoot(t, binary, sc)
 	mainBefore := gitOutput(t, root, "rev-parse", "main")
 	branchBefore := gitOutput(t, root, "rev-parse", "task/TF-916")
 	res := runSplit(t, binary, root, "integrate", "TF-916", "--dry-run")
@@ -430,7 +463,7 @@ func TestDryRunIntegrateCheckMainChangeNothing(t *testing.T) {
 	runDryScenario(t, binary, sc)
 
 	cm := scenarioNamed(t, "check-main")
-	cmRoot := cm.setup(t, binary)
+	cmRoot := scenarioRoot(t, binary, cm)
 	res = runSplit(t, binary, cmRoot, "check-main", "--dry-run")
 	if res.code != 0 {
 		t.Fatalf("check-main --dry-run: %+v", res)
@@ -447,7 +480,7 @@ func TestDryRunWorkNeverLaunchesAdapter(t *testing.T) {
 	sc := scenarioNamed(t, "work")
 	res := runDryScenario(t, binary, sc) // fails if the fake adapter ran
 	assertWould(t, sc, res)
-	root := sc.setup(t, binary)
+	root := scenarioRoot(t, binary, sc)
 	runSplit(t, binary, root, "work", "TF-918", "--adapter", "pi", "--model", "m", "--dry-run")
 	if _, err := os.Stat(filepath.Join(root, ".taskfactory", "logs")); err == nil {
 		t.Error("work --dry-run wrote a log directory")
@@ -458,7 +491,7 @@ func TestDryRunLeavesGitStatusAndWorktreesUnchanged(t *testing.T) {
 	binary := buildCLI(t)
 	for _, sc := range dryScenarios() {
 		t.Run(sc.name, func(t *testing.T) {
-			root := sc.setup(t, binary)
+			root := scenarioRoot(t, binary, sc)
 			status := gitOutput(t, root, "status", "--short", "--untracked-files=all")
 			worktrees := gitOutput(t, root, "worktree", "list")
 			res := runSplit(t, binary, root, append(append([]string(nil), sc.args...), "--dry-run")...)
@@ -479,7 +512,7 @@ func TestDryRunOutputFormat(t *testing.T) {
 	binary := buildCLI(t)
 	for _, sc := range dryScenarios() {
 		t.Run(sc.name, func(t *testing.T) {
-			root := sc.setup(t, binary)
+			root := scenarioRoot(t, binary, sc)
 			res := runSplit(t, binary, root, append(append([]string(nil), sc.args...), "--dry-run")...)
 			if res.code != 0 || res.stderr != "" {
 				t.Fatalf("%+v", res)

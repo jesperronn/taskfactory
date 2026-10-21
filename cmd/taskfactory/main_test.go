@@ -627,6 +627,9 @@ var (
 // TestMain removes the shared CLI build after every test has run.
 func TestMain(m *testing.M) {
 	code := m.Run()
+	if sharedFixtureDir != "" {
+		os.RemoveAll(sharedFixtureDir)
+	}
 	if cliDir != "" {
 		os.RemoveAll(cliDir)
 	}
@@ -654,7 +657,11 @@ func buildCLI(t *testing.T) string {
 
 func initGitProject(t *testing.T) string {
 	t.Helper()
-	root := filepath.Join(t.TempDir(), "project with trailing space ")
+	base := sharedFixtureBase
+	if base == "" {
+		base = t.TempDir()
+	}
+	root := filepath.Join(base, "project with trailing space ")
 	if err := os.Mkdir(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
