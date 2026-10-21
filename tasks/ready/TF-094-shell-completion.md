@@ -1,4 +1,4 @@
-# TF-088: Bash and zsh tab-completion for taskfactory and tf
+# TF-094: Bash and zsh tab-completion for taskfactory and tf
 
 ## Goal
 
