@@ -71,3 +71,11 @@ Check: go test ./cmd/taskfactory && bin/test.test.sh
 Run `bin/test --verbose bin/lint.test.sh`, `bin/test --verbose cmd/taskfactory`
 and `bin/test --budget cmd/taskfactory`, and report each exit code. Run
 `bin/test` with no arguments and report its exit code.
+
+## Claim
+
+Owner: claude-code
+Branch: task/TF-093
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-093
+Base commit: 26c3f64674ca5d44177451ea2bcf1ddb2f2466d4
+Started at: 2026-10-21T09:27:34Z
