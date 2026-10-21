@@ -31,6 +31,8 @@ var nextSteps = map[string]hint{
 	"fail":          {"taskfactory requeue <ID> --to ready", "taskfactory status shows the task state"},
 	"requeue":       {"taskfactory claim <ID> --owner <name>", "taskfactory status shows the task state"},
 	"completion":    {"add it to your shell profile, see README", "taskfactory completion bash or taskfactory completion zsh"},
+	"skill-install": {"taskfactory skill status", "rerun with --force to replace it, or choose --target"},
+	"skill-status":  {"", "taskfactory skill install"},
 	"requeue-inbox": {"taskfactory promote <ID>", "taskfactory status shows the task state"},
 }
 
@@ -47,6 +49,7 @@ func initNextSteps(target string) []string {
 		"  2. " + commit,
 		"  3. Write a task in tasks/inbox, then run: taskfactory promote <ID>",
 		"  4. Run: taskfactory claim <ID> --owner <name>",
+		"  5. Optional: install the agent skill with taskfactory skill install (check with " + nextSteps["skill-install"].success + ")",
 	}
 }
 

@@ -58,6 +58,11 @@ var completionSpecs = []completionSpec{
 		{Name: "--discard-claim"},
 	}},
 	{Command: "completion", Positional: "words", Words: []string{"bash", "zsh"}},
+	{Command: "skill", Positional: "words", Words: []string{"install", "status"}, Flags: []completionFlag{
+		{Name: "--target", Values: []string{"claude", "agents"}},
+		{Name: "--global"},
+		{Name: "--force"},
+	}},
 }
 
 // completionCommonFlags are offered for every command except completion.

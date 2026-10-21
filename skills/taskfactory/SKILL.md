@@ -190,3 +190,6 @@ Rules:
 
 If the contract is impossible or contradictory, report it instead of rewriting
 the contract.
+
+To install or check this skill from the binary, run `taskfactory skill install` and
+`taskfactory skill status`.

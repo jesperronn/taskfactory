@@ -53,6 +53,7 @@ var commandSummaries = []commandSummary{
 	{"requeue", "requeue <ID> [--to ready|inbox] [--discard-claim]", "return a failed task to ready or inbox"},
 	{"work", "work <ID> --adapter <omp|pi|claude> --model <id>", "launch a local worker on a claimed task"},
 	{"completion", "completion <bash|zsh>", "print a shell completion script"},
+	{"skill", "skill <install|status>", "install or check the embedded agent skill"},
 }
 
 // commandHelps maps each command in commandSummaries to its per-command help.
@@ -69,6 +70,7 @@ var commandHelps = map[string]string{
 	"requeue":    requeueHelp,
 	"work":       workHelp,
 	"completion": completionHelp,
+	"skill":      skillHelp,
 }
 
 // styleArguments colors the words after a subcommand name: flags starting with
@@ -580,6 +582,10 @@ func main() {
 		os.Exit(completeHelper(args[1:], os.Stdout))
 	}
 	if len(args) > 0 && wantsHelp(args[1:]) {
+		if args[0] == "skill" {
+			fmt.Fprint(os.Stdout, styleHelp(stdoutStyle, skillHelpFor(args[1:])))
+			return
+		}
 		if args[0] == "requeue" {
 			fmt.Fprint(os.Stdout, styleHelp(stdoutStyle, requeueHelpText()))
 			return
@@ -605,6 +611,9 @@ func main() {
 	dry := dryRun{out: os.Stdout}
 	if len(args) >= 1 && args[0] == "completion" {
 		os.Exit(completionCommand(args[1:], os.Stdout, os.Stderr, stdoutIsTerminal()))
+	}
+	if len(args) >= 1 && args[0] == "skill" {
+		os.Exit(skillCommand(args[1:], common, dry, os.Stdout, os.Stderr))
 	}
 	if len(args) >= 1 && args[0] == "init" {
 		if len(args) > 2 {

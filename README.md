@@ -1042,6 +1042,23 @@ mkdir -p .claude/skills
 cp -R /path/to/taskfactory/skills/taskfactory .claude/skills/
 ```
 
+The skill is also embedded in the binary, so the version of the binary decides
+the skill text, with no network or release archive:
+
+```sh
+taskfactory skill install                      # write the skill
+taskfactory skill status                       # present, missing or stale
+taskfactory skill install --global --force     # user-wide, replacing a copy
+```
+
+By default the skill goes to `.claude/skills/taskfactory` when `.claude/`
+exists in the project root and `.agents/skills/taskfactory` otherwise.
+`--target claude`, `--target agents` or `--target dir:<path>` choose the
+directory, and `--global` uses `$HOME` instead of the project root. Install
+refuses to overwrite an existing directory unless `--force`. It writes
+`SKILL.md` and the stamp file `.taskfactory-skill` and nothing else. Status
+exits 0 when present and 1 when missing or stale.
+
 Other harnesses may use an equivalent skills directory. The skill lists the
 commands that exist, and marks release as not implemented.
 `bin/skill.test.sh` checks the frontmatter that harnesses

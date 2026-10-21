@@ -83,7 +83,8 @@ const wantInitBlock = "Next steps:\n" +
 	"  1. Review .taskfactory/config.toml and set the verification commands.\n" +
 	"  2. Commit .taskfactory/config.toml, .gitignore and tasks/ first.\n" +
 	"  3. Write a task in tasks/inbox, then run: taskfactory promote <ID>\n" +
-	"  4. Run: taskfactory claim <ID> --owner <name>\n"
+	"  4. Run: taskfactory claim <ID> --owner <name>\n" +
+	"  5. Optional: install the agent skill with taskfactory skill install (check with taskfactory skill status)\n"
 
 func TestNextStepInitBlock(t *testing.T) {
 	binary := buildCLI(t)
@@ -91,6 +92,11 @@ func TestNextStepInitBlock(t *testing.T) {
 	res := runSplit(t, binary, root, "init")
 	if res.code != 0 || res.stdout != wantInitBlock || res.stderr != "" {
 		t.Fatalf("init: %+v, want stdout %q", res, wantInitBlock)
+	}
+	for _, d := range []string{".claude", ".agents"} {
+		if _, err := os.Stat(filepath.Join(root, d)); err == nil {
+			t.Errorf("init wrote %s", d)
+		}
 	}
 }
 
@@ -324,7 +330,11 @@ func TestNextStepTableIsSingleSource(t *testing.T) {
 		if command.name == "init" {
 			continue
 		}
-		if _, ok := nextSteps[command.name]; !ok {
+		key := command.name
+		if key == "skill" {
+			key = "skill-install" // skill has the two entries skill-install and skill-status
+		}
+		if _, ok := nextSteps[key]; !ok {
 			t.Errorf("no next-step table entry for %s", command.name)
 		}
 	}

@@ -91,7 +91,9 @@ version explicitly.
 - `taskfactory-skill_<version>.tar.gz` holding a `taskfactory/` directory
   with `SKILL.md` and nothing specific to one harness (no `.claude`
   paths). It follows the Agent Skills layout, where `SKILL.md` has a name and
-  a description.
+  a description. It remains for `npx skills add` and manual use; the
+  `taskfactory skill install` command uses the skill embedded in the binary,
+  not this archive.
 - `SHA256SUMS`, one file covering all archives
 
 ## Publishing
