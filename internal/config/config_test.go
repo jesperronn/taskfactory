@@ -37,7 +37,7 @@ main = ["go test ./..."]
 			want: Config{
 				ProtocolVersion: 1,
 				Workers:         Workers{MaxParallel: 4},
-				Git:             Git{UseWorktrees: true, WorktreeRoot: filepath.Join(".taskfactory", "worktrees"), IntegrationStrategy: "ff-only"},
+				Git:             Git{UseWorktrees: true, WorktreeRoot: filepath.Join(".taskfactory", "worktrees"), IntegrationStrategy: "ff-only", BaseBranch: "main"},
 				Integration:     Integration{StopOnMainFailure: true},
 				Verification: Verification{
 					Worker: []string{"go test ./..."}, Integration: []string{"go test ./...", "go vet ./..."}, Main: []string{"go test ./..."},
@@ -50,7 +50,7 @@ main = ["go test ./..."]
 			want: Config{
 				ProtocolVersion: 1,
 				Workers:         Workers{MaxParallel: 4},
-				Git:             Git{UseWorktrees: true, WorktreeRoot: ".taskfactory/worktrees", IntegrationStrategy: "ff-only"},
+				Git:             Git{UseWorktrees: true, WorktreeRoot: ".taskfactory/worktrees", IntegrationStrategy: "ff-only", BaseBranch: "main"},
 				Integration:     Integration{StopOnMainFailure: true},
 				Verification:    Verification{Worker: []string{"go test ./..."}, Integration: []string{"go test ./...", "go vet ./..."}},
 			},
