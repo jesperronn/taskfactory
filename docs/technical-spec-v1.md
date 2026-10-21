@@ -94,17 +94,18 @@ solely on worker success.
 
 ### Integration contract
 
-`integrate <ID>` operates only on the local base branch, `refs/heads/main` unless `git.base_branch` names another; it does not fetch or
-push. Require local main to exist and be checked out in the repository worktree.
-The main worktree may contain ready-to-active claim transitions (each ready task
-file moved to active with its Claim block), TaskFactory's exact runtime paths
-from `protocol-v1.md` (including the untracked `.taskfactory/logs/` work log
-directory, which is never staged), and registered worker worktrees under the configured
-root. Reject unrelated tracked or untracked changes, and never stage concurrent
-claim transitions. Inventory runtime directories even when Git ignore rules hide
-them, so ignored user files are not mistaken for TaskFactory state. The task
-worktree itself must be clean. `.taskfactory/config.toml` is allowed only when
-tracked in HEAD and clean in the index and worktree; reject a missing,
+`integrate <ID>` operates only on the local base branch, `refs/heads/main`
+unless `git.base_branch` names another; it does not fetch or push. Require local
+main to exist and be checked out in the repository worktree. The main worktree
+may contain ready-to-active claim transitions (each ready task file moved to
+active with its Claim block), TaskFactory's exact runtime paths from
+`protocol-v1.md` (including the untracked `.taskfactory/logs/` work log
+directory, which is never staged), and registered worker worktrees under the
+configured root. Reject unrelated tracked or untracked changes, and never stage
+concurrent claim transitions. Inventory runtime directories even when Git ignore
+rules hide them, so ignored user files are not mistaken for TaskFactory state.
+The task worktree itself must be clean. `.taskfactory/config.toml` is allowed
+only when tracked in HEAD and clean in the index and worktree; reject a missing,
 untracked, staged, or unstaged config. Recheck it immediately before merge and
 before lifecycle staging. Never stage or commit it. The claimed branch must be
 checked out in its registered worktree, and the complete, schema-valid,

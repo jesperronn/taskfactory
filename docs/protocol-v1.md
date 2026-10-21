@@ -118,14 +118,14 @@ integration, and claim does not verify that it is tracked.
 ## Integration and main health
 
 Integration is a local operation on the repository's base branch,
-`refs/heads/main` unless `git.base_branch` names another; it does
-not fetch, push, contact a remote, or update a remote-tracking ref. It requires
-that the local base branch (`main` by default) exists and is checked out in the repository worktree. The
-repository worktree may contain ready-to-active lifecycle changes from
-concurrent claims: each must be exactly a ready task file moved to active with
-the Claim block appended. It may also contain these TaskFactory operational
-paths: `.taskfactory/config.toml` (only when tracked and clean),
-`.taskfactory/claim.lock`, `.taskfactory/integration.lock`,
+`refs/heads/main` unless `git.base_branch` names another; it does not fetch,
+push, contact a remote, or update a remote-tracking ref. It requires that the
+local base branch (`main` by default) exists and is checked out in the
+repository worktree. The repository worktree may contain ready-to-active
+lifecycle changes from concurrent claims: each must be exactly a ready task file
+moved to active with the Claim block appended. It may also contain these
+TaskFactory operational paths: `.taskfactory/config.toml` (only when tracked and
+clean), `.taskfactory/claim.lock`, `.taskfactory/integration.lock`,
 `.taskfactory/evidence/<ID>.jsonl`, `.taskfactory/evidence/<ID>.lock`,
 `.taskfactory/integration-evidence/<ID>.jsonl`, the work log directory
 `.taskfactory/logs/` with any content (written by `taskfactory work`, never

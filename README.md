@@ -94,9 +94,10 @@ The **task contract defines when it is finished**.
 
 # Quick start
 
-This walks one small task through the whole loop with a local worker. Run it
-in a Git repository with at least one commit on `main` (or on the branch `git.base_branch` names). Every step is a command
-that exists today, including `requeue` for the failed branch.
+This walks one small task through the whole loop with a local worker. Run it in
+a Git repository with at least one commit on `main` (or on the branch
+`git.base_branch` names). Every step is a command that exists today, including
+`requeue` for the failed branch.
 
 1. Install. From a TaskFactory checkout run `bin/install`, which builds
    `taskfactory` (and the short `tf` alias, which works anywhere `taskfactory`
@@ -230,18 +231,18 @@ the flag is accepted and nothing is discarded.
 
 After the requeue commit, `requeue` also removes the task's old worktree and
 branch, so that `taskfactory claim` can create them again (otherwise the claim
-fails with `branch task/TF-001 already exists`). It removes the ones recorded
-in the Claim block, or the conventional `.taskfactory/worktrees/TF-001` and
+fails with `branch task/TF-001 already exists`). It removes the ones recorded in
+the Claim block, or the conventional `.taskfactory/worktrees/TF-001` and
 `task/TF-001` when there is no Claim block. It does this only when it is safe:
 the worktree has no changes and no untracked files, the branch has no commits
-that are not already on the local base branch, `main` by default (a branch still at its claim base commit
-counts), and the worktree is inside `.taskfactory/worktrees` and is not the
-main checkout. These checks run before anything changes. If one fails,
-`requeue` exits 1, changes nothing and prints the commands below. The cleanup
-runs `git worktree remove` and `git branch -d`, never with force and never with
-`-D`. A worktree or branch that is already gone is not an error. If the cleanup
-fails after the commit, `requeue` exits 1 and says the task was requeued and
-what it left behind.
+that are not already on the local base branch, `main` by default (a branch still
+at its claim base commit counts), and the worktree is inside
+`.taskfactory/worktrees` and is not the main checkout. These checks run before
+anything changes. If one fails, `requeue` exits 1, changes nothing and prints
+the commands below. The cleanup runs `git worktree remove` and `git branch -d`,
+never with force and never with `-D`. A worktree or branch that is already gone
+is not an error. If the cleanup fails after the commit, `requeue` exits 1 and
+says the task was requeued and what it left behind.
 
 Unmerged worker commits therefore always need your decision. A failed task
 usually carries worker commits, so the refusal is the common case, and the

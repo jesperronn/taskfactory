@@ -67,8 +67,9 @@ and `requeue --discard-claim` below. Do not invent others.
 4. Commit `.taskfactory/config.toml`, the `tasks/` directories and each ready
    task before claiming. `init leaves .taskfactory/config.toml untracked`, and
    it prints nothing about that. Claim creates task branches from
-   `refs/heads/main` (or the `git.base_branch` branch), so an uncommitted contract is missing from the worker's
-   checkout. Claim does not verify that the config is tracked (not verified).
+   `refs/heads/main` (or the `git.base_branch` branch), so an
+   uncommitted contract is missing from the worker's checkout. Claim does not
+   verify that the config is tracked (not verified).
    Integration does require it tracked in HEAD and unchanged.
 5. After claims, `.taskfactory/` operational files and `tasks/active/` show as
    untracked or changed. This is expected; do not commit them by hand. Worker
