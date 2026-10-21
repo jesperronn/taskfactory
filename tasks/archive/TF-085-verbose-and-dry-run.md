@@ -180,3 +180,11 @@ Run each Check command, `bin/test`, `bin/lint` and
 each exit code. Also run `git status --short` and `git worktree list` before
 and after a `--dry-run` of `claim` in a scratch repository and paste both
 outputs.
+
+## Claim
+
+Owner: sonnet-worker-085
+Branch: task/TF-085
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-085
+Base commit: 9317b4800adf55b9179430888ba7a07e288c6c22
+Started at: 2026-10-20T23:52:19Z
