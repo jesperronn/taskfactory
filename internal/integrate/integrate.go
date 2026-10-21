@@ -774,6 +774,12 @@ func registeredClaimWorktree(root, path string) bool {
 func checkRuntimeInventory(root, configuredWorktreeRoot string) error {
 	dir := paths.For(root).Runtime()
 	configuredWorktreeRoot = filepath.Clean(configuredWorktreeRoot)
+	// A tasks_dir under .taskfactory puts the task folders in the runtime
+	// directory; its top entry is a task directory, not a runtime path.
+	tasksTop := ""
+	if rest := strings.TrimPrefix(paths.For(root).TasksRel(), paths.RuntimeRel()+"/"); rest != paths.For(root).TasksRel() {
+		tasksTop = strings.SplitN(rest, "/", 2)[0]
+	}
 	entries, e := os.ReadDir(dir)
 	if e != nil {
 		return fmt.Errorf("inspect .taskfactory runtime paths: %w", e)
@@ -830,6 +836,9 @@ func checkRuntimeInventory(root, configuredWorktreeRoot string) error {
 				}
 			}
 		default:
+			if tasksTop != "" && name == tasksTop && entry.IsDir() {
+				continue
+			}
 			if strings.HasPrefix(name, ".claim-backup-") && strings.HasSuffix(name, ".tmp") && !entry.IsDir() {
 				continue
 			}

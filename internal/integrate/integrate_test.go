@@ -349,12 +349,19 @@ func newFixture(t *testing.T) fixture {
 // is not empty, before the task branch is created.
 func newFixtureWithGitignore(t *testing.T, gitignore string) fixture {
 	t.Helper()
+	return newFixtureAt(t, gitignore, "tasks")
+}
+
+// newFixtureAt is newFixtureWithGitignore with the task folders in tasksDir,
+// a slash path relative to the project.
+func newFixtureAt(t *testing.T, gitignore, tasksDir string) fixture {
+	t.Helper()
 	root := t.TempDir()
 	run(t, root, "git", "init", "-b", "main")
 	run(t, root, "git", "config", "user.name", "Test")
 	run(t, root, "git", "config", "user.email", "test@example.invalid")
 	run(t, root, "git", "config", "commit.gpgsign", "false")
-	for _, d := range []string{"tasks/inbox", "tasks/ready", "tasks/active", "tasks/failed", "tasks/archive", ".taskfactory"} {
+	for _, d := range []string{tasksDir + "/inbox", tasksDir + "/ready", tasksDir + "/active", tasksDir + "/failed", tasksDir + "/archive", ".taskfactory"} {
 		if err := os.MkdirAll(filepath.Join(root, d), 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -362,7 +369,7 @@ func newFixtureWithGitignore(t *testing.T, gitignore string) fixture {
 	config := "protocol_version = 1\n[workers]\nmax_parallel=4\n[git]\nuse_worktrees=true\nworktree_root=\".taskfactory/worktrees\"\nintegration_strategy=\"ff-only\"\n[integration]\nstop_on_main_failure=true\n[verification]\nworker=[\"true\"]\nintegration=[\"true\"]\n"
 	write(t, root, ".taskfactory/config.toml", config)
 	baseTask := "# TF-901: Example\n\n## Goal\n\nDo it.\n\n## Dependencies\n\nNone\n\n## Scope\n\nImplement.\n\n## Constraints\n\nKeep it small.\n\n## Success criteria\n\n### C1: works\n\nCheck: true\n\n## Verification\n\nRun it.\n"
-	write(t, root, "tasks/ready/TF-901-example.md", baseTask)
+	write(t, root, tasksDir+"/ready/TF-901-example.md", baseTask)
 	if gitignore != "" {
 		write(t, root, ".gitignore", gitignore)
 	}
@@ -377,8 +384,8 @@ func newFixtureWithGitignore(t *testing.T, gitignore string) fixture {
 	}
 	run(t, root, "git", "worktree", "add", candidate, branch)
 	active := strings.TrimSuffix(baseTask, "\n") + "\n\n## Claim\n\nOwner: test\nBranch: task/TF-901\nWorktree: " + candidate + "\nBase commit: " + base + "\nStarted at: 2026-10-08T12:00:00Z\n"
-	write(t, root, "tasks/active/TF-901-example.md", active)
-	if err := os.Remove(filepath.Join(root, "tasks/ready/TF-901-example.md")); err != nil {
+	write(t, root, tasksDir+"/active/TF-901-example.md", active)
+	if err := os.Remove(filepath.Join(root, tasksDir+"/ready/TF-901-example.md")); err != nil {
 		t.Fatal(err)
 	}
 	write(t, candidate, "feature.txt", "candidate\n")
