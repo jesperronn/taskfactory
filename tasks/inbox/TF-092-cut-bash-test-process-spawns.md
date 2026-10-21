@@ -8,7 +8,7 @@ need the real tool.
 
 ## Dependencies
 
-- TF-087
+- TF-093
 
 ## Scope
 
@@ -45,7 +45,7 @@ the first target.
 
 ### C1: Every bash test is under a second
 
-Check: bin/check-speed bash
+Check: bin/test --budget bin/
 
 ### C2: The full bash suite still passes
 
@@ -54,4 +54,4 @@ Check: bin/test
 ## Verification
 
 Run `bin/test --verbose` and report each file's per-case timing and the exit
-code. Run `bin/check-speed bash` and report its exit code.
+code. Run `bin/test --budget bin/` and report its exit code.

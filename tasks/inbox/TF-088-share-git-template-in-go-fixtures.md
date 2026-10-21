@@ -8,7 +8,7 @@ and `go test -count=1 ./...` gets faster by the time those git calls cost.
 
 ## Dependencies
 
-- TF-087
+- TF-093
 
 ## Scope
 
@@ -45,7 +45,7 @@ Do not change what the tests assert. Only move setup that every test repeats.
 
 ### C1: The Go suite meets the time limit
 
-Check: bin/check-speed go
+Check: bin/test --budget ./...
 
 ### C2: Fixture behavior is unchanged
 
@@ -53,6 +53,6 @@ Check: go test -count=1 ./internal/...
 
 ## Verification
 
-Run `bin/check-speed go` and `go test -count=1 ./...`, and report the per-package
+Run `bin/test --budget ./...` and `go test -count=1 ./...`, and report the per-package
 timing before and after, plus exit codes. Run `bin/test` and report its exit
 code.

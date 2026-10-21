@@ -25,11 +25,11 @@ is satisfied. Baseline on 2026-10-21 (uncached, one machine):
   (`TestMain`) and share it, share one prepared git template repo copied per
   test, run independent tests with `t.Parallel()`, and stop `bin/test.test.sh`
   re-running the whole suite.
-- Create `bin/check-speed go|bash`: it runs the suite uncached, prints
-  per-test timing, and exits non-zero when the 5s (Go, total) or 1s (each
-  bash test) limit is exceeded.
-- No bash test supports `--verbose` yet; add per-test timing output to a shared
-  helper first so the loop can be measured.
+- Limits are enforced by `bin/test --budget`, planned in TF-093: 5s total for
+  the selected Go packages and 1s for each bash test case. `bin/check-speed` is
+  dropped.
+- Per-test timing for bash tests is in place: every `bin/*.test.sh` accepts
+  `--verbose` (commit 3d00086).
 
 ## Constraints
 
@@ -39,11 +39,11 @@ Do not delete or weaken a test to make it faster. Keep each test isolated.
 
 ### C1: Go suite is fast
 
-Check: bin/check-speed go
+Check: bin/test --budget ./...
 
 ### C2: Every bash test is fast
 
-Check: bin/check-speed bash
+Check: bin/test --budget bin/
 
 ## Verification
 

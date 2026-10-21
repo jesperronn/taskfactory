@@ -8,7 +8,7 @@ of the top of the timing list.
 
 ## Dependencies
 
-- TF-087
+- TF-093
 
 ## Scope
 
@@ -44,9 +44,9 @@ Check: go test -count=1 -run 'TestDryRun' ./cmd/taskfactory
 
 ### C2: Whole Go suite meets the time limit
 
-Check: bin/check-speed go
+Check: bin/test --budget ./...
 
 ## Verification
 
 Run the dry-run tests with `-v` and report each test's duration before and
-after. Run `bin/check-speed go` and report its exit code.
+after. Run `bin/test --budget ./...` and report its exit code.

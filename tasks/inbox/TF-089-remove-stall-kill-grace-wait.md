@@ -7,7 +7,7 @@ The adapter stall tests finish in well under a second each instead of about
 
 ## Dependencies
 
-- TF-087
+- TF-093
 
 ## Scope
 
@@ -51,9 +51,9 @@ Check: go test -count=1 -run 'Stall|TestLaunchMapsExitStallAndBlocked' ./interna
 
 ### C2: Whole Go suite meets the time limit
 
-Check: bin/check-speed go
+Check: bin/test --budget ./...
 
 ## Verification
 
 Run the stall tests with `-v` and report each test's duration. Run
-`bin/check-speed go` and report its exit code.
+`bin/test --budget ./...` and report its exit code.

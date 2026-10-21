@@ -38,7 +38,7 @@ enough.
 
 ### C1: Go suite meets the time limit
 
-Check: bin/check-speed go
+Check: bin/test --budget ./...
 
 ### C2: Race detector is clean
 
@@ -46,5 +46,5 @@ Check: go test -race -count=1 ./...
 
 ## Verification
 
-Run `bin/check-speed go`, `go test -race -count=1 ./...`, and report both exit
+Run `bin/test --budget ./...`, `go test -race -count=1 ./...`, and report both exit
 codes and the wall time.
