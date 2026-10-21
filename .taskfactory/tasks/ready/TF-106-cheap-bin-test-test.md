@@ -47,7 +47,7 @@ Check: bin/test --budget bin/test.test.sh
 
 ### C3: The wrapper test finishes in under 10 seconds
 
-Check: timeout 10 bin/test.test.sh
+Check: bash -c 'SECONDS=0; bin/test.test.sh && [ "$SECONDS" -lt 10 ]'
 
 ### C4: The whole task tree validates
 
