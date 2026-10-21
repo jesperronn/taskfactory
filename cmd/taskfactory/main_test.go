@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"taskfactory/internal/config"
+	"taskfactory/internal/testgit"
 )
 
 func TestCLIHelpVersionAndInvalidFlag(t *testing.T) {
@@ -645,6 +646,7 @@ var (
 // TestMain removes the shared CLI build after every test has run.
 func TestMain(m *testing.M) {
 	code := m.Run()
+	testgit.Cleanup()
 	if sharedFixtureDir != "" {
 		os.RemoveAll(sharedFixtureDir)
 	}
@@ -673,7 +675,9 @@ func buildCLI(t *testing.T) string {
 	return cliBinary
 }
 
-func initGitProject(t *testing.T) string {
+// projectDir returns the not yet created project directory a fixture uses: the
+// shared scenario base when this test is building one, else the test's temp dir.
+func projectDir(t *testing.T) string {
 	t.Helper()
 	sharedBasesMu.Lock()
 	base := sharedFixtureBases[t]
@@ -681,18 +685,16 @@ func initGitProject(t *testing.T) string {
 	if base == "" {
 		base = t.TempDir()
 	}
-	root := filepath.Join(base, "project with trailing space ")
-	if err := os.Mkdir(root, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command("git", "init", "--quiet", "--initial-branch=main", root)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git init temporary project: %v\n%s", err, output)
-	}
-	if output, err := exec.Command("git", "-C", root, "config", "commit.gpgsign", "false").CombinedOutput(); err != nil {
-		t.Fatalf("disable commit signing in temporary project: %v\n%s", err, output)
-	}
-	return root
+	return filepath.Join(base, "project with trailing space ")
+}
+
+// initGitProject returns an empty repository on main with commit signing off,
+// copied from a template built once per test binary.
+func initGitProject(t *testing.T) string {
+	t.Helper()
+	return testgit.CloneInto(t, "init", func(dir string) error {
+		return testgit.Init(dir, "commit.gpgsign", "false")
+	}, projectDir(t))
 }
 
 func runCLI(t *testing.T, binary, directory string, args ...string) ([]byte, error) {

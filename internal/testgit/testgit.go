@@ -33,15 +33,21 @@ var (
 	counter int
 )
 
-// Git runs git in dir with global and system configuration disabled and returns an error carrying its output on failure.
-func Git(dir string, args ...string) error {
-	c := exec.Command("git", args...)
+// Run runs a command in dir with global and system git configuration disabled
+// and returns an error carrying its combined output on failure.
+func Run(dir, name string, args ...string) error {
+	c := exec.Command(name, args...)
 	c.Dir = dir
-	c.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_SYSTEM="+os.DevNull)
+	c.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_SYSTEM="+os.DevNull, "NO_COLOR=1")
 	if out, err := c.CombinedOutput(); err != nil {
-		return fmt.Errorf("git %v: %v\n%s", args, err, out)
+		return fmt.Errorf("%s %v: %v\n%s", name, args, err, out)
 	}
 	return nil
+}
+
+// Git runs git in dir, as Run does.
+func Git(dir string, args ...string) error {
+	return Run(dir, "git", args...)
 }
 
 // Init runs git init on main in dir, then sets each key and value pair of
@@ -62,6 +68,13 @@ func Init(dir string, config ...string) error {
 // Clone returns a new t.TempDir holding a copy of the template named key. The
 // template is built by build on first use only; concurrent callers wait for it.
 func Clone(t testing.TB, key string, build func(dir string) error) string {
+	t.Helper()
+	return CloneInto(t, key, build, t.TempDir())
+}
+
+// CloneInto is Clone with the copy placed in dst, which is created if absent.
+// It returns dst.
+func CloneInto(t testing.TB, key string, build func(dir string) error, dst string) string {
 	t.Helper()
 	mu.Lock()
 	e := entries[key]
@@ -90,7 +103,6 @@ func Clone(t testing.TB, key string, build func(dir string) error) string {
 	if e.err != nil {
 		t.Fatalf("build git template %q: %v", key, e.err)
 	}
-	dst := t.TempDir()
 	if err := copyTree(e.dir, dst); err != nil {
 		t.Fatalf("copy git template %q: %v", key, err)
 	}

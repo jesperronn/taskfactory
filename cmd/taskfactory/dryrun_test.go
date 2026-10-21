@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"taskfactory/internal/testgit"
 )
 
 // runWithEnv is runSplit with extra environment variables. The directory is
@@ -50,11 +52,25 @@ const fixtureConfig = "protocol_version = 1\n\n[workers]\nmax_parallel = 4\n\n[g
 // or failed (claimed, then failed). The task's own check is check.
 func stateFixture(t *testing.T, binary, state, id, check string) string {
 	t.Helper()
-	root := nextStepProject(t, binary, id, check)
-	if err := os.WriteFile(filepath.Join(root, ".taskfactory", "config.toml"), []byte(fixtureConfig), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	mustGit(t, root, "commit", "--no-gpg-sign", "-q", "-am", "main check")
+	// Everything up to and including promote holds no absolute path, so it is
+	// copied from a template; claim and later states write the worktree path
+	// and run per test.
+	promoted := state != "inbox"
+	root := testgit.CloneInto(t, fmt.Sprint("state\x00", id, "\x00", check, "\x00", promoted), func(dir string) error {
+		if err := buildNextStep(binary, dir, id, check); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".taskfactory", "config.toml"), []byte(fixtureConfig), 0o644); err != nil {
+			return err
+		}
+		if err := testgit.Git(dir, "commit", "--no-gpg-sign", "-q", "-am", "main check"); err != nil {
+			return err
+		}
+		if promoted {
+			return testgit.Run(dir, binary, "promote", "TF-"+id)
+		}
+		return nil
+	}, projectDir(t))
 	step := func(args ...string) {
 		t.Helper()
 		if res := runSplit(t, binary, root, args...); res.code != 0 {
@@ -65,7 +81,6 @@ func stateFixture(t *testing.T, binary, state, id, check string) string {
 	if state == "inbox" {
 		return root
 	}
-	step("promote", task)
 	if state == "ready" {
 		return root
 	}

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"taskfactory/internal/testgit"
 	"taskfactory/internal/ui"
 )
 
@@ -43,26 +44,36 @@ func mustGit(t *testing.T, dir string, args ...string) {
 // check is check.
 func nextStepProject(t *testing.T, binary, id, check string) string {
 	t.Helper()
-	root := initGitProject(t)
-	mustGit(t, root, "config", "user.name", "Test")
-	mustGit(t, root, "config", "user.email", "test@example.invalid")
-	if res := runSplit(t, binary, root, "init"); res.code != 0 {
-		t.Fatalf("init: %+v", res)
+	return testgit.CloneInto(t, "next\x00"+id+"\x00"+check, func(dir string) error {
+		return buildNextStep(binary, dir, id, check)
+	}, projectDir(t))
+}
+
+// buildNextStep makes the template behind nextStepProject: an initialized
+// repository with config, .gitignore and the inbox task committed. It has no
+// worktree and no text holding its own path.
+func buildNextStep(binary, dir, id, check string) error {
+	if err := testgit.Init(dir, "commit.gpgsign", "false", "user.name", "Test", "user.email", "test@example.invalid"); err != nil {
+		return err
+	}
+	if err := testgit.Run(dir, binary, "init"); err != nil {
+		return err
 	}
 	config := "protocol_version = 1\n\n[workers]\nmax_parallel = 4\n\n[git]\nuse_worktrees = true\nworktree_root = \".taskfactory/worktrees\"\nintegration_strategy = \"ff-only\"\n\n[integration]\nstop_on_main_failure = true\n\n[verification]\nworker = [\"true\"]\nintegration = [\"true\"]\n"
-	if err := os.WriteFile(filepath.Join(root, ".taskfactory", "config.toml"), []byte(config), 0o644); err != nil {
-		t.Fatal(err)
+	if err := os.WriteFile(filepath.Join(dir, ".taskfactory", "config.toml"), []byte(config), 0o644); err != nil {
+		return err
 	}
 	task := strings.Replace(strings.Replace(nextStepTaskBody, "%s", id, 1), "%s", check, 1)
-	if err := os.WriteFile(filepath.Join(root, "tasks", "inbox", "TF-"+id+"-example.md"), []byte(task), 0o644); err != nil {
-		t.Fatal(err)
+	if err := os.WriteFile(filepath.Join(dir, "tasks", "inbox", "TF-"+id+"-example.md"), []byte(task), 0o644); err != nil {
+		return err
 	}
-	if err := os.WriteFile(filepath.Join(root, "tasks", "inbox", ".gitkeep"), nil, 0o644); err != nil {
-		t.Fatal(err)
+	if err := os.WriteFile(filepath.Join(dir, "tasks", "inbox", ".gitkeep"), nil, 0o644); err != nil {
+		return err
 	}
-	mustGit(t, root, "add", ".")
-	mustGit(t, root, "commit", "--no-gpg-sign", "-m", "initial")
-	return root
+	if err := testgit.Git(dir, "add", "."); err != nil {
+		return err
+	}
+	return testgit.Git(dir, "commit", "--no-gpg-sign", "-q", "-m", "initial")
 }
 
 func lines(s string) []string {
