@@ -149,3 +149,94 @@ usage_status=0
 usage_output=$(cd / && "${fixture_root}/verbose/bin/test" --bogus 2>&1) || usage_status=$?
 assert_status "${usage_status}" 2 'rejects unknown bin/test arguments'
 assert_contains "${usage_output}" 'Usage: bin/test [--verbose]' 'prints usage for unknown arguments'
+
+new_fixture paths
+mkdir -p "${fixture_root}/paths/bin" "${fixture_root}/paths/pkg" "${fixture_root}/paths/stubs"
+cat > "${fixture_root}/paths/bin/a.test.sh" <<'EOF2'
+#!/usr/bin/env bash
+printf 'a\n' >> "${ARGS_FILE}"
+EOF2
+cat > "${fixture_root}/paths/bin/b.test.sh" <<'EOF2'
+#!/usr/bin/env bash
+printf 'b\n' >> "${ARGS_FILE}"
+EOF2
+chmod +x "${fixture_root}/paths/bin/"*.test.sh
+cat > "${fixture_root}/paths/bin/testlib.sh" <<'EOF2'
+printf 'testlib\n' >> "${ARGS_FILE}"
+EOF2
+: > "${fixture_root}/paths/pkg/pkg.go"
+cp "${fixture_root}/go-success/stubs/go" "${fixture_root}/paths/stubs/go"
+paths_args=${fixture_root}/paths-args
+paths_go=${fixture_root}/paths-go
+
+# paths_run ARGS...: runs bin/test in the paths fixture, sets path_status and path_output.
+paths_run() {
+  rm -f "${paths_args}" "${paths_go}"
+  path_status=0
+  path_output=$(cd / && PATH="${fixture_root}/paths/stubs:${PATH}" ARGS_FILE="${paths_args}" GO_LOG="${paths_go}" GO_STATUS=0 "${fixture_root}/paths/bin/test" "$@" 2>&1) || path_status=$?
+}
+
+paths_run bin/a.test.sh
+assert_status "${path_status}" 0 'a single shell test file runs alone'
+if [[ "$(cat "${paths_args}")" != 'a' ]]; then
+  printf '[FAIL] a single shell test file ran other tests: %q\n' "$(cat "${paths_args}")" >&2
+  exit 1
+fi
+printf '[PASS] a single shell test file runs only that file\n'
+
+paths_run bin/
+assert_status "${path_status}" 0 'a folder runs its shell tests'
+if [[ "$(cat "${paths_args}")" != $'a\nb' ]]; then
+  printf '[FAIL] a folder runs its shell tests in order, skipping testlib.sh: %q\n' "$(cat "${paths_args}")" >&2
+  exit 1
+fi
+printf '[PASS] a folder runs its shell tests in order and skips testlib.sh\n'
+
+paths_run pkg
+assert_status "${path_status}" 0 'a Go package folder runs go test for that package'
+if ! grep -Fqx "${fixture_root}/paths|test ./pkg" "${paths_go}"; then
+  printf '[FAIL] Go package folder did not run go test ./pkg: %q\n' "$(cat "${paths_go}")" >&2
+  exit 1
+fi
+if [[ -e "${paths_args}" ]] || grep -Fq 'validate' "${paths_go}"; then
+  printf '[FAIL] a Go package path ran shell tests or validation\n' >&2
+  exit 1
+fi
+printf '[PASS] a Go package folder runs only go test and skips shell tests and validation\n'
+
+paths_run './...'
+assert_status "${path_status}" 0 'a Go package pattern runs go test for the pattern'
+if ! grep -Fqx "${fixture_root}/paths|test ./..." "${paths_go}"; then
+  printf '[FAIL] Go pattern did not run go test ./...: %q\n' "$(cat "${paths_go}")" >&2
+  exit 1
+fi
+printf '[PASS] a Go package pattern runs go test with that pattern\n'
+
+paths_run bin/missing.test.sh
+assert_status "${path_status}" 2 'a missing shell test file exits 2'
+assert_contains "${path_output}" 'no such shell test file: bin/missing.test.sh' 'a missing shell test file is named'
+
+paths_run /etc
+assert_status "${path_status}" 2 'an absolute path is refused'
+assert_contains "${path_output}" 'path must be inside the repository' 'an absolute path explains the limit'
+
+new_fixture budget
+cat > "${fixture_root}/budget/bin/fast.test.sh" <<'EOF2'
+#!/usr/bin/env bash
+printf '[TIME]   0.100s [PASS] fast case\n'
+printf '[TIME]   0.100s total\n'
+EOF2
+cat > "${fixture_root}/budget/bin/slow.test.sh" <<'EOF2'
+#!/usr/bin/env bash
+printf '[TIME]   2.500s [PASS] slow case\n'
+printf '[TIME]   2.500s total\n'
+EOF2
+chmod +x "${fixture_root}/budget/bin/"*.test.sh
+budget_status=0
+budget_output=$(cd / && "${fixture_root}/budget/bin/test" --budget bin/fast.test.sh 2>&1) || budget_status=$?
+assert_status "${budget_status}" 0 '--budget passes a shell test with every case under 1s'
+budget_status=0
+budget_output=$(cd / && "${fixture_root}/budget/bin/test" --budget bin/slow.test.sh 2>&1) || budget_status=$?
+assert_status "${budget_status}" 1 '--budget fails a shell test with a case over 1s'
+assert_contains "${budget_output}" 'budget: bin/slow.test.sh has cases over 1.000s' '--budget names the slow test file'
+assert_contains "${budget_output}" '2.500s [PASS] slow case' '--budget prints the slow case'

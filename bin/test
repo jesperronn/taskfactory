@@ -7,37 +7,145 @@ cd "${repo_root}"
 
 export LC_ALL=C
 
+# Limits from TF-087, enforced by --budget.
+shell_case_limit=1.000 # seconds, per [TIME] case line
+go_total_limit=5000    # milliseconds, for the selected Go packages
+
+usage() {
+  printf 'Usage: bin/test [--verbose] [--budget] [PATH...]\n' >&2
+}
+
 verbose=0
+budget=0
+paths=()
 for arg in "$@"; do
   case "${arg}" in
     --verbose) verbose=1 ;;
-    *)
-      printf 'Usage: bin/test [--verbose]\n' >&2
+    --budget) budget=1 ;;
+    -*)
+      usage
       exit 2
       ;;
+    *) paths+=("${arg}") ;;
   esac
 done
 
-failed=0
-test_files=()
+# normalize PATH: relative to the repository root, no leading ./ or trailing /.
+normalize() {
+  local p=${1#./}
+  p=${p%/}
+  case "${p}" in
+    /*|../*|*/../*|..)
+      printf 'bin/test: path must be inside the repository: %s\n' "$1" >&2
+      usage
+      exit 2
+      ;;
+  esac
+  printf '%s\n' "${p:-.}"
+}
 
-for test_file in bin/*.test.sh; do
-  [[ -f "${test_file}" ]] || continue
+now_ms() {
+  perl -MTime::HiRes=time -e 'printf "%d\n", time * 1000'
+}
+
+shell_tests=()
+go_packages=()
+
+# select_path PATH adds a shell test file, a folder of shell tests, or a Go
+# package folder or pattern to the lists. Anything else exits 2.
+select_path() {
+  local p file found=0
+  p=$(normalize "$1")
+  if [[ "${p}" == *...* ]]; then
+    go_packages+=("./${p}")
+  elif [[ "${p}" == *.test.sh ]]; then
+    if [[ ! -f "${p}" ]]; then
+      printf 'bin/test: no such shell test file: %s\n' "$1" >&2
+      usage
+      exit 2
+    fi
+    shell_tests+=("${p}")
+  elif [[ -d "${p}" ]]; then
+    for file in "${p}"/*.test.sh; do
+      [[ -f "${file}" ]] || continue
+      shell_tests+=("${file}")
+      found=1
+    done
+    if (( ! found )); then
+      for file in "${p}"/*.go; do
+        [[ -f "${file}" ]] || continue
+        found=2
+        break
+      done
+      if (( found == 2 )); then
+        go_packages+=("./${p}")
+      else
+        printf 'bin/test: no shell tests or Go package in: %s\n' "$1" >&2
+        usage
+        exit 2
+      fi
+    fi
+  else
+    printf 'bin/test: not a shell test, folder or Go package: %s\n' "$1" >&2
+    usage
+    exit 2
+  fi
+}
+
+full_run=0
+if (( ${#paths[@]} == 0 )); then
+  # No paths: every shell test, the Go suite, and whole-tree validation.
+  full_run=1
+  for test_file in bin/*.test.sh; do
+    [[ -f "${test_file}" ]] || continue
+    shell_tests+=("${test_file}")
+  done
+  if [[ -f go.mod ]]; then
+    go_packages+=("./...")
+  fi
+else
+  for p in "${paths[@]}"; do
+    select_path "${p}"
+  done
+fi
+
+failed=0
+
+# run_shell_test FILE runs one shell test, and checks its cases against the
+# budget when --budget is set.
+run_shell_test() {
+  local test_file=$1 out slow status=0
   if [[ ! -x "${test_file}" ]]; then
     printf 'FAIL: shell test is not executable: %s\n' "${test_file}" >&2
     failed=1
-    continue
+    return
   fi
-  test_files+=("${test_file}")
-done
-
-for test_file in "${test_files[@]}"; do
   if [[ -z "${NO_COLOR:-}" && -t 1 ]]; then
     printf '\033[1;36m==> %s\033[0m\n' "${test_file}"
   else
     printf '==> %s\n' "${test_file}"
   fi
-  test_args=()
+  if (( budget )); then
+    out=$(mktemp)
+    "./${test_file}" --verbose > "${out}" 2>&1 || status=$?
+    cat "${out}"
+    slow=$(awk '$1 == "[TIME]" && $3 != "total" {
+      t = $2; sub(/s$/, "", t)
+      if (t + 0 > '"${shell_case_limit}"') { print; bad = 1 }
+    }
+    END { exit bad }' "${out}") || true
+    rm -f "${out}"
+    if [[ -n "${slow}" ]]; then
+      printf 'FAIL: budget: %s has cases over %ss:\n%s\n' "${test_file}" "${shell_case_limit}" "${slow}" >&2
+      failed=1
+    fi
+    if (( status != 0 )); then
+      printf 'FAIL: shell test: %s (rerun with: ./%s)\n' "${test_file}" "${test_file}" >&2
+      failed=1
+    fi
+    return
+  fi
+  local test_args=()
   if (( verbose )); then
     test_args+=(--verbose)
   fi
@@ -45,21 +153,53 @@ for test_file in "${test_files[@]}"; do
     printf 'FAIL: shell test: %s (rerun with: ./%s)\n' "${test_file}" "${test_file}" >&2
     failed=1
   fi
-done
+}
 
-if [[ -f go.mod ]]; then
-  printf '==> go test ./...\n'
-  if ! go test ./...; then
-    printf 'FAIL: Go tests: go test ./...\n' >&2
+# run_go_tests PKG... runs go test for the packages and checks the total
+# time against the budget when --budget is set.
+run_go_tests() {
+  local out start elapsed
+  printf '==> go test %s\n' "$*"
+  if (( ! budget )); then
+    if ! go test "$@"; then
+      printf 'FAIL: Go tests: go test %s\n' "$*" >&2
+      failed=1
+    fi
+    return
+  fi
+  out=$(mktemp)
+  start=$(now_ms)
+  if ! go test -count=1 -v "$@" > "${out}" 2>&1; then
+    cat "${out}"
+    printf 'FAIL: Go tests: go test %s\n' "$*" >&2
     failed=1
   fi
-else
+  elapsed=$(( $(now_ms) - start ))
+  if (( elapsed > go_total_limit )); then
+    printf 'FAIL: budget: Go tests took %sms, over the %sms limit; slowest tests:\n' "${elapsed}" "${go_total_limit}" >&2
+    awk '/--- (PASS|FAIL): / {
+      if (match($0, /\([0-9.]+s\)/)) {
+        secs = substr($0, RSTART + 1, RLENGTH - 2)
+        print secs, $3
+      }
+    }' "${out}" | sort -rn | head -5 >&2
+    failed=1
+  fi
+  rm -f "${out}"
+}
+
+for test_file in ${shell_tests[@]+"${shell_tests[@]}"}; do
+  run_shell_test "${test_file}"
+done
+
+if (( ${#go_packages[@]} )); then
+  run_go_tests "${go_packages[@]}"
+elif (( full_run )); then
   printf 'SKIP: Go tests (go.mod not found)\n'
 fi
 
-# Whole-tree validation: every state except the archive's contract checks.
-# Archived files are still read for task IDs and dependency resolution.
-if [[ -f go.mod ]]; then
+# Whole-tree validation runs only for a full run, never for selected paths.
+if (( full_run )) && [[ -f go.mod ]]; then
   if [[ -f .taskfactory/config.toml ]]; then
     printf '==> go run ./cmd/taskfactory validate tasks\n'
     if ! go run ./cmd/taskfactory validate tasks; then
