@@ -78,9 +78,9 @@ if want version; then
   esac
   # The one real build, for the host target only (TF_PACKAGE_TARGETS).
   # -trimpath is what bin/package passes already, so Go reuses compiled
-  # packages and only one link is paid.
+  # packages; -buildvcs=false skips Go's git calls. One link is paid.
   real_out="${tmp}/real-out"
-  TF_PACKAGE_TARGETS="${os}/${arch}" TESTLIB_REAL_GO=1 "${repo_root}/bin/package" "${v}" "${real_out}" >"${tmp}/real-package.log" 2>&1 || { cat "${tmp}/real-package.log" >&2; fail "real bin/package succeeds"; }
+  TF_PACKAGE_TARGETS="${os}/${arch}" TESTLIB_REAL_GO=1 GOFLAGS=-buildvcs=false "${repo_root}/bin/package" "${v}" "${real_out}" >"${tmp}/real-package.log" 2>&1 || { cat "${tmp}/real-package.log" >&2; fail "real bin/package succeeds"; }
   pass "real bin/package build succeeds"
   mkdir "${tmp}/host"
   tar -xzf "${real_out}/taskfactory_${v}_${os}_${arch}.tar.gz" -C "${tmp}/host"

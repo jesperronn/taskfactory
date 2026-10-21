@@ -108,7 +108,7 @@ if want dry-run; then
   # test-only TF_PACKAGE_TARGETS limits it to the one target the case names;
   # bin/package.test.sh covers the full set of four archives.
   status=0
-  out=$(RELEASE_REPO_DIR="${fx}" RELEASE_TEST_CMD=true RELEASE_LINT_CMD=true TF_PACKAGE_TARGETS=linux/arm64 \
+  out=$(RELEASE_REPO_DIR="${fx}" RELEASE_TEST_CMD=true RELEASE_LINT_CMD=true TF_PACKAGE_TARGETS=linux/arm64 GOFLAGS=-buildvcs=false \
     "${release}" v1.0.0-rc.1 2>&1) || status=$?
   if [[ ${status} -eq 0 ]]; then
     assert_has "${out}" "taskfactory_v1.0.0-rc.1_linux_arm64.tar.gz" "real bin/package names the linux archive"

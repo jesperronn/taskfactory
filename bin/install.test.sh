@@ -100,9 +100,10 @@ if selected default; then
 prefix_dir="${dest_root}/prefix/nested"
 printf '[PASS] fixture with real sources is ready\n'
 # The one real go build in this file. -trimpath lets Go reuse compiled packages
-# across fixture copies, so only the link step is paid here.
+# across fixture copies, and -buildvcs=false skips the git calls Go makes to
+# stamp the binary, so mostly the link step is paid here.
 install_script="${real_install}"
-output=$(run_install PREFIX="${prefix_dir}" GOFLAGS=-trimpath)
+output=$(run_install PREFIX="${prefix_dir}" GOFLAGS="-trimpath -buildvcs=false")
 install_script="${stub_fixture}/bin/install"
 assert_contains "${output}" "installed ${prefix_dir}/taskfactory" 'PREFIX: prints the installed path'
 test -x "${prefix_dir}/taskfactory"

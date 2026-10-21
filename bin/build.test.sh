@@ -110,7 +110,7 @@ scenario_tagged() {
   git_fixture tagged real
   git -C "${fixture_root}/tagged" tag -a -m release v1.2.0
   printf '[PASS] tagged PASS fixture with real sources is ready\n'
-  TESTLIB_REAL_GO=1 GOFLAGS=-trimpath check_version tagged v1.2.0
+  TESTLIB_REAL_GO=1 GOFLAGS="-trimpath -buildvcs=false" check_version tagged v1.2.0
 }
 
 scenario_untagged() {

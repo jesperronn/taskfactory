@@ -34,7 +34,7 @@ cat > "$stubs/go" <<STUB
 #!/usr/bin/env bash
 if [[ -n "\${TASK_REAL:-}" ]]; then
   # -trimpath lets Go reuse the compiled packages of the real checkout.
-  case "\$*" in run\ ./cmd/taskfactory\ *) GOFLAGS=-trimpath exec "$real_go" "\$@" ;; esac
+  case "\$*" in run\ ./cmd/taskfactory\ *) GOFLAGS="-trimpath -buildvcs=false" exec "$real_go" "\$@" ;; esac
   exec "$real_go" "\$@"
 fi
 case "\$*" in
@@ -45,7 +45,7 @@ esac
 STUB
 chmod +x "$stubs/go"
 printf '[PASS] fixture project is ready\n'
-(cd "$project" && "$real_go" build -trimpath -o "$fixture/taskfactory" ./cmd/taskfactory) &
+(cd "$project" && "$real_go" build -trimpath -buildvcs=false -o "$fixture/taskfactory" ./cmd/taskfactory) &
 build_pid=$!
 # The validator needs a Git working tree; the fixture only needs the directory.
 git -C "$project" init -q
