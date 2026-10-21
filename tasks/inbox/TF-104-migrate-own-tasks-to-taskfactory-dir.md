@@ -14,18 +14,29 @@ None
 This is a data migration of this repository only; it adds no product
 behaviour for other projects.
 
-1. `git mv tasks .taskfactory/tasks` in one atomic commit.
+1. `git mv tasks .taskfactory/tasks` in one atomic commit that also sets
+`tasks_dir = ".taskfactory/tasks"` in this repository's
+`.taskfactory/config.toml`, so no commit exists where config and layout
+disagree. The key is the one TF-105 adds.
 2. Update `bin/test`, `bin/lint`, the mdsmith config, `AGENTS.md`,
 `docs/worker-instructions.md`, `README.md`, the skill, completion and
 `tests/fixtures` to the new paths.
 3. Archived tasks keep their old Check lines untouched.
-4. Preconditions, checked first: nothing in `tasks/active`, both planning and
-worker sessions paused, and TF-102 and TF-103 landed.
+4. Preconditions, checked first: TF-102, TF-103 and TF-105 landed, nothing in
+`tasks/active`, no claimed worktree left open under `.taskfactory/worktrees`
+(TF-093 was stuck active and idle; resolve it first), and both planning and
+worker sessions paused.
+5. Verify before committing that `bin/lint` (its `find` prune of
+`.taskfactory`, `is_task_file`, the `--tells` scope) and the mdsmith config
+(its `.taskfactory/**` ignore) still lint Markdown under
+`.taskfactory/tasks`; TF-105 changes them, so fix any gap here.
 
 ## Constraints
 
-Leave in inbox until the preconditions hold; the orchestrator promotes it at a
-quiet moment. Not a validator dependency, since dependencies must be archived.
+Requires TF-105 landed: do not promote this task before TF-105 is archived.
+That order is a constraint, not a validator dependency, because the Dependencies
+section must stay `None`. Leave in inbox until the preconditions hold; the
+orchestrator promotes it at a quiet moment.
 Watch dot-directory blind spots: globbing and lint skip dot paths. Do not edit
 archived task bodies. Never touch git signing.
 
