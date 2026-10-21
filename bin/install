@@ -49,7 +49,7 @@ if [[ "${TASKFACTORY_NO_ALIAS:-}" != 1 ]]; then
   fi
 fi
 
-printf 'hint: enable tab completion with: source <(taskfactory completion bash) (see README for zsh)\n'
+printf 'hint: enable tab completion with: source <(taskfactory completion bash)\n'
 
 case ":${PATH}:" in
   *":${destination}:"*) ;;

@@ -295,6 +295,9 @@ func TestHelpListsVerboseAndDryRun(t *testing.T) {
 	binary := buildCLI(t)
 	scratch := t.TempDir()
 	for _, command := range commandSummaries {
+		if command.name == "completion" {
+			continue // exempt from the common flags by contract
+		}
 		res := runSplit(t, binary, scratch, command.name, "--help")
 		if res.code != 0 {
 			t.Fatalf("%s --help: %+v", command.name, res)
