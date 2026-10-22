@@ -44,3 +44,11 @@ Check: bin/lint
 Run each check from the repository root and report each exit code. Report
 whether the test in C1 was added by the worker and that it fails before the
 change.
+
+## Claim
+
+Owner: haiku-worker-109
+Branch: task/TF-109
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-109
+Base commit: 7c244f08c87029f4b1f3febab96dd7988d27bbe7
+Started at: 2026-10-22T12:36:03Z
