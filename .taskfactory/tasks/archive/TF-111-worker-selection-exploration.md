@@ -51,3 +51,11 @@ Check: bin/lint docs/worker-selection.md
 
 Run each check from the repository root and report each exit code. State
 the recommendation in one sentence in the report.
+
+## Claim
+
+Owner: haiku-worker-111
+Branch: task/TF-111
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-111
+Base commit: 1e41b58426e21bf441673fafd0635d67f5baf7a9
+Started at: 2026-10-22T12:22:42Z
