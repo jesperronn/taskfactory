@@ -58,3 +58,11 @@ Run every check from the repository root, then `bin/test` and `bin/lint`, and
 report each exit code. In the report, separate what the `skills` CLI run
 showed from what was only read in its docs. A human confirms
 `npx skills add jesperronn/taskfactory` after the repository is public.
+
+## Claim
+
+Owner: haiku-worker-080
+Branch: task/TF-080
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-080
+Base commit: 87e2e015ecd544b6f1539c991e968201d93b7f49
+Started at: 2026-10-22T12:21:45Z
