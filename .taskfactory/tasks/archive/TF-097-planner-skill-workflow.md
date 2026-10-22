@@ -42,3 +42,11 @@ Check: bin/test && bin/lint
 ## Verification
 
 Run the three checks from the repository root and report each exit code.
+
+## Claim
+
+Owner: haiku-worker-097
+Branch: task/TF-097
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-097
+Base commit: 87e2e015ecd544b6f1539c991e968201d93b7f49
+Started at: 2026-10-22T12:21:45Z
