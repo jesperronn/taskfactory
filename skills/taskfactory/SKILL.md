@@ -152,6 +152,36 @@ Rules:
   `--no-gpg-sign` or any signing override to TaskFactory commands or to
   commands you run for the user.
 
+### Drafting workflow
+
+Use this to turn an idea into a good inbox task with runnable checks.
+
+1. Ask what done means. Get the outcome in one or two sentences and the
+   observable signal that shows it. If the answer is vague, ask again before
+   writing anything.
+2. Inspect the repository. Find the files, commands and existing tests the
+   task touches, and the verification the project already runs (its test and
+   lint wrappers).
+3. Scaffold with `taskfactory new "<title>"`. Replace every `TODO` marker with
+   the Goal, Dependencies, Scope, Constraints and Verification text.
+4. Write falsifiable `Check:` commands. A check must fail on the current tree
+   and pass only when the criterion is met. Prefer commands that exist in the
+   project, such as `bin/test` or a targeted `go test -run`. Avoid checks that
+   always pass, such as `true`, or that only grep for a file's existence when
+   the behavior matters.
+5. Run each check on a clean tree to see it fail first. A check that already
+   passes proves nothing; tighten it or drop it.
+6. Validate with `taskfactory validate tasks/inbox/<ID>-<slug>.md`, then run
+   `taskfactory promote <ID>` once the file is complete.
+
+Projects whose tests do not run in a worktree (Docker services, a missing
+virtualenv, or a database that is only on the main checkout) need care. Pick
+checks that run inside a plain worktree, such as unit tests or lint, and move
+the environment-bound checks out of `Check:` lines. If the project needs them,
+set the `[verification]` keys in `.taskfactory/config.toml` to commands that do
+run there. Do not list a command in a check or in `[verification]` unless it
+exists in the project.
+
 ## Orchestrator
 
 - Assign ready tasks to workers, keeping no more than `workers.max_parallel`
