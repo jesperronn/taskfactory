@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"taskfactory/internal/config"
 	"taskfactory/internal/paths"
 	"taskfactory/internal/statecommit"
 	"taskfactory/internal/taskvalidate"
@@ -269,6 +270,13 @@ func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 	evidenceRel, asideRel, attempts, err := planEvidence(root, id)
 	if err != nil {
 		return Result{}, err
+	}
+	budget, err := config.RetryBudgetOf(layout.State)
+	if err != nil {
+		return Result{}, fmt.Errorf("refusing to requeue %s: %w", id, err)
+	}
+	if attempts >= budget {
+		return Result{}, fmt.Errorf("refusing to requeue %s: it has used %d attempt(s) and its retry budget is %d; the budget is set by retry_budget in %s", id, attempts, budget, paths.ConfigRel())
 	}
 
 	stage := []string{targetRel}

@@ -16,6 +16,10 @@ import (
 // DefaultBaseBranch is the base branch when git.base_branch is not set.
 const DefaultBaseBranch = "main"
 
+// DefaultRetryBudget is the number of attempts a task may use before requeue
+// refuses it, when retry_budget is not set.
+const DefaultRetryBudget = 5
+
 const (
 	protocolVersion  = 1
 	maxParallelLimit = 4
@@ -31,6 +35,9 @@ type Config struct {
 	Git          Git
 	Integration  Integration
 	Verification Verification
+	// RetryBudget is the number of attempts a task may use before requeue
+	// refuses to requeue it. Only requeue reads it.
+	RetryBudget int
 }
 
 // Workers contains worker execution policy.
@@ -100,6 +107,7 @@ func Load(projectRoot string) (Config, error) {
 			Worker:      []string{"go test ./..."},
 			Integration: []string{"go test ./...", "go vet ./..."},
 		},
+		RetryBudget: DefaultRetryBudget,
 	}
 	if metadata.IsDefined("project_root") {
 		config.ProjectRoot = parsed.ProjectRoot
@@ -142,9 +150,15 @@ func Load(projectRoot string) (Config, error) {
 	if metadata.IsDefined("verification", "main") {
 		config.Verification.Main = parsed.Verification.Main
 	}
+	if metadata.IsDefined("retry_budget") {
+		config.RetryBudget = parsed.RetryBudget
+	}
 
 	if config.ProtocolVersion != protocolVersion {
 		return Config{}, fmt.Errorf("configuration file %s: protocol_version %d is unsupported; only version 1 is supported", path, config.ProtocolVersion)
+	}
+	if config.RetryBudget < 1 {
+		return Config{}, fmt.Errorf("configuration file %s: retry_budget %d must be at least 1", path, config.RetryBudget)
 	}
 	if config.Workers.MaxParallel < 1 || config.Workers.MaxParallel > maxParallelLimit {
 		return Config{}, fmt.Errorf("configuration file %s: workers.max_parallel %d is outside the allowed range 1..4", path, config.Workers.MaxParallel)
@@ -188,6 +202,7 @@ func Load(projectRoot string) (Config, error) {
 type fileConfig struct {
 	ProjectRoot     string `toml:"project_root"`
 	TasksDir        string `toml:"tasks_dir"`
+	RetryBudget     int    `toml:"retry_budget"`
 	ProtocolVersion int    `toml:"protocol_version"`
 	Workers         struct {
 		MaxParallel int `toml:"max_parallel"`
@@ -411,6 +426,33 @@ func ValidateBaseBranch(name string) error {
 		}
 	}
 	return nil
+}
+
+// RetryBudgetOf reads only retry_budget from the config in stateRoot, for
+// requeue without loading the whole config. It returns DefaultRetryBudget when
+// the file or the key is absent and errors when the value is below 1.
+func RetryBudgetOf(stateRoot string) (int, error) {
+	cfgPath := paths.Default(stateRoot).Config()
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return DefaultRetryBudget, nil
+		}
+		return 0, fmt.Errorf("read configuration file %s: %w", cfgPath, err)
+	}
+	var parsed struct {
+		RetryBudget *int `toml:"retry_budget"`
+	}
+	if _, err := toml.Decode(string(data), &parsed); err != nil {
+		return 0, fmt.Errorf("parse configuration file %s: %w", cfgPath, err)
+	}
+	if parsed.RetryBudget == nil {
+		return DefaultRetryBudget, nil
+	}
+	if *parsed.RetryBudget < 1 {
+		return 0, fmt.Errorf("configuration file %s: retry_budget %d must be at least 1", cfgPath, *parsed.RetryBudget)
+	}
+	return *parsed.RetryBudget, nil
 }
 
 // BaseBranchOf reads only git.base_branch from the config in stateRoot, for

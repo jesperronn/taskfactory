@@ -47,6 +47,7 @@ above.
 | `tasks_dir`                        | string           | `"tasks"`                           | Relative slash path inside the state directory; see "The tasks_dir key" below.                                             |
 | `protocol_version`                 | integer          | `1`                                 | Must equal `1`; any other integer is an unsupported protocol version.                                                      |
 | `workers.max_parallel`             | integer          | `4`                                 | Must be from `1` through `4`, inclusive.                                                                                   |
+| `retry_budget`                     | integer          | `5`                                 | Must be at least `1`; the attempts a task may use before `requeue` refuses it. See "The retry_budget key" below.           |
 | `git.use_worktrees`                | boolean          | `true`                              | Must be `true`; `false` is invalid because v1 requires isolated worker worktrees.                                          |
 | `git.worktree_root`                | string           | `".taskfactory/worktrees"`          | Non-empty path. Relative paths resolve from repository root; absolute paths are allowed, including outside the repository. |
 | `git.integration_strategy`         | string           | `"ff-only"`                         | Must equal `"ff-only"`; v1 supports no other integration strategy.                                                         |
@@ -62,6 +63,20 @@ but v1 rejects `false`; all workers use isolated worktrees. An absent
 `verification.main` means no post-merge main verification commands are run. This
 keeps main verification optional while preserving the technical-spec defaults
 for worker and integration verification.
+
+## The retry_budget key
+
+`retry_budget` is a top-level integer key. It is the number of attempts a task
+may use before `taskfactory requeue` refuses to requeue it. The default is `5`,
+a limit: a project without the key refuses a requeue once a task has used five
+attempts. The value must be at least `1`; `0`, a negative number or a string is
+rejected with an error naming `retry_budget`.
+
+The budget is checked only by `requeue`, against the last attempt number in the
+task's evidence file. A refusal names the task ID, the attempts used and the
+budget, and changes no file and creates no commit. Workers and `work` do not
+read the key. Requeue renames the evidence file aside when it resets the
+counter, so the count is the attempts since the last requeue.
 
 ## The tasks_dir key
 

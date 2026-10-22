@@ -443,6 +443,10 @@ or:
 the allowed execution/retry budget is exhausted
 ```
 
+`taskfactory requeue` applies the same limit. It refuses a task whose attempts
+reach `retry_budget` (default `5`, see `docs/config-v1.md`) and names the task,
+the attempts used and the budget. A refusal changes no file.
+
 ---
 
 # Workers cannot redefine success

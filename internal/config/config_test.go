@@ -42,6 +42,7 @@ main = ["go test ./..."]
 				Verification: Verification{
 					Worker: []string{"go test ./..."}, Integration: []string{"go test ./...", "go vet ./..."}, Main: []string{"go test ./..."},
 				},
+				RetryBudget: 5,
 			},
 		},
 		{
@@ -53,6 +54,7 @@ main = ["go test ./..."]
 				Git:             Git{UseWorktrees: true, WorktreeRoot: ".taskfactory/worktrees", IntegrationStrategy: "ff-only", BaseBranch: "main"},
 				Integration:     Integration{StopOnMainFailure: true},
 				Verification:    Verification{Worker: []string{"go test ./..."}, Integration: []string{"go test ./...", "go vet ./..."}},
+				RetryBudget:     5,
 			},
 		},
 		{name: "unsupported version", content: "protocol_version = 2\n", wantErr: "protocol_version 2 is unsupported"},
@@ -156,7 +158,7 @@ func writeConfig(t *testing.T, root, content string) {
 }
 
 func equalConfig(a, b Config) bool {
-	if a.ProtocolVersion != b.ProtocolVersion || a.Workers != b.Workers || a.Git != b.Git || a.Integration != b.Integration {
+	if a.ProtocolVersion != b.ProtocolVersion || a.Workers != b.Workers || a.Git != b.Git || a.Integration != b.Integration || a.RetryBudget != b.RetryBudget {
 		return false
 	}
 	return equalStrings(a.Verification.Worker, b.Verification.Worker) && equalStrings(a.Verification.Integration, b.Verification.Integration) && equalStrings(a.Verification.Main, b.Verification.Main)
