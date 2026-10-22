@@ -48,3 +48,11 @@ Check: bin/lint
 
 Run each check from the repository root and report each exit code. Report
 the default budget value chosen and where it is documented.
+
+## Claim
+
+Owner: haiku-worker-110
+Branch: task/TF-110
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-110
+Base commit: 1e41b58426e21bf441673fafd0635d67f5baf7a9
+Started at: 2026-10-22T12:22:42Z
