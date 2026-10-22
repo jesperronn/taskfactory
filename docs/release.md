@@ -17,7 +17,7 @@ publishing do not exist yet. They are planned in these tasks:
 - TF-075: `bin/release --publish` local fallback
 - TF-076: first release `v1.0.0-rc.1`
 - TF-077: release notes (decided before the stable `v1.0.0`)
-- TF-079: `taskfactory skill install`
+- TF-095: `taskfactory skill install`
 - TF-080: `npx skills add` compatibility and the install paths in the README
 
 ## Releases are human-started

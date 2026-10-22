@@ -2,8 +2,9 @@
 
 ## Goal
 
-Cut the first release, `v1.0.0-rc.1`, and confirm the whole mechanism on
-GitHub. Only a human can finish this task end to end.
+Prepare the first release, `v1.0.0-rc.1`, and record the checklist the owner
+runs to confirm the whole mechanism on GitHub. Only the owner can finish this
+task end to end.
 
 ## Dependencies
 
@@ -26,16 +27,17 @@ release"), then the owner runs it. Owner-performed steps are marked as such:
    `SHA256SUMS`, and the checksums verify.
 5. (Owner) Download one archive and run `taskfactory --version`, expecting
    `taskfactory version v1.0.0-rc.1`.
-6. (Owner) After the release exists, the first real use of
-   `taskfactory skill install` (TF-079) against it is verified; that is a
-   TF-079 human check, listed here so it is not forgotten.
+6. (Owner) After the release exists, verify the first real use of
+   `taskfactory skill install` (TF-095) against it. Listed here so it is not
+   forgotten.
 7. (Worker) Record the outcome in the task and remove "planned" wording about
    release from the README and SKILL.md.
 
 ## Constraints
 
-Workers never create the real tag, push or publish. Do not claim steps 2 to 5
-passed; the owner reports them. Record what is unverified.
+Workers never create the real tag, push or publish. Do not publish anything
+without an explicit owner ask. Do not claim steps 2 to 5 passed; the owner
+reports them. Record what is unverified.
 
 ## Success criteria
 

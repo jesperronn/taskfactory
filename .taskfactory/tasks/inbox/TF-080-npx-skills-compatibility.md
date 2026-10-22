@@ -9,7 +9,7 @@ document the three ways to install the skill.
 ## Dependencies
 
 - TF-072
-- TF-079
+- TF-095
 
 ## Scope
 
@@ -23,7 +23,7 @@ document the three ways to install the skill.
    paths: `taskfactory skill install` (default `.agents/skills`, with
    `--target claude` and `--global`), `npx skills add` (only as far as step 1
    verified), and manual extraction of `taskfactory-skill_<version>.tar.gz`.
-   State that nothing is bundled into the binary and that the checksum proves
+   State that the skill is embedded in the binary and that the checksum proves
    integrity, not publisher identity.
 3. If the layout does not match, record the smallest change that would make
    it match as a new inbox task instead of changing the layout here.
