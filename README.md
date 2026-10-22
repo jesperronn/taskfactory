@@ -1074,14 +1074,39 @@ mkdir -p .claude/skills
 cp -R /path/to/taskfactory/skills/taskfactory .claude/skills/
 ```
 
-The skill is also embedded in the binary, so the version of the binary decides
-the skill text, with no network or release archive:
+There are three ways to install it.
 
-```sh
-taskfactory skill install                      # write the skill
-taskfactory skill status                       # present, missing or stale
-taskfactory skill install --global --force     # user-wide, replacing a copy
-```
+1. `taskfactory skill install` writes the skill embedded in the binary. No
+   network or release archive is needed, so the binary version decides the
+   skill text. The default target is `.agents/skills/taskfactory`. Use
+   `--target claude` for `.claude/skills/taskfactory`, and `--global` to write
+   under `$HOME` instead of the project root:
+
+   ```sh
+   taskfactory skill install                      # write the skill
+   taskfactory skill install --target claude      # Claude Code location
+   taskfactory skill status                       # present, missing or stale
+   taskfactory skill install --global --force     # user-wide, replacing a copy
+   ```
+
+2. `npx skills add jesperronn/taskfactory` uses the Vercel Labs `skills` CLI.
+   Only the local-path listing was run against this repository layout. The
+   record is in
+   [docs/research/tf-080-skills-cli.md](docs/research/tf-080-skills-cli.md).
+   Confirm this command against the public GitHub repository before relying on
+   it.
+
+3. Manual extraction. Download `taskfactory-skill_<version>.tar.gz` from the
+   release assets, verify it against `SHA256SUMS`, then extract it into the
+   skills directory of your harness:
+
+   ```sh
+   tar -xzf taskfactory-skill_<version>.tar.gz -C .agents/skills
+   ```
+
+The skill is embedded in the binary. The checksum in `SHA256SUMS` proves the
+archive is intact and matches what was published. It does not prove who
+published it.
 
 By default the skill goes to `.claude/skills/taskfactory` when `.claude/`
 exists in the project root and `.agents/skills/taskfactory` otherwise.
