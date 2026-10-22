@@ -72,11 +72,24 @@ a limit: a project without the key refuses a requeue once a task has used five
 attempts. The value must be at least `1`; `0`, a negative number or a string is
 rejected with an error naming `retry_budget`.
 
-The budget is checked only by `requeue`, against the last attempt number in the
-task's evidence file. A refusal names the task ID, the attempts used and the
+The budget is checked only by `requeue`, against the total attempts of the task
+across all requeues. A refusal names the task ID, the attempts used and the
 budget, and changes no file and creates no commit. Workers and `work` do not
-read the key. Requeue renames the evidence file aside when it resets the
-counter, so the count is the attempts since the last requeue.
+read the key.
+
+The total is kept in the aside files, so it survives the reset. When requeue
+resets the counter it renames the evidence file to
+`.taskfactory/evidence/<ID>.attempts-<N>.jsonl`, where `<N>` is the total
+attempts counted through that cycle: the earlier cycles plus the last attempt
+number of the renamed file. The evidence bytes are kept unchanged. The total for
+a new requeue is the largest `<N>` among the task's aside files plus the last
+attempt number of the current evidence file. A task with no aside file counts
+its current evidence only, so existing single-cycle projects behave as before.
+An aside file that is not readable evidence, or whose number cannot be read,
+makes requeue refuse. It is never overwritten or counted, so the count is never
+lowered silently. The aside name is unique because `<N>` increases with
+each cycle. The counter is not stored in the task file or a separate counter
+file.
 
 ## The tasks_dir key
 

@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -465,22 +466,29 @@ func claimedRefusal(root, id string) error {
 	return fmt.Errorf("refusing to requeue %s: it still has a Claim block, so it is flagged for a human decision; claimed failed tasks: %s; to decide, rerun with --discard-claim, which removes the Claim block and records it in the commit message", id, list)
 }
 
-// planEvidence returns the evidence path, the aside path and the highest
-// attempt number when the task has a non-empty evidence file. With no evidence
-// both paths are empty. It refuses an invalid evidence file or an aside path
-// that already exists.
+// planEvidence returns the evidence path, the aside path and the total attempts
+// counted for the task. The total is the attempts of every earlier cycle plus
+// the highest attempt number of the current evidence file. The aside path is
+// named by that total, so each cycle's aside name is unique and records the
+// attempts counted through it. With no evidence the aside path is empty and the
+// total is the attempts of the earlier cycles. It refuses an invalid evidence
+// file or an aside path that already exists.
 func planEvidence(root, id string) (evidenceRel, asideRel string, attempts int, err error) {
 	evidenceRel = paths.EvidenceRel(id)
 	evidenceAbs := paths.For(root).Evidence(id)
+	prior, err := priorAttempts(root, id)
+	if err != nil {
+		return "", "", 0, err
+	}
 	data, err := os.ReadFile(evidenceAbs)
 	if os.IsNotExist(err) {
-		return "", "", 0, nil
+		return "", "", prior, nil
 	}
 	if err != nil {
 		return "", "", 0, fmt.Errorf("refusing to requeue %s: read evidence: %w", id, err)
 	}
 	if len(data) == 0 {
-		return "", "", 0, nil
+		return "", "", prior, nil
 	}
 	if _, err := verify.LastOutcome(root, id); err != nil {
 		return "", "", 0, fmt.Errorf("refusing to requeue %s: %w", id, err)
@@ -492,7 +500,7 @@ func planEvidence(root, id string) (evidenceRel, asideRel string, attempts int, 
 	if err := json.Unmarshal(lines[len(lines)-1], &last); err != nil || last.Attempt < 1 {
 		return "", "", 0, fmt.Errorf("refusing to requeue %s: evidence has an unreadable last attempt number", id)
 	}
-	attempts = last.Attempt
+	attempts = prior + last.Attempt
 	asideRel = fmt.Sprintf("%s/%s.attempts-%d.jsonl", paths.EvidenceDirRel(), id, attempts)
 	if _, err := os.Lstat(filepath.Join(paths.For(root).State, filepath.FromSlash(asideRel))); err == nil {
 		return "", "", 0, fmt.Errorf("refusing to requeue %s: %s already exists; it is never overwritten", id, asideRel)
@@ -500,6 +508,53 @@ func planEvidence(root, id string) (evidenceRel, asideRel string, attempts int, 
 		return "", "", 0, fmt.Errorf("inspect %s: %w", asideRel, err)
 	}
 	return evidenceRel, asideRel, attempts, nil
+}
+
+// priorAttempts returns the attempts counted in earlier requeue cycles. Each
+// aside file, named <ID>.attempts-<N>.jsonl, records in N the total attempts
+// counted through its cycle, so the largest N is the count of earlier cycles.
+// It returns 0 when there is no aside file. Every aside file must be readable
+// evidence, whose last record has an attempt number of at least 1. A file that
+// is not is refused and never counted, so the count is never lowered silently.
+func priorAttempts(root, id string) (int, error) {
+	dir := paths.For(root).EvidenceDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("refusing to requeue %s: read evidence directory: %w", id, err)
+	}
+	prefix, highest := id+".attempts-", 0
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, ".jsonl") {
+			continue
+		}
+		rel := paths.EvidenceDirRel() + "/" + name
+		n, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(name, prefix), ".jsonl"))
+		if err != nil || n < 1 || !readableEvidence(filepath.Join(dir, name)) {
+			return 0, fmt.Errorf("refusing to requeue %s: aside evidence file %s already exists but is not readable evidence; it is never overwritten or counted", id, rel)
+		}
+		if n > highest {
+			highest = n
+		}
+	}
+	return highest, nil
+}
+
+// readableEvidence reports whether the file ends with a newline and its last
+// record has an attempt number of at least 1.
+func readableEvidence(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) == 0 || data[len(data)-1] != '\n' {
+		return false
+	}
+	lines := bytes.Split(data[:len(data)-1], []byte{'\n'})
+	var last struct {
+		Attempt int `json:"attempt"`
+	}
+	return json.Unmarshal(lines[len(lines)-1], &last) == nil && last.Attempt >= 1
 }
 
 // findFailedFile returns the name of the only failed task file for id. It
@@ -546,7 +601,7 @@ func commitPaths(root, id, target string, stage []string, asideRel string, attem
 	}
 	args := []string{"commit", "--quiet", "--only", "-m", fmt.Sprintf("docs: requeue %s to %s", id, target)}
 	if asideRel != "" {
-		args = append(args, "-m", fmt.Sprintf("Attempt counter reset: the evidence file with %d attempt(s) was renamed to %s. The next attempt starts at 1.", attempts, asideRel))
+		args = append(args, "-m", fmt.Sprintf("Attempt counter reset: the evidence file was renamed to %s. It and the earlier cycles count %d attempt(s) in total. The next attempt starts at 1.", asideRel, attempts))
 	}
 	if discarded != "" {
 		args = append(args, "-m", "Discarded claim (removed from the task file; the worktree and branch were not touched):\n\n"+discarded)
