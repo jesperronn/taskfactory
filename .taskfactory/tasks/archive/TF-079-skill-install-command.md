@@ -84,3 +84,7 @@ report each exit code. Only a human can verify the real download: after the
 first release exists (TF-076), run `taskfactory skill install` in a scratch
 project against the real GitHub release and confirm the files and checksum
 check. Workers must not claim that.
+
+## Closure
+
+Archived without implementation: superseded by TF-095 (embedded skill install).

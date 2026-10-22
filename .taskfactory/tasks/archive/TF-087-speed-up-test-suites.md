@@ -80,3 +80,8 @@ Check: go run ./cmd/taskfactory validate .taskfactory/tasks
 
 Run each check, report the exit codes, and report the wall time of C1 on an
 otherwise idle machine and the per-package times from `bin/test --budget`.
+
+## Closure
+
+Closed without a change of its own: children TF-088 to TF-092
+and TF-106 are archived.

@@ -37,3 +37,7 @@ Check: bin/lint docs/task-state-options.md
 ## Verification
 
 Run both checks from the repository root and report each exit code.
+
+## Closure
+
+Archived without implementation: superseded by TF-101 (task state options).
