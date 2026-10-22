@@ -1,0 +1,37 @@
+# TF-905: Implement Median and add it to the summary
+
+## Goal
+
+Implement Median in stats.go: the middle sorted value for odd length, the mean
+of the two middle values for even length. Add median=%.2f to the Summary line in
+report.go. Correct the expected value 2.0 to 2.5 in TestMedianEven.
+
+## Dependencies
+
+None
+
+## Scope
+
+Edit stats.go, report.go and that one expected value in stats_test.go only.
+
+## Constraints
+
+Add no dependencies. Keep other behaviour the same. Commit on the task branch.
+
+## Success criteria
+
+### C1: The unit tests pass
+
+Check: go test ./...
+
+### C2: The package vets
+
+Check: go vet ./...
+
+### C3: The summary line contains the median
+
+Check: go run . | grep -q 'median=2.50'
+
+## Verification
+
+Run each check from the repository root and report its exit code.

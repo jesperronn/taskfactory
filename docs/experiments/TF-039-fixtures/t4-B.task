@@ -1,0 +1,36 @@
+# TF-904: Rename Parse to ParseInt and fix one expected value
+
+## Goal
+
+Rename the function Parse to ParseInt in the whole package, in every file and
+every test that calls it. Also fix the expected value 7 in TestLoadLimit to 5.
+
+## Dependencies
+
+None
+
+## Scope
+
+Edit only the Go files of the module root. Change no other test expectation.
+
+## Constraints
+
+Add no dependencies. Keep behaviour the same. Commit on the task branch.
+
+## Success criteria
+
+### C1: No old name remains
+
+Check: test -z "$(grep -rnw 'Parse' --include='*.go' .)"
+
+### C2: The package builds and vets
+
+Check: go vet ./...
+
+### C3: The unit tests pass
+
+Check: go test ./...
+
+## Verification
+
+Run each check from the repository root and report its exit code.

@@ -1,0 +1,43 @@
+# TF-904: Rename Parse to ParseInt in the whole package and repair the wrong expectation
+
+## Goal
+
+The package in this Go module has a function named Parse that reads an integer
+from a string. The name is too generic, so rename it to ParseInt everywhere in
+the package: its definition, every call site in every file, and every test that
+calls it. The test TestLoadLimit in config_test.go also expects the wrong value
+(7 for the input "5"), so after the rename correct that single expected value
+to 5. Only that expected value may change in the tests.
+
+## Dependencies
+
+None
+
+## Scope
+
+Edit the Go files of the package in the module root only. The rename touches
+util.go, config.go, cmd.go, and the test files that call it. Do not rename
+anything else, and do not change any other test expectation.
+
+## Constraints
+
+Do not add dependencies. Keep the behaviour of every function the same. Commit
+the change on the task branch.
+
+## Success criteria
+
+### C1: No old name remains
+
+Check: test -z "$(grep -rnw 'Parse' --include='*.go' .)"
+
+### C2: The package builds and vets
+
+Check: go vet ./...
+
+### C3: The unit tests pass
+
+Check: go test ./...
+
+## Verification
+
+Run each check from the repository root and report its exit code.

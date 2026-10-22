@@ -1,0 +1,44 @@
+# TF-905: Implement Median and use it in the summary report
+
+## Goal
+
+The function Median in stats.go is a stub that panics. Implement it so it
+returns the median of a slice of floats: the middle value of the sorted slice
+for an odd length, and the mean of the two middle values for an even length.
+The function Summary in report.go prints a line that currently has no median in
+it. Add the median to that line, formatted with %.2f. The unit test
+TestMedianEven in stats_test.go expects 2.0 for the input 1, 2, 3, 4, but the
+correct median of that input is 2.5, so correct that expected value. Change no
+other test.
+
+## Dependencies
+
+None
+
+## Scope
+
+Edit stats.go, report.go and the single expected value in stats_test.go. Do not
+change the signature of Median or Summary. Do not change other tests.
+
+## Constraints
+
+Add no dependencies. Keep the behaviour of Summary apart from the added median.
+Commit on the task branch.
+
+## Success criteria
+
+### C1: The unit tests pass
+
+Check: go test ./...
+
+### C2: The package vets
+
+Check: go vet ./...
+
+### C3: The summary line contains the median
+
+Check: go run . | grep -q 'median=2.50'
+
+## Verification
+
+Run each check from the repository root and report its exit code.
