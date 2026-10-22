@@ -38,9 +38,10 @@ checks tree-wide ID uniqueness and dependency references. It reports only
 diagnostics for the selected task. `bin/test` runs the whole-tree form
 automatically.
 
-The task folders are `tasks/` unless `tasks_dir` in `.taskfactory/config.toml`
-names another directory, such as `.taskfactory/tasks`. Read that directory
-wherever this document says `tasks/`; `bin/lint` and `bin/test` do.
+The task folders are `tasks/` by default. The `tasks_dir` key in
+`.taskfactory/config.toml` can name another directory, for example
+`.taskfactory/tasks`. Read that directory wherever this document says `tasks/`.
+`bin/lint` and `bin/test` do this for you.
 
 ## Evidence and operational files
 
