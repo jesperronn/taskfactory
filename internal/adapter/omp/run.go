@@ -47,6 +47,7 @@ func run(ctx context.Context, req Request, opts Options) Result {
 		Argv:    argv,
 		Dir:     req.Worktree,
 		Timeout: req.Timeout,
+		Stream:  opts.Stream,
 		Notes:   progressNote,
 	})
 }

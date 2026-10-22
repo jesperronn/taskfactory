@@ -127,6 +127,7 @@ type LaunchSpec struct {
 	Stdin   io.Reader     // standard input; nil gives none
 	Timeout time.Duration // wall-clock bound enforced by Launch
 	Notes   string        // progress and mapping notes, kept on exit and stall
+	Stream  io.Writer     // optional; receives output as it arrives, nil means none
 }
 
 // Launch starts the harness once and maps its outcome. A binary that does not
@@ -148,8 +149,12 @@ func Launch(ctx context.Context, spec LaunchSpec) Result {
 	cmd.Stdin = spec.Stdin
 	cmd.WaitDelay = KillGrace
 	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
+	var w io.Writer = &out
+	if spec.Stream != nil {
+		w = io.MultiWriter(&out, spec.Stream)
+	}
+	cmd.Stdout = w
+	cmd.Stderr = w
 
 	runErr := cmd.Run()
 	if errors.Is(runCtx.Err(), context.DeadlineExceeded) {

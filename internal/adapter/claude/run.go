@@ -58,6 +58,7 @@ func run(ctx context.Context, req Request, opts Options) Result {
 		Env:     Environ(os.Environ(), baseURL, opts.token(), req),
 		Stdin:   strings.NewReader(req.Prompt),
 		Timeout: req.Timeout,
+		Stream:  opts.Stream,
 		Notes:   progressNote,
 	})
 }

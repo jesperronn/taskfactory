@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"slices"
@@ -18,6 +19,8 @@ import (
 type Options struct {
 	// Endpoint is the host:port of the oMLX server. Empty means DefaultEndpoint.
 	Endpoint string
+	// Stream receives the harness output as it arrives. Nil means none.
+	Stream io.Writer
 	// AuthToken is the local placeholder token. Empty means the value of
 	// ANTHROPIC_AUTH_TOKEN in the operator's environment. It is never written to
 	// a task, evidence, or result file.

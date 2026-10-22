@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 
 	"taskfactory/internal/adapter/common"
@@ -19,6 +20,8 @@ const Binary = "omp"
 type Options struct {
 	// Endpoint is the host:port of the oMLX server. Empty means DefaultEndpoint.
 	Endpoint string
+	// Stream receives the harness output as it arrives. Nil means none.
+	Stream io.Writer
 	// Dial reports whether addr accepts a TCP connection. Nil means a real
 	// net.Dialer. Tests inject it so no socket is opened.
 	Dial func(ctx context.Context, addr string) error

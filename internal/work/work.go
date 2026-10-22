@@ -1,6 +1,7 @@
 package work
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -29,6 +30,8 @@ type Request struct {
 	Endpoint   string
 	Timeout    time.Duration
 	Prompt     string
+	// Stream receives adapter output as it arrives, already redacted. Nil means none.
+	Stream io.Writer
 }
 
 // Deps holds everything Execute touches outside the filesystem, so tests can
@@ -124,15 +127,34 @@ func Execute(ctx context.Context, root, id string, opts Options, deps Deps) (int
 	logPath = logFile.Name()
 	fmt.Fprintf(out, "log: %s\n", logPath)
 
-	res := run(ctx, req)
+	// Output streams to the terminal and the log while the worker runs. The
+	// header is already in the log, so hdrLen is where the body starts. The
+	// State block goes in front of the body once the exit is known.
+	hdrLen, err := logFile.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return 1, fmt.Errorf("locate log body %s: %w", logPath, err)
+	}
 	secrets := environ()
+	stream := &streamWriter{secrets: secrets, dst: []io.Writer{out, logFile}}
+	req.Stream = stream
+	res := run(ctx, req)
+	stream.flush()
+	if err := stream.err; err != nil {
+		return 1, fmt.Errorf("write log %s: %w", logPath, err)
+	}
 	output := redact(res.Output, secrets)
 	note := redact(res.Note, secrets)
 	code := "none"
 	if res.ExitCode != nil {
 		code = fmt.Sprint(*res.ExitCode)
 	}
-	if _, err := fmt.Fprintf(logFile, "State: %s\nExit code: %s\nNote: %s\n\n----- adapter output -----\n%s\n", res.State, code, note, output); err != nil {
+	body := stream.logged.String()
+	if body == "" {
+		// The adapter returned output without streaming it, so log it whole.
+		body = output
+	}
+	block := fmt.Sprintf("State: %s\nExit code: %s\nNote: %s\n\n----- adapter output -----\n%s\n", res.State, code, note, body)
+	if err := rewriteBody(logFile, hdrLen, block); err != nil {
 		return 1, fmt.Errorf("write log %s: %w", logPath, err)
 	}
 
@@ -153,6 +175,62 @@ func Execute(ctx context.Context, root, id string, opts Options, deps Deps) (int
 		fmt.Fprintf(out, "suggestion, not run: taskfactory fail %s --outcome BLOCKED --reason %q\n", id, oneLine(note))
 	}
 	return exit, nil
+}
+
+// streamWriter takes adapter output as it arrives, redacts it one complete line
+// at a time, and writes each line to every destination. The bytes written to
+// the log are kept in logged, so the final log can place the State block in
+// front of them. A write error is kept in err and does not stop the worker.
+type streamWriter struct {
+	secrets []string
+	dst     []io.Writer
+	pending []byte
+	logged  strings.Builder
+	err     error
+}
+
+func (w *streamWriter) Write(p []byte) (int, error) {
+	w.pending = append(w.pending, p...)
+	for {
+		i := bytes.IndexByte(w.pending, '\n')
+		if i < 0 {
+			break
+		}
+		w.emit(w.pending[:i+1])
+		w.pending = w.pending[i+1:]
+	}
+	return len(p), nil
+}
+
+// flush emits a final partial line, such as output that lacks a newline.
+func (w *streamWriter) flush() {
+	if len(w.pending) > 0 {
+		w.emit(w.pending)
+		w.pending = nil
+	}
+}
+
+func (w *streamWriter) emit(line []byte) {
+	text := redact(string(line), w.secrets)
+	w.logged.WriteString(text)
+	for _, d := range w.dst {
+		if _, err := io.WriteString(d, text); err != nil && w.err == nil {
+			w.err = err
+		}
+	}
+}
+
+// rewriteBody cuts the log back to hdrLen and writes block there, so the State
+// block sits between the header and the adapter output.
+func rewriteBody(f *os.File, hdrLen int64, block string) error {
+	if err := f.Truncate(hdrLen); err != nil {
+		return err
+	}
+	if _, err := f.Seek(hdrLen, io.SeekStart); err != nil {
+		return err
+	}
+	_, err := io.WriteString(f, block)
+	return err
 }
 
 // trace is the verbose sink of the running call; it is nil unless Options.Verbose is set.
@@ -238,11 +316,11 @@ func realPreflight(ctx context.Context, r Request) common.PreflightResult {
 func realRun(ctx context.Context, r Request) common.Result {
 	switch r.Adapter {
 	case "omp":
-		return omp.Run(ctx, ompRequest(r), omp.Options{Endpoint: r.Endpoint})
+		return omp.Run(ctx, ompRequest(r), omp.Options{Endpoint: r.Endpoint, Stream: r.Stream})
 	case "pi":
-		return pi.Run(ctx, piRequest(r), pi.Options{Endpoint: r.Endpoint})
+		return pi.Run(ctx, piRequest(r), pi.Options{Endpoint: r.Endpoint, Stream: r.Stream})
 	default:
-		return claude.Run(ctx, claudeRequest(r), claude.Options{Endpoint: r.Endpoint})
+		return claude.Run(ctx, claudeRequest(r), claude.Options{Endpoint: r.Endpoint, Stream: r.Stream})
 	}
 }
 
