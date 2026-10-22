@@ -109,3 +109,11 @@ Run each check from the repository root and report its exit code. Run
 line for each file kind and the detail-check output from the record. State the
 number of worker runs per condition and whether the simplified text changed the
 result, or say that the result was not measured.
+
+## Claim
+
+Owner: haiku-worker-039
+Branch: task/TF-039
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-039
+Base commit: 05d7b8dc5f86cbb3985d98668d8561d6602c122c
+Started at: 2026-10-21T22:51:29Z
