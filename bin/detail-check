@@ -29,10 +29,12 @@ normalize() {
 # items TEXT: one item per line, the distinct details of a normalized text.
 items() {
   {
+    # shellcheck disable=SC2016 # the backticks are literal characters in the pattern
     printf '%s\n' "$1" | grep -oE '`[^`]+`' || true
     printf '%s\n' "$1" | grep -oE -- '--[a-z][a-z0-9-]*' || true
     printf '%s\n' "$1" | grep -oE 'TF-[0-9]+' || true
     printf '%s\n' "$1" | grep -oE 'exit( code)? [0-9]+' || true
+    # shellcheck disable=SC2016 # the backticks are literal characters in the pattern
     printf '%s\n' "$1" | grep -oE 'Check: ?`[^`]*`' || true
   } | sort -u
 }
