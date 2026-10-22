@@ -49,11 +49,27 @@ Check: grep -q 'First release' docs/release.md
 
 Check: grep -q 'bin/release v1.0.0-rc.1' docs/release.md
 
-### C3: The skill no longer says release is planned
+### C3: README drops the planned release policy wording
+
+Check: test "$(grep -c 'planned release policy' README.md)" -eq 0
+
+### C4: README drops the bin/release does not exist wording
+
+Check: test "$(grep -c 'does not exist yet' README.md)" -eq 0
+
+### C5: README states the bin/release dry run exists
+
+Check: grep -q 'bin/release dry run' README.md
+
+### C6: SKILL.md names the bin/release command
+
+Check: grep -q 'bin/release' skills/taskfactory/SKILL.md
+
+### C7: The skill archive test passes
 
 Check: bin/skill.test.sh
 
-### C4: Docs lint clean
+### C8: Docs lint clean
 
 Check: bin/lint docs/release.md README.md skills/taskfactory/SKILL.md
 
