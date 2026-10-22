@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage: bin/detail-check [ORIGINAL SIMPLIFIED]
+#
+# Proves that a simplified Markdown file lost no detail from its original. From
+# each file it extracts every backticked span, every --flag, every task ID,
+# every "exit N" or "exit code N" phrase and every "Check:" span. Line breaks
+# are joined first, so a span wrapped over two lines still matches. Each item of
+# the original must appear in the simplified text. Otherwise the check prints
+# the missing items and exits 1.
+#
+# With no arguments it checks the worker-facing pairs against the base branch
+# (BASE, default main): docs/worker-instructions.md and
+# skills/taskfactory/SKILL.md, read from the base and from the working tree.
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+usage() {
+  echo "Usage: bin/detail-check [ORIGINAL SIMPLIFIED]" >&2
+  exit 2
+}
+
+# normalize FILE: the file's text with line breaks and runs of blanks joined.
+normalize() {
+  tr '\n' ' ' < "$1" | tr -s ' \t' '  '
+}
+
+# items TEXT: one item per line, the distinct details of a normalized text.
+items() {
+  {
+    printf '%s\n' "$1" | grep -oE '`[^`]+`' || true
+    printf '%s\n' "$1" | grep -oE -- '--[a-z][a-z0-9-]*' || true
+    printf '%s\n' "$1" | grep -oE 'TF-[0-9]+' || true
+    printf '%s\n' "$1" | grep -oE 'exit( code)? [0-9]+' || true
+    printf '%s\n' "$1" | grep -oE 'Check: ?`[^`]*`' || true
+  } | sort -u
+}
+
+# check_pair ORIG_TEXT SIMPLIFIED_TEXT LABEL: prints the result for one pair.
+check_pair() {
+  local orig=$1 simp=$2 label=$3 total=0 missing=0 item
+  local list
+  list=$(items "$orig")
+  while IFS= read -r item; do
+    [[ -n $item ]] || continue
+    total=$((total + 1))
+    if ! printf '%s\n' "$simp" | grep -F -q -- "$item"; then
+      missing=$((missing + 1))
+      printf '  MISSING in simplified: %s\n' "$item"
+    fi
+  done <<< "$list"
+  if (( missing )); then
+    printf 'FAIL %s: %d of %d details missing\n' "$label" "$missing" "$total"
+    return 1
+  fi
+  printf 'PASS %s: %d details kept\n' "$label" "$total"
+}
+
+base=${BASE:-main}
+status=0
+
+if (( $# == 0 )); then
+  pairs=(docs/worker-instructions.md skills/taskfactory/SKILL.md)
+  for f in "${pairs[@]}"; do
+    orig_file=$(mktemp)
+    if ! git show "$base:$f" > "$orig_file" 2>/dev/null; then
+      echo "bin/detail-check: cannot read $f from $base" >&2
+      rm -f "$orig_file"
+      exit 2
+    fi
+    check_pair "$(normalize "$orig_file")" "$(normalize "$f")" "$f (vs $base)" || status=1
+    rm -f "$orig_file"
+  done
+elif (( $# == 2 )); then
+  [[ -f $1 && -f $2 ]] || { echo "bin/detail-check: no such file" >&2; exit 2; }
+  check_pair "$(normalize "$1")" "$(normalize "$2")" "$2 (vs $1)" || status=1
+else
+  usage
+fi
+
+exit "$status"

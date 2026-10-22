@@ -15,11 +15,11 @@ The default `bin/lint` and `.mdsmith.yml` are unchanged, so
 `paragraph-readability: false` still holds. Findings stay out of the lint
 exit code because most measured files do not meet the thresholds yet.
 
-Scope: `tasks/inbox`, `tasks/ready`, `tasks/active`, `tasks/failed`,
+Scope: `.taskfactory/tasks/inbox`, `.taskfactory/tasks/ready`, `.taskfactory/tasks/active`, `.taskfactory/tasks/failed`,
 `docs/worker-instructions.md`, `docs/protocol-v1.md`,
 `docs/task-format-v1.md`, `skills/taskfactory/SKILL.md` and `README.md`
-(its quick start is lines 95 to 257). `tasks/active` and `tasks/failed` are
-empty today. Nothing under `tasks/archive` is read.
+(its quick start is lines 95 to 257). `.taskfactory/tasks/active` and `.taskfactory/tasks/failed` are
+empty today. Nothing under `.taskfactory/tasks/archive` is read.
 
 Rule settings, from `mdsmith help rule`:
 
@@ -69,17 +69,17 @@ maximum). The first block is the original text, the second is this branch.
 | worker-instructions, new  | 14    | 8.6      | 11.8    |
 | SKILL.md, orig            | 3     | 13.4     | 18.0    |
 | SKILL.md, new             | 3     | 5.5      | 8.4     |
-| tasks/inbox (2 files)     | 3     | 13.7     | 17.2    |
-| tasks/ready (TF-039)      | 5     | 15.8     | 23.7    |
+| .taskfactory/tasks/inbox (2 files)     | 3     | 13.7     | 17.2    |
+| .taskfactory/tasks/ready (TF-039)      | 5     | 15.8     | 23.7    |
 
 Finding counts, before (original files) and after (this branch), as
 MDS023 / MDS024 / MDS036:
 
 | File kind                   | Before    | After     |
 | --------------------------- | --------- | --------- |
-| tasks/ready (1 file)        | 4 / 1 / 0 | 4 / 1 / 0 |
-| tasks/inbox (2 files)       | 2 / 0 / 0 | 2 / 0 / 0 |
-| tasks/active, tasks/failed  | 0 / 0 / 0 | 0 / 0 / 0 |
+| .taskfactory/tasks/ready (1 file)        | 4 / 1 / 0 | 4 / 1 / 0 |
+| .taskfactory/tasks/inbox (2 files)       | 2 / 0 / 0 | 2 / 0 / 0 |
+| .taskfactory/tasks/active, .taskfactory/tasks/failed  | 0 / 0 / 0 | 0 / 0 / 0 |
 | docs/worker-instructions.md | 3 / 5 / 0 | 0 / 0 / 0 |
 | skills/taskfactory/SKILL.md | 2 / 0 / 1 | 0 / 0 / 1 |
 | docs/task-format-v1.md      | 3 / 9 / 2 | 3 / 9 / 2 |

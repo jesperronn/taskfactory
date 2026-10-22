@@ -34,7 +34,7 @@ case $type in
   printf 'package main\n\nimport "fmt"\n\nfunc main() {\nfmt.Printf("total: %%d\\n", 3, 4)\n  }\n' > report.go
   printf 'package main\n\nimport "testing"\n\nfunc TestMain2(t *testing.T) {}\n' > report_test.go ;;
 esac
-cp "$fx/t$type-$cond.task" "tasks/inbox/$id-trial.md"
+cp "$fx/t$type-$cond.task" ".taskfactory/tasks/inbox/$id-trial.md"
 git add -A && git commit -q -m fixture
 "$bin" promote "$id" >/dev/null || exit 1
 "$bin" claim "$id" --owner trial >/dev/null || exit 1
