@@ -14,7 +14,7 @@ document the three ways to install the skill.
 ## Scope
 
 1. Research how the Vercel Labs `skills` CLI discovers skills, starting from
-   https://www.mintlify.com/vercel-labs/skills/introduction. Record the
+   `https://www.mintlify.com/vercel-labs/skills/introduction`. Record the
    discovery rules and whether `skills/taskfactory/SKILL.md` matches. If its
    list option can run against a local path without a global install (for
    example through `npx` only), run it and record the output; anything that
