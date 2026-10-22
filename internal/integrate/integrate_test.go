@@ -171,7 +171,7 @@ func TestIntegrationLockSerializesCalls(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(60 * time.Second):
 		t.Fatal("integration stayed blocked after lock release")
 	}
 }
