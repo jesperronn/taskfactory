@@ -135,7 +135,7 @@ func Execute(ctx context.Context, root, id string, opts Options, deps Deps) (int
 		return 1, fmt.Errorf("locate log body %s: %w", logPath, err)
 	}
 	secrets := environ()
-	stream := &streamWriter{secrets: secrets, dst: []io.Writer{out, logFile}}
+	stream := &streamWriter{secrets: secrets, multi: multiLineSecrets(secrets), dst: []io.Writer{out, logFile}}
 	req.Stream = stream
 	res := run(ctx, req)
 	stream.flush()
@@ -178,11 +178,14 @@ func Execute(ctx context.Context, root, id string, opts Options, deps Deps) (int
 }
 
 // streamWriter takes adapter output as it arrives, redacts it one complete line
-// at a time, and writes each line to every destination. The bytes written to
-// the log are kept in logged, so the final log can place the State block in
-// front of them. A write error is kept in err and does not stop the worker.
+// at a time, and writes each line to every destination. A credential value that
+// spans lines is redacted as a whole, so complete lines are held back while they
+// could still be the start of one (see multi). The bytes written to the log are
+// kept in logged, so the final log can place the State block in front of them.
+// A write error is kept in err and does not stop the worker.
 type streamWriter struct {
 	secrets []string
+	multi   []string // credential values that contain a newline
 	dst     []io.Writer
 	pending []byte
 	logged  strings.Builder
@@ -191,15 +194,48 @@ type streamWriter struct {
 
 func (w *streamWriter) Write(p []byte) (int, error) {
 	w.pending = append(w.pending, p...)
-	for {
-		i := bytes.IndexByte(w.pending, '\n')
-		if i < 0 {
-			break
-		}
-		w.emit(w.pending[:i+1])
-		w.pending = w.pending[i+1:]
+	if n := w.cut(); n > 0 {
+		w.emit(w.pending[:n])
+		w.pending = w.pending[n:]
 	}
 	return len(p), nil
+}
+
+// cut returns how many leading bytes of pending can be emitted. The cut is
+// always a line boundary, so no single-line value is split. It stops before the
+// line that holds the first byte that could begin a multi-line value.
+func (w *streamWriter) cut() int {
+	end := bytes.LastIndexByte(w.pending, '\n') + 1
+	if len(w.multi) == 0 {
+		return end
+	}
+	h := w.holdStart()
+	if h < 0 {
+		return end
+	}
+	if ls := bytes.LastIndexByte(w.pending[:h], '\n') + 1; ls < end {
+		return ls
+	}
+	return end
+}
+
+// holdStart returns the earliest offset in pending whose remaining bytes are a
+// proper, non-empty prefix of a multi-line value, or -1 when there is none. A
+// complete value is not a proper prefix, so redact handles it when emitted.
+func (w *streamWriter) holdStart() int {
+	longest := 0
+	for _, v := range w.multi {
+		longest = max(longest, len(v))
+	}
+	for k := max(0, len(w.pending)-longest+1); k < len(w.pending); k++ {
+		tail := string(w.pending[k:])
+		for _, v := range w.multi {
+			if len(tail) < len(v) && strings.HasPrefix(v, tail) {
+				return k
+			}
+		}
+	}
+	return -1
 }
 
 // flush emits a final partial line, such as output that lacks a newline.
@@ -210,14 +246,25 @@ func (w *streamWriter) flush() {
 	}
 }
 
-func (w *streamWriter) emit(line []byte) {
-	text := redact(string(line), w.secrets)
-	w.logged.WriteString(text)
+func (w *streamWriter) emit(text []byte) {
+	s := redact(string(text), w.secrets)
+	w.logged.WriteString(s)
 	for _, d := range w.dst {
-		if _, err := io.WriteString(d, text); err != nil && w.err == nil {
+		if _, err := io.WriteString(d, s); err != nil && w.err == nil {
 			w.err = err
 		}
 	}
+}
+
+// multiLineSecrets returns the credential values in environ that span lines.
+func multiLineSecrets(environ []string) []string {
+	var multi []string
+	for _, v := range secretValues(environ) {
+		if strings.Contains(v, "\n") {
+			multi = append(multi, v)
+		}
+	}
+	return multi
 }
 
 // rewriteBody cuts the log back to hdrLen and writes block there, so the State
@@ -286,6 +333,16 @@ var credentialNames = []string{"TOKEN", "KEY", "SECRET", "PASSWORD", "PASSWD", "
 // redact replaces the value of every credential-looking environment variable
 // in s. Values shorter than four bytes are skipped to avoid mangling text.
 func redact(s string, environ []string) string {
+	for _, value := range secretValues(environ) {
+		s = strings.ReplaceAll(s, value, "[redacted]")
+	}
+	return s
+}
+
+// secretValues returns the values of the credential-looking environment
+// variables that redact replaces.
+func secretValues(environ []string) []string {
+	var values []string
 	for _, kv := range environ {
 		name, value, ok := strings.Cut(kv, "=")
 		if !ok || len(value) < 4 {
@@ -294,12 +351,12 @@ func redact(s string, environ []string) string {
 		upper := strings.ToUpper(name)
 		for _, marker := range credentialNames {
 			if strings.Contains(upper, marker) {
-				s = strings.ReplaceAll(s, value, "[redacted]")
+				values = append(values, value)
 				break
 			}
 		}
 	}
-	return s
+	return values
 }
 
 func realPreflight(ctx context.Context, r Request) common.PreflightResult {
