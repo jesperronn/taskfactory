@@ -15,6 +15,8 @@ A passing report includes the task ID, changed files, result commit, and
 verification evidence. A failed or blocked report keeps the failing command. It
 also keeps enough context to continue.
 
+## Task file checks
+
 Before claiming work, run `bin/lint tasks/ready/<ID>-<slug>.md` from the
 repository root. It runs the Markdown lint. Then it runs
 `go run ./cmd/taskfactory validate` on that file. It prints each failure with

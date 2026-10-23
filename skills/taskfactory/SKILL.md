@@ -85,6 +85,8 @@ A task file is `tasks/<state>/<ID>-<slug>.md`. The `<ID>` is `TF-NNN`. The slug
 is lowercase letters, digits and single hyphens. A ready task must have exactly
 these headings, in this order. It must have no `## Claim` block.
 
+### Template and rules
+
 ```markdown
 # TF-001: Short title
 
@@ -93,29 +95,23 @@ these headings, in this order. It must have no `## Claim` block.
 One or more sentences describing the outcome.
 
 ## Dependencies
-
 None
 
 ## Scope
-
 What is in scope.
 
 ## Constraints
-
 What must not change.
 
 ## Success criteria
 
 ### C1: Single-line criterion text
-
 Check: go test ./...
 
 ### C2: Another criterion
-
 Check: test -f hello.txt
 
 ## Verification
-
 Run the checks from the repository root and report each exit code.
 ```
 

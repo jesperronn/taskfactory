@@ -182,6 +182,37 @@ if (( whole_project )) || (( ${#md_targets[@]} )); then
   go run "$mdsmith_pkg" "${mdsmith_args[@]}" || md_status=$?
 fi
 
+# Readability gate (TF-115): the worker-facing files a small model reads before
+# every task also get MDS023, MDS024 and MDS036 in the default lint. Their
+# thresholds come from .mdsmith-readability.yml, the one source. Other Markdown
+# stays advisory (bin/lint --readability). These rules only report, so
+# --autofix never changes them; the gate always runs in check mode.
+gated_md=(docs/worker-instructions.md skills/taskfactory/SKILL.md)
+gate_files=()
+for gf in "${gated_md[@]}"; do
+  [[ -e $gf ]] || continue
+  if (( whole_project )); then gate_files+=("$gf"); continue; fi
+  for p in ${paths[@]+"${paths[@]}"}; do
+    if [[ $p == "$gf" || $gf == "$p"/* ]]; then gate_files+=("$gf"); break; fi
+  done
+done
+if (( ${#gate_files[@]} )); then
+  # mdsmith exits 1 on any finding, including non-readability ones; the grep
+  # below decides, and the stats line shows that mdsmith ran.
+  gate_report=$(go run "$mdsmith_pkg" check --no-color -c .mdsmith-readability.yml \
+    "${gate_files[@]}" 2>&1 || true)
+  gate_findings=$(printf '%s\n' "$gate_report" | grep -E '^[^ ]+:[0-9]+:[0-9]+ MDS(023|024|036) ' || true)
+  if [[ -n $gate_findings ]]; then
+    printf '%s\n' "$gate_findings" >&2
+    echo "bin/lint: FAIL readability gate: ${gate_files[*]}" >&2
+    failed=1
+  elif ! printf '%s\n' "$gate_report" | grep -q '^stats: checked='; then
+    printf '%s\n' "$gate_report" >&2
+    echo "bin/lint: FAIL readability gate could not run mdsmith" >&2
+    failed=1
+  fi
+fi
+
 # Task files: each one gets the Markdown lint and then the contract validation.
 # Both halves run even when the other fails, and each failure names the file.
 for tf in ${task_files[@]+"${task_files[@]}"}; do

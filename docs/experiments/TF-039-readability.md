@@ -159,3 +159,13 @@ a measured gain. The advisory readability check stays out of the default
 Next step, if needed: a harder task family that the 35B model fails sometimes,
 with five or more runs per cell, and a harness that counts a run as passing
 only when a commit exists.
+
+## Gate for worker-facing files (TF-115)
+
+TF-115 gates the two worker-facing files in the default `bin/lint`:
+`docs/worker-instructions.md` and `skills/taskfactory/SKILL.md`. Their MDS023,
+MDS024 and MDS036 findings now fail the default lint, with the thresholds from
+`.mdsmith-readability.yml`. Other Markdown stays advisory under
+`bin/lint --readability`, and the rules still only report, so `--autofix`
+leaves them alone. After the TF-115 prose edits both files have no findings
+for the three rules. `bin/lint.readability.test.sh` covers the gate.
