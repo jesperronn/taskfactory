@@ -57,3 +57,11 @@ Check: bin/test
 ## Verification
 
 Run each check from the repository root and report each exit code.
+
+## Claim
+
+Owner: haiku-worker-115
+Branch: task/TF-115
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-115
+Base commit: a9243b4a5c938b60a28d9488d0650ed3b1ca3fb3
+Started at: 2026-10-23T04:23:37Z
