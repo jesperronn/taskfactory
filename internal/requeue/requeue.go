@@ -291,6 +291,10 @@ func RequeueWith(projectRoot, id, target string, opts Options) (Result, error) {
 		return dryRun(root, id, target, targetRel, plan, newData, discarded, asideRel, attempts, opts)
 	}
 	tracef("move %s to %s", failedRel, targetRel)
+	// Git does not track empty directories, so the target state may be absent.
+	if err := os.MkdirAll(filepath.Dir(targetAbs), 0o755); err != nil {
+		return Result{}, fmt.Errorf("create %s: %w", filepath.Dir(targetRel), err)
+	}
 	if err := os.Rename(failedAbs, targetAbs); err != nil {
 		return Result{}, fmt.Errorf("move %s to %s: %w", failedRel, targetRel, err)
 	}

@@ -298,3 +298,17 @@ func gitOutput(t *testing.T, root string, args ...string) string {
 }
 
 var _ = time.RFC3339
+
+func TestClaimCreatesMissingActiveDir(t *testing.T) {
+	t.Parallel()
+	root := newGitProject(t, 4, "TF-001")
+	if err := os.RemoveAll(filepath.Join(root, "tasks", "active")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Claim(root, "TF-001", "worker-a"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "tasks", "active", "TF-001-target.md")); err != nil {
+		t.Fatalf("active task missing after claim: %v", err)
+	}
+}

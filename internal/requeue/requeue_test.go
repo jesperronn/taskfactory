@@ -567,3 +567,25 @@ func TestParseArgsUsageErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestRequeueCreatesMissingReadyDir(t *testing.T) {
+	t.Parallel()
+	root := newProject(t, false)
+	if err := os.RemoveAll(filepath.Join(root, "tasks", "ready")); err != nil {
+		t.Fatalf("remove ready dir: %v", err)
+	}
+
+	res, err := Requeue(root, "TF-001", "ready")
+	if err != nil {
+		t.Fatalf("Requeue: %v", err)
+	}
+	if res.Path != "tasks/ready/"+taskFile {
+		t.Fatalf("result = %+v", res)
+	}
+	if !exists(filepath.Join(root, "tasks", "ready", taskFile)) {
+		t.Fatal("ready file missing after requeue")
+	}
+	if exists(filepath.Join(root, "tasks", "failed", taskFile)) {
+		t.Fatal("failed file still exists")
+	}
+}

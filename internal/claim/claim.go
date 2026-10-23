@@ -255,6 +255,10 @@ func ClaimWith(projectRoot, id, owner string, opts Options) error {
 			return rollback(fmt.Errorf("create task worktree %s: %w", worktree, err))
 		}
 		createdWorktree = true
+		// Git does not track empty directories, so the active state may be absent.
+		if err := os.MkdirAll(activeDir, 0o755); err != nil {
+			return rollback(fmt.Errorf("create active task directory %s: %w", activeDir, err))
+		}
 		tmp, err := os.CreateTemp(activeDir, ".claim-*.tmp")
 		if err != nil {
 			return rollback(fmt.Errorf("prepare active task file: %w", err))
@@ -334,9 +338,15 @@ func validateTaskStateDirectories(projectRoot string) error {
 	for _, state := range paths.States {
 		dirs = append(dirs, layout.TaskDir(state))
 	}
+	activeDir := layout.TaskDir("active")
 	for _, path := range dirs {
 		info, err := os.Lstat(path)
 		if err != nil {
+			// Git does not track empty directories, so a missing active
+			// directory is created by the claim itself before the task moves.
+			if path == activeDir && os.IsNotExist(err) {
+				continue
+			}
 			return fmt.Errorf("inspect task state directory %s: %w", path, err)
 		}
 		if info.Mode()&os.ModeSymlink != 0 {

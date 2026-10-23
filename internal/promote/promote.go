@@ -159,6 +159,10 @@ func PromoteWith(projectRoot, id string, opts Options) (string, error) {
 		return readyRel, nil
 	}
 	tracef("move %s to %s", inboxRel, readyRel)
+	// Git does not track empty directories, so the ready state may be absent.
+	if err := os.MkdirAll(filepath.Dir(readyAbs), 0o755); err != nil {
+		return "", fmt.Errorf("create %s: %w", layout.TaskDirRel("ready"), err)
+	}
 	if err := os.Rename(inboxAbs, readyAbs); err != nil {
 		return "", fmt.Errorf("move %s to %s: %w", inboxRel, readyRel, err)
 	}

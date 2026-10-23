@@ -249,6 +249,10 @@ func FailWith(projectRoot, id string, opts Options, common CommonOptions) (strin
 		return failedRel, nil
 	}
 	tracef("move %s to %s", activeRel, failedRel)
+	// Git does not track empty directories, so the failed state may be absent.
+	if err := os.MkdirAll(filepath.Dir(failedAbs), 0o755); err != nil {
+		return "", fmt.Errorf("create %s: %w", layout.TaskDirRel("failed"), err)
+	}
 	if err := os.Rename(activeAbs, failedAbs); err != nil {
 		return "", fmt.Errorf("move %s to %s: %w", activeRel, failedRel, err)
 	}

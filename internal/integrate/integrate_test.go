@@ -547,3 +547,18 @@ func TestIntegrateWithIgnoredRuntime(t *testing.T) {
 		t.Fatalf("tracked .taskfactory files: %q", tracked)
 	}
 }
+
+func TestIntegrateCreatesMissingArchiveDir(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	if err := os.RemoveAll(filepath.Join(f.root, "tasks/archive")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run(f.root, "TF-901"); err != nil {
+		status, _ := git(f.root, "status", "--short")
+		t.Fatalf("%v; status=%q", err, status)
+	}
+	if _, err := os.Stat(filepath.Join(f.root, "tasks/archive/TF-901-example.md")); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -448,3 +448,23 @@ func TestReasonMustBeSingleLineText(t *testing.T) {
 		t.Fatalf("valid reason refused: %v", err)
 	}
 }
+
+func TestFailCreatesMissingFailedDir(t *testing.T) {
+	t.Parallel()
+	root := newProject(t, true)
+	if err := os.RemoveAll(filepath.Join(root, "tasks", "failed")); err != nil {
+		t.Fatalf("remove failed dir: %v", err)
+	}
+	writeEvidence(t, root, "FAILED")
+
+	failed, err := Fail(root, "TF-001", Options{Outcome: "FAILED"})
+	if err != nil {
+		t.Fatalf("Fail: %v", err)
+	}
+	if failed != "tasks/failed/TF-001-example.md" {
+		t.Fatalf("failed path = %q", failed)
+	}
+	if _, err := os.Stat(filepath.Join(root, "tasks", "failed", "TF-001-example.md")); err != nil {
+		t.Fatalf("failed file missing: %v", err)
+	}
+}

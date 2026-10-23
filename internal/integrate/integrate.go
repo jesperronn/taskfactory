@@ -356,6 +356,10 @@ func archiveTask(root, id, taskPath, archive string) *failure {
 	layout := paths.For(root)
 	renamed := false
 	if _, e := os.Lstat(taskPath); e == nil {
+		// Git does not track empty directories, so the archive may be absent.
+		if e = os.MkdirAll(filepath.Dir(archive), 0o755); e != nil {
+			return &failure{outcome: "FAILED", stage: "archive", err: fmt.Errorf("create archive directory: %w", e)}
+		}
 		if e = os.Rename(taskPath, archive); e != nil {
 			return &failure{outcome: "FAILED", stage: "archive", err: fmt.Errorf("move task to archive: %w", e)}
 		}

@@ -433,3 +433,31 @@ func TestPromoteRefusesTodo(t *testing.T) {
 		t.Fatalf("Promote after filling in: %v", err)
 	}
 }
+
+func TestPromoteCreatesMissingReadyDir(t *testing.T) {
+	t.Parallel()
+	const name = "TF-010-valid-example.md"
+	content := validTask("TF-010", "valid-example")
+
+	root := newRepo(t)
+	writeTask(t, root, "inbox", name, content)
+	commitAll(t, root, "add proposal")
+	if err := os.RemoveAll(filepath.Join(root, "tasks", "ready")); err != nil {
+		t.Fatalf("remove ready dir: %v", err)
+	}
+
+	rel, err := Promote(root, "TF-010")
+	if err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	if rel != "tasks/ready/"+name {
+		t.Fatalf("ready path = %q", rel)
+	}
+	got, err := os.ReadFile(filepath.Join(root, "tasks", "ready", name))
+	if err != nil || string(got) != content {
+		t.Fatalf("ready contents changed or missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "tasks", "inbox", name)); !os.IsNotExist(err) {
+		t.Fatalf("inbox file still present: %v", err)
+	}
+}
