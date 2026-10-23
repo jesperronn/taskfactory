@@ -52,3 +52,11 @@ Check: bin/lint
 ## Verification
 
 Run each check from the repository root and report each exit code.
+
+## Claim
+
+Owner: haiku-worker-113
+Branch: task/TF-113
+Worktree: /Users/jesper/src/taskfactory/.taskfactory/worktrees/TF-113
+Base commit: 00c9a8d270916d376652590d2631a0944e01b841
+Started at: 2026-10-23T04:22:20Z
