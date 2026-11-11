@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# setup — check the tools bin/test, bin/lint and bin/build need, then fetch Go modules; --check changes nothing
+set -euo pipefail
+
+# Go that the pinned mdsmith in bin/lint needs. go.mod keeps its lower
+# minimum; CI (.github/workflows/ci.yml) uses this version.
+mdsmith_min_go=1.25.11
+
+usage() {
+  echo "Usage: bin/setup [--check]" >&2
+  echo "  --check  only report tools and versions; changes nothing" >&2
+}
+
+check=0
+for arg in "$@"; do
+  case "$arg" in
+    --check) check=1 ;;
+    -h | --help) usage; exit 0 ;;
+    *) usage; exit 2 ;;
+  esac
+done
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+failed=0
+ok() { printf 'ok      %s\n' "$*"; }
+fail() { printf 'FAIL    %s\n' "$*"; failed=1; }
+warn() { printf 'skip    %s\n' "$*"; }
+
+# version_of TEXT: the first x.y[.z] in TEXT, as x.y.z; empty when none.
+version_of() {
+  local v
+  v=$(printf '%s\n' "$1" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1 || true)
+  [[ -n $v ]] || return 0
+  [[ $v == *.*.* ]] || v=$v.0
+  printf '%s\n' "$v"
+}
+
+# version_ge A B: succeeds when x.y.z A >= B.
+version_ge() {
+  local a b i
+  IFS=. read -r -a a <<<"$1"
+  IFS=. read -r -a b <<<"$2"
+  for i in 0 1 2; do
+    if ((${a[i]:-0} > ${b[i]:-0})); then return 0; fi
+    if ((${a[i]:-0} < ${b[i]:-0})); then return 1; fi
+  done
+  return 0
+}
+
+if command -v go >/dev/null 2>&1; then
+  have=$(version_of "$(go version 2>/dev/null || true)")
+  mod_min=$(awk '$1 == "go" { print $2; exit }' go.mod 2>/dev/null || true)
+  mod_min=$(version_of "$mod_min")
+  if [[ -z $have ]]; then
+    fail "go: cannot read the version from 'go version'"
+  elif [[ -n $mod_min ]] && ! version_ge "$have" "$mod_min"; then
+    fail "go $have is older than go.mod's $mod_min"
+  elif ! version_ge "$have" "$mdsmith_min_go"; then
+    fail "go $have is older than $mdsmith_min_go, which the pinned mdsmith in bin/lint needs"
+  else
+    ok "go $have (go.mod ${mod_min:-?}, mdsmith needs $mdsmith_min_go)"
+  fi
+else
+  fail "go not found (need >= $mdsmith_min_go; https://go.dev/dl/)"
+fi
+
+if command -v git >/dev/null 2>&1; then ok "git"; else fail "git not found (bin/build stamps the version from it)"; fi
+if command -v perl >/dev/null 2>&1; then ok "perl"; else fail "perl not found (bin/test timing and --budget use it)"; fi
+if command -v shellcheck >/dev/null 2>&1; then
+  ok "shellcheck"
+else
+  warn "shellcheck not installed; bin/lint skips Bash files (optional)"
+fi
+if command -v gh >/dev/null 2>&1; then ok "gh"; else warn "gh not installed; only bin/release --publish needs it (optional)"; fi
+
+if ((failed)); then
+  echo "bin/setup: required tools missing or too old" >&2
+  exit 1
+fi
+
+if ((check)); then
+  echo "bin/setup: --check ok, nothing changed"
+  exit 0
+fi
+
+go mod download
+echo "bin/setup: ready; next run bin/test"
