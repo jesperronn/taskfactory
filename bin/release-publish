@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# release-publish — verify a release tag and publish a GitHub release (human or release workflow only)
 # bin/release-publish: verify a release tag and publish a GitHub release.
 #
 # Shared by .github/workflows/release.yml and the local fallback

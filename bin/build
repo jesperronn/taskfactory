@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# build — build the taskfactory binary into dist/ (or the given path) with the git version stamped in
 set -euo pipefail
 
 usage() {

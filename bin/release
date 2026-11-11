@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# release — release dry run by default; --tag tags locally, --publish pushes (human-run only)
 # bin/release <version> [--tag [--publish]] [--allow-unsigned]
 #
 # Default is a DRY RUN that changes nothing in the repository: it checks the

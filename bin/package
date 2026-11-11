@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# package — build release archives and SHA256SUMS; never tags, pushes or uses the network
 # bin/package <version> <output-dir>: build the release archives and SHA256SUMS.
 # Never tags, pushes or uses the network. Portable to bash 3.2 and bash 5.
 set -euo pipefail

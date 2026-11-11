@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# lint — Markdown, task contract, gofmt, go vet and shellcheck over the project or given paths
 set -euo pipefail
 
 usage() {

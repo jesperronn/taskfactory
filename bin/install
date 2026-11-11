@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# install — build and install taskfactory (and the tf alias) into PREFIX, GOBIN or GOPATH/bin
 set -euo pipefail
 
 usage() {

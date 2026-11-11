@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# workflows — print the commands for each maintainer workflow. Prints only, runs nothing.
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: bin/workflows [commands|setup|build|test|lint|release]
+
+Print the commands for a workflow (no argument: all). Only prints; runs nothing.
+Exit: 0 ok, 2 unknown workflow.
+USAGE
+}
+
+# commands: list every script in bin/ with the description from its "# <name> — <text>" line,
+# so the list cannot go stale. Add that line near the top of each new script.
+commands() {
+  local dir f name desc
+  dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  echo "== commands =="
+  for f in "$dir"/*; do
+    [[ -f "$f" && -x "$f" && "$(head -c 2 "$f")" == "#!" ]] || continue
+    name="${f##*/}"
+    [[ "$name" == *.test.sh ]] && continue
+    desc="$(grep -m1 "^# $name — " "$f" | cut -d' ' -f4- || true)"
+    printf '  %-16s %s\n' "$name" "${desc:-(no description line)}"
+  done
+}
+
+setup() {
+  cat <<'EOT'
+== setup ==
+  bin/setup --check          # verify go, git, perl and the Go version bin/lint needs; changes nothing
+  bin/setup                  # same checks, then go mod download (idempotent)
+  bin/test                   # first check after setup
+EOT
+}
+
+build() {
+  cat <<'EOT'
+== build ==
+  bin/build [PATH]           # binary at dist/taskfactory (git-ignored) or PATH
+  bin/install                # build and install taskfactory and tf into PREFIX, GOBIN or GOPATH/bin
+EOT
+}
+
+test_() {
+  cat <<'EOT'
+== test ==
+  bin/test                   # every shell test, the Go suite and whole-tree task validation
+  bin/test bin/lint.tells.test.sh   # one shell test file; a bin/ script runs its colocated test
+  bin/test internal/foo      # one Go package folder; ./pkg/... patterns work too
+  bin/test --budget          # also fail a shell case over 1s or the Go suite over 5s
+  bin/test --verbose         # [TIME] line per case
+  Suites: lint.* cover bin/lint (stubbed mdsmith, tells, readability, task contract,
+  and lint.real-mdsmith with the real pinned tool); release.* cover bin/release
+  (gates, tag, signing, publish) and its version grammar, release-publish.test.sh
+  covers bin/release-publish.
+EOT
+}
+
+lint() {
+  cat <<'EOT'
+== lint ==
+  bin/lint                   # whole project, check only
+  bin/lint PATH...           # only these files or folders
+  bin/lint --autofix PATH    # fix formatting of PATH only; never on unrelated files
+  bin/lint .taskfactory/tasks/ready/<ID>-<slug>.md   # Markdown style plus task contract
+  bin/lint --tells | --readability   # advisory reports, always exit 0
+EOT
+}
+
+release() {
+  cat <<'EOT'
+== release == (human-run only; agents never run these; policy: docs/release.md)
+  bin/release <version>               # dry run: gates, bump advice, packages to a temp dir
+  bin/release <version> --tag         # also creates the annotated tag locally
+  bin/release <version> --tag --publish   # pushes the tag and publishes via gh (fallback to CI)
+  bin/release-publish                 # called by the release workflow and bin/release
+  bin/package <version> <dir>         # archives and SHA256SUMS; no tag, no push
+  Changelog, deps, dev, troubleshoot, deploy: none.
+EOT
+}
+
+main() {
+  case "${1-all}" in
+    -h | --help) usage ;;
+    commands) commands ;;
+    setup) setup ;;
+    build) build ;;
+    test) test_ ;;
+    lint) lint ;;
+    release) release ;;
+    all)
+      commands
+      setup
+      build
+      test_
+      lint
+      release
+      ;;
+    *)
+      usage >&2
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# detail-check — prove a simplified Markdown file lost no detail from its original
 set -euo pipefail
 
 # Usage: bin/detail-check [ORIGINAL SIMPLIFIED]

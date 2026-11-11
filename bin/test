@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# test — run the shell tests and Go tests, narrowed by path; --budget enforces timing limits
 set -euo pipefail
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
